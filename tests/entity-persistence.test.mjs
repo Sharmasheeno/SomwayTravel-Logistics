@@ -97,7 +97,7 @@ test("create cargo does not affect visa", async () => {
   await withMockedPersistence({ cargo, visas }, async () => {
     await writeEntity({
       collection: "cargo",
-      record: { id: "cargo-a", tracking: "NBO-33333", origin: "Nairobi", senderPhone: "+254700000002" },
+      record: { id: "cargo-a", tracking: "NBO-33333", origin: "Nairobi", senderPhone: "+254700000002", rateNote: "Flight SO-201" },
       user: owner,
     });
   });
@@ -112,7 +112,7 @@ test("update cargo does not affect expenses", async () => {
     await writeEntity({
       collection: "cargo",
       id: "cargo-a",
-      record: { id: "cargo-a", tracking: "NBO-33333", origin: "Nairobi", destination: "Mogadishu", status: "arrived", senderPhone: "+254700000002" },
+      record: { id: "cargo-a", tracking: "NBO-33333", origin: "Nairobi", destination: "Mogadishu", status: "arrived", senderPhone: "+254700000002", rateNote: "Flight SO-201" },
       user: owner,
     });
   });
@@ -120,11 +120,123 @@ test("update cargo does not affect expenses", async () => {
   assert.equal(expenses.docs.get("expense-a").description, "Rent");
 });
 
+const validCargoRecord = (overrides = {}) => ({
+  id: "cargo-validation",
+  tracking: "NBO-VALIDATION",
+  origin: "Nairobi",
+  destination: "Mogadishu",
+  sender: "Test Sender",
+  senderPhone: "+254700000010",
+  receiver: "Test Receiver",
+  contents: "Documents",
+  weight: 1,
+  rate: 12,
+  rateNote: "Flight SO-201",
+  ...overrides,
+});
+
+test("cargo accepts an omitted optional sender email", async () => {
+  const cargo = makeModel();
+  await withMockedPersistence({ cargo }, async () => {
+    await writeEntity({
+      collection: "cargo",
+      record: validCargoRecord(),
+      user: owner,
+    });
+  });
+  assert.equal(cargo.docs.get("cargo-validation").senderEmail, "");
+});
+
+test("cargo accepts an empty optional sender email", async () => {
+  const cargo = makeModel();
+  await withMockedPersistence({ cargo }, async () => {
+    await writeEntity({
+      collection: "cargo",
+      record: validCargoRecord({ senderEmail: "" }),
+      user: owner,
+    });
+  });
+  assert.equal(cargo.docs.get("cargo-validation").senderEmail, "");
+});
+
+test("cargo trims and stores a valid sender email", async () => {
+  const cargo = makeModel();
+  await withMockedPersistence({ cargo }, async () => {
+    await writeEntity({
+      collection: "cargo",
+      record: validCargoRecord({ senderEmail: "  sender@example.com  " }),
+      user: owner,
+    });
+  });
+  assert.equal(
+    cargo.docs.get("cargo-validation").senderEmail,
+    "sender@example.com",
+  );
+});
+
+test("cargo rejects an invalid sender email", async () => {
+  const cargo = makeModel();
+  await withMockedPersistence({ cargo }, async () => {
+    await assert.rejects(
+      writeEntity({
+        collection: "cargo",
+        record: validCargoRecord({ senderEmail: "not-an-email" }),
+        user: owner,
+      }),
+      (error) => {
+        assert.equal(error.status, 400);
+        assert.equal(
+          error.message,
+          "Sender email must be a valid email address.",
+        );
+        return true;
+      },
+    );
+  });
+  assert.equal(cargo.calls.findOneAndUpdate, 0);
+});
+
+test("cargo rejects a missing, empty or whitespace pricing note", async () => {
+  for (const rateNote of [undefined, "", "   "]) {
+    const cargo = makeModel();
+    await withMockedPersistence({ cargo }, async () => {
+      await assert.rejects(
+        writeEntity({
+          collection: "cargo",
+          record: validCargoRecord({ rateNote }),
+          user: owner,
+        }),
+        (error) => {
+          assert.equal(error.status, 400);
+          assert.equal(
+            error.message,
+            "Pricing note / flight reference is required.",
+          );
+          return true;
+        },
+      );
+    });
+    assert.equal(cargo.calls.findOneAndUpdate, 0);
+  }
+});
+
+test("cargo trims a valid pricing note before storage", async () => {
+  const cargo = makeModel();
+  await withMockedPersistence({ cargo }, async () => {
+    await writeEntity({
+      collection: "cargo",
+      record: validCargoRecord({ rateNote: "  Flight SO-201  " }),
+      user: owner,
+    });
+  });
+  assert.equal(cargo.docs.get("cargo-validation").rateNote, "Flight SO-201");
+});
+
 test("stale ticket edit cannot erase newly created cargo", async () => {
   const tickets = makeModel([{ id: "ticket-a", ref: "TKT-N-11111", office: "Nairobi" }]);
   const cargo = makeModel();
   await withMockedPersistence({ tickets, cargo }, async () => {
-    await writeEntity({ collection: "cargo", record: { id: "cargo-b", tracking: "NBO-44444", origin: "Nairobi", senderPhone: "+254700000003" }, user: owner });
+    await writeEntity({ collection: "cargo", record: { id: "cargo-b", tracking: "NBO-44444", origin: "Nairobi", senderPhone: "+254700000003", rateNote: "Flight SO-201" }, user: owner });
     await writeEntity({ collection: "tickets", id: "ticket-a", record: { id: "ticket-a", ref: "TKT-N-11111", office: "Nairobi", phone: "+254700000001", notes: "stale edit" }, user: owner });
   });
   assert.ok(cargo.docs.has("cargo-b"));
@@ -135,7 +247,7 @@ test("stale cargo edit cannot erase newly created ticket", async () => {
   const cargo = makeModel([{ id: "cargo-a", tracking: "NBO-55555", origin: "Nairobi" }]);
   await withMockedPersistence({ tickets, cargo }, async () => {
     await writeEntity({ collection: "tickets", record: { id: "ticket-b", ref: "TKT-N-22222", office: "Nairobi", phone: "+254700000004" }, user: owner });
-    await writeEntity({ collection: "cargo", id: "cargo-a", record: { id: "cargo-a", tracking: "NBO-55555", origin: "Nairobi", destination: "Mogadishu", senderPhone: "+254700000003", status: "delivered" }, user: owner });
+    await writeEntity({ collection: "cargo", id: "cargo-a", record: { id: "cargo-a", tracking: "NBO-55555", origin: "Nairobi", destination: "Mogadishu", senderPhone: "+254700000003", status: "delivered", rateNote: "Flight SO-201" }, user: owner });
   });
   assert.ok(tickets.docs.has("ticket-b"));
 });
@@ -155,7 +267,7 @@ test("updating a ticket preserves document identity and business reference", asy
 test("updating cargo preserves document identity and business reference", async () => {
   const cargo = makeModel([{ id: "cargo-a", _id: "mongo-cargo-a", createdAt: "2026-01-01T00:00:00.000Z", tracking: "NBO-55555", origin: "Nairobi", status: "in_transit" }]);
   await withMockedPersistence({ cargo }, async () => {
-    await writeEntity({ collection: "cargo", id: "cargo-a", record: { id: "cargo-a", tracking: "NBO-55555", origin: "Nairobi", destination: "Mogadishu", senderPhone: "+254700000003", status: "arrived", updatedAt: "2026-02-01T00:00:00.000Z" }, user: owner });
+    await writeEntity({ collection: "cargo", id: "cargo-a", record: { id: "cargo-a", tracking: "NBO-55555", origin: "Nairobi", destination: "Mogadishu", senderPhone: "+254700000003", status: "arrived", rateNote: "Flight SO-201", updatedAt: "2026-02-01T00:00:00.000Z" }, user: owner });
   });
   const updated = cargo.docs.get("cargo-a");
   assert.equal(updated._id, "mongo-cargo-a");

@@ -9,7 +9,10 @@ import Supplier from "../server/models/Supplier.js";
 import SupplierPayment from "../server/models/SupplierPayment.js";
 import Ticket from "../server/models/Ticket.js";
 import Visa from "../server/models/Visa.js";
-import { buildFinanceReport } from "../server/lib/finance.js";
+import {
+  buildFinanceReport,
+  deriveCustomerFinanceSummary,
+} from "../server/lib/finance.js";
 
 const nbo = "68b500000000000000000001";
 const mog = "68b500000000000000000002";
@@ -59,32 +62,29 @@ test("phase 5b report separates Nairobi KES, Nairobi USD, Mogadishu USD and futu
     ],
   }, async () => {
     const all = await buildFinanceReport({ from: "2026-08-01", to: "2026-08-31" });
-    assert.equal(all.find((row) => row.branchId === nbo && row.currency === "KES").revenue, 10000);
-    assert.equal(all.find((row) => row.branchId === nbo && row.currency === "USD").revenue, 100);
-    assert.equal(all.find((row) => row.branchId === mog && row.currency === "USD").revenue, 200);
-    assert.equal(all.find((row) => row.branchId === hga && row.currency === "USD").revenue, 75);
+    assert.equal(all.find((row) => row.branchId === nbo && row.currency === "KES").customerCharges, 10000);
+    assert.equal(all.find((row) => row.branchId === nbo && row.currency === "KES").paymentsReceived, 3000);
+    assert.equal(all.find((row) => row.branchId === nbo && row.currency === "USD").customerCharges, 100);
+    assert.equal(all.find((row) => row.branchId === nbo && row.currency === "USD").paymentsReceived, 50);
+    assert.equal(all.find((row) => row.branchId === mog && row.currency === "USD").customerCharges, 200);
+    assert.equal(all.find((row) => row.branchId === mog && row.currency === "USD").paymentsReceived, 100);
+    assert.equal(all.find((row) => row.branchId === hga && row.currency === "USD").customerCharges, 75);
+    assert.equal(all.find((row) => row.branchId === hga && row.currency === "USD").paymentsReceived, 0);
     assert.equal(all.find((row) => row.branchId === nbo && row.currency === "KES").paymentMethods["M-Pesa"], 2000);
     assert.equal(all.find((row) => row.branchId === mog && row.currency === "USD").paymentMethods["EVC Plus"], 100);
   });
 });
 
-test("phase 5b report includes active branch currency rows with zero activity", async () => {
+test("phase 5b report excludes branch currency rows with zero activity", async () => {
   await withReportMocks({}, async () => {
     const all = await buildFinanceReport({ from: "2026-08-01", to: "2026-08-31" });
-    const keys = all.map((row) => `${row.branch}:${row.currency}`).sort();
-    assert.deepEqual(keys, [
-      "Hargeisa Office:USD",
-      "Mogadishu Office:USD",
-      "Nairobi Office:KES",
-      "Nairobi Office:USD",
-    ]);
-    assert.ok(all.every((row) => row.revenue === 0 && row.collections === 0 && row.grossProfit === 0));
+    assert.deepEqual(all, []);
 
     const nairobi = await buildFinanceReport({ branchId: nbo, from: "2026-08-01", to: "2026-08-31" });
-    assert.deepEqual(nairobi.map((row) => row.currency).sort(), ["KES", "USD"]);
+    assert.deepEqual(nairobi, []);
 
     const mogadishu = await buildFinanceReport({ branchId: mog, from: "2026-08-01", to: "2026-08-31" });
-    assert.deepEqual(mogadishu.map((row) => row.currency), ["USD"]);
+    assert.deepEqual(mogadishu, []);
   });
 });
 
@@ -111,10 +111,240 @@ test("phase 5b branch and date filters are applied by the backend report helper"
     const rows = await buildFinanceReport({ branchId: nbo, from: "2026-08-01", to: "2026-08-31" });
     const kes = rows.find((row) => row.currency === "KES");
     const usd = rows.find((row) => row.currency === "USD");
-    assert.equal(rows.length, 2);
+    assert.equal(rows.length, 1);
     assert.equal(kes.branchId, nbo);
-    assert.equal(kes.revenue, 10000);
+    assert.equal(kes.customerCharges, 10000);
+    assert.equal(kes.paymentsReceived, 1000);
     assert.equal(kes.collections, 1000);
-    assert.equal(usd.revenue, 0);
+    assert.equal(usd, undefined);
+  });
+});
+
+test("cargo revenue stays with the origin branch while collection stays with the receiving branch", async () => {
+  await withReportMocks({
+    cargo: [
+      doc({
+        id: "cargo-collect",
+        originBranchId: nbo,
+        paidByBranchId: mog,
+        dateIn: "2026-08-15",
+        currency: "USD",
+        weight: 10,
+        rate: 20,
+        cost: 120,
+        status: "delivered",
+      }),
+    ],
+    payments: [
+      doc({
+        transactionType: "cargo",
+        transactionId: "cargo-collect",
+        branchId: mog,
+        paymentDate: "2026-08-20",
+        currency: "USD",
+        paymentMethod: "EVC Plus",
+        amount: 200,
+        status: "active",
+      }),
+    ],
+  }, async () => {
+    const rows = await buildFinanceReport({ from: "2026-08-01", to: "2026-08-31" });
+    const nairobi = rows.find((row) => row.branchId === nbo && row.currency === "USD");
+    const mogadishu = rows.find((row) => row.branchId === mog && row.currency === "USD");
+    assert.equal(nairobi.revenue, 200);
+    assert.equal(nairobi.directCost, 120);
+    assert.equal(nairobi.grossProfit, 80);
+    assert.equal(nairobi.outstanding, 0);
+    assert.deepEqual(nairobi.serviceDetails.cargo, {
+      transactions: 1,
+      customerCharges: 200,
+      paymentsReceived: 200,
+      directCost: 120,
+      profit: 80,
+    });
+    assert.equal(mogadishu.revenue, 0);
+    assert.equal(mogadishu.collections, 200);
+    assert.deepEqual(mogadishu.paymentMethodDetails["EVC Plus"], {
+      transactions: 1,
+      received: 200,
+      refunds: 0,
+      netReceived: 200,
+    });
+  });
+});
+
+test("service performance follows partial cargo payments without duplicating accounts receivable", async () => {
+  const payments = [
+    doc({
+      transactionType: "cargo",
+      transactionId: "cargo-a",
+      branchId: mog,
+      paymentDate: "2026-08-31",
+      currency: "USD",
+      paymentMethod: "EVC Plus",
+      amount: 24,
+      status: "active",
+    }),
+  ];
+  await withReportMocks({
+    cargo: [
+      doc({
+        id: "cargo-a",
+        originBranchId: mog,
+        dateIn: "2026-08-31",
+        currency: "USD",
+        weight: 1,
+        rate: 24,
+        cost: 0,
+        status: "received",
+      }),
+      doc({
+        id: "cargo-b",
+        originBranchId: mog,
+        dateIn: "2026-08-31",
+        currency: "USD",
+        weight: 1,
+        rate: 42,
+        cost: 0,
+        status: "received",
+      }),
+    ],
+    payments,
+  }, async () => {
+    const servicePerformance = async () => {
+      const rows = await buildFinanceReport({
+        branchId: mog,
+        from: "2026-08-01",
+        to: "2026-08-31",
+      });
+      assert.equal(rows.length, 1);
+      assert.deepEqual(Object.keys(rows[0].serviceDetails), ["cargo"]);
+      return rows[0].serviceDetails.cargo;
+    };
+    const cargoBReceivable = () =>
+      deriveCustomerFinanceSummary({
+        totalCharge: 42,
+        payments: payments.filter(
+          (payment) => payment.transactionId === "cargo-b",
+        ),
+        asOf: "2026-08-31",
+      }).accountsReceivable;
+
+    assert.deepEqual(await servicePerformance(), {
+      transactions: 2,
+      customerCharges: 66,
+      paymentsReceived: 24,
+      directCost: 0,
+      profit: 66,
+    });
+    assert.equal(cargoBReceivable(), 42);
+
+    payments.push(doc({
+      transactionType: "cargo",
+      transactionId: "cargo-b",
+      branchId: mog,
+      paymentDate: "2026-08-31",
+      currency: "USD",
+      paymentMethod: "EVC Plus",
+      amount: 20,
+      status: "active",
+    }));
+    assert.equal((await servicePerformance()).paymentsReceived, 44);
+    assert.equal((await servicePerformance()).profit, 66);
+    assert.equal(cargoBReceivable(), 22);
+
+    payments.push(doc({
+      transactionType: "cargo",
+      transactionId: "cargo-b",
+      branchId: mog,
+      paymentDate: "2026-08-31",
+      currency: "USD",
+      paymentMethod: "EVC Plus",
+      amount: 22,
+      status: "active",
+    }));
+    assert.equal((await servicePerformance()).paymentsReceived, 66);
+    assert.equal((await servicePerformance()).profit, 66);
+    assert.equal(cargoBReceivable(), 0);
+  });
+});
+
+test("service charges and later ledger payments stay in their actual months", async () => {
+  await withReportMocks({
+    cargo: [
+      doc({
+        id: "cargo-cross-month",
+        originBranchId: mog,
+        dateIn: "2026-08-31",
+        currency: "USD",
+        weight: 1,
+        rate: 24,
+        cost: 0,
+        status: "received",
+      }),
+    ],
+    payments: [
+      doc({
+        transactionType: "cargo",
+        transactionId: "cargo-cross-month",
+        branchId: mog,
+        paymentDate: "2026-09-05",
+        currency: "USD",
+        paymentMethod: "EVC Plus",
+        amount: 24,
+        status: "active",
+      }),
+    ],
+  }, async () => {
+    const august = await buildFinanceReport({
+      branchId: mog,
+      from: "2026-08-01",
+      to: "2026-08-31",
+    });
+    assert.deepEqual(august[0].serviceDetails.cargo, {
+      transactions: 1,
+      customerCharges: 24,
+      paymentsReceived: 0,
+      directCost: 0,
+      profit: 24,
+    });
+
+    const september = await buildFinanceReport({
+      branchId: mog,
+      from: "2026-09-01",
+      to: "2026-09-30",
+    });
+    assert.deepEqual(september[0].serviceDetails.cargo, {
+      transactions: 0,
+      customerCharges: 0,
+      paymentsReceived: 24,
+      directCost: 0,
+      profit: 0,
+    });
+  });
+});
+
+test("payment method detail separates refunds from receipts and reports net received", async () => {
+  await withReportMocks({
+    visas: [
+      doc({ id: "sale", type: "Sale", branchId: mog, appDate: "2026-08-12", currency: "USD", amount: 300, cost: 200 }),
+      doc({ id: "refund", type: "Refund", branchId: mog, appDate: "2026-08-16", currency: "USD", amount: 100, cost: 0 }),
+    ],
+    payments: [
+      doc({ transactionType: "visa", transactionId: "sale", branchId: mog, paymentDate: "2026-08-12", currency: "USD", paymentMethod: "EVC Plus", amount: 300, status: "active" }),
+      doc({ transactionType: "visa", transactionId: "refund", branchId: mog, paymentDate: "2026-08-16", currency: "USD", paymentMethod: "EVC Plus", amount: 100, status: "active", flow: "outbound" }),
+    ],
+  }, async () => {
+    const rows = await buildFinanceReport({ branchId: mog, from: "2026-08-01", to: "2026-08-31" });
+    const usd = rows.find((row) => row.currency === "USD");
+    assert.equal(usd.revenue, 200);
+    assert.equal(usd.grossProfit, 0);
+    assert.equal(usd.collections, 200);
+    assert.deepEqual(usd.paymentMethodDetails["EVC Plus"], {
+      transactions: 2,
+      received: 300,
+      refunds: 100,
+      netReceived: 200,
+    });
   });
 });

@@ -1,0 +1,2828 @@
+/* Production compatibility after the exact handoff stylesheet. */
+:root {
+  --display: Poppins, Inter, ui-sans-serif, system-ui, sans-serif;
+  --body: Poppins, Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  min-width: 0;
+  overflow-x: clip;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.page-header h1,
+.panel-head h2,
+.public-hero h1 {
+  font-family: Poppins, Inter, ui-sans-serif, system-ui, sans-serif !important;
+}
+
+.page-wrap.content {
+  width: 100%;
+  max-width: none;
+  padding: 20px 20px 38px;
+  animation: pageIn 0.45s ease;
+}
+
+/* Cargo intentionally has no analytics side rail: both the KPI strip and the
+   status/route panels use the full shared-workspace width. */
+.cargo-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.cargo-overview .metrics-grid.five,
+.cargo-overview .split-even {
+  width: 100%;
+}
+
+.cargo-overview .split-even > * {
+  min-width: 0;
+}
+
+.metrics-grid.six > .metric-card {
+  min-height: 108px;
+  padding: 15px;
+  border-radius: 15px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.metrics-grid.six > .metric-card .metric-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+}
+
+.metrics-grid.six > .metric-card .metric-main {
+  padding-right: 0;
+}
+
+.metrics-grid.six > .metric-card .metric-main > .eyebrow-soft {
+  min-height: 0;
+}
+
+.metrics-grid.six > .metric-card .sparkline {
+  display: block;
+  position: absolute;
+  right: 11px;
+  bottom: 11px;
+  width: 76px;
+  height: 33px;
+}
+
+.sidebar-brand {
+  min-height: 70px;
+  padding: 0 8px !important;
+  border-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-logo {
+  width: 175px;
+  height: auto;
+  max-height: 68px;
+  filter: none;
+}
+
+.sidebar-brand .sidebar-symbol {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  object-fit: contain;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: brightness(0) invert(1) drop-shadow(0 4px 10px rgba(0, 183, 212, 0.22));
+}
+
+.summary-eq hr {
+  border: 0;
+  border-top: 1px solid #dbe4ef;
+  margin: 12px 0;
+}
+
+.sidebar-wordmark {
+  min-width: 0;
+  color: #fff;
+  line-height: 1;
+}
+
+.sidebar-wordmark strong {
+  display: block;
+  color: #fff;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.sidebar-wordmark strong span {
+  color: #20d5ef;
+}
+
+.sidebar-wordmark small {
+  display: block;
+  margin-top: 6px;
+  color: #d7e6fb;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+}
+
+.metric-main > strong {
+  overflow-wrap: anywhere;
+}
+
+.payable-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.filter-panel { margin-top: 14px; }
+.branch-expense-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px; font-size: 10px; }
+
+.sidebar nav {
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 0;
+}
+
+.sidebar nav button {
+  height: auto;
+  min-height: 40px;
+  padding: 12px 13px;
+  border-radius: 11px;
+  font-size: 14px;
+}
+
+.sidebar nav button.active i {
+  display: none;
+}
+
+.sidebar-promo {
+  flex-shrink: 0;
+  margin: auto 0 0;
+  border-radius: 16px;
+}
+
+.sidebar-promo a {
+  border-radius: 9px;
+}
+
+.sidebar-footer {
+  padding: 16px 4px 0;
+}
+
+.topbar-workspace.workspace-context {
+  text-transform: none;
+}
+
+.topbar-workspace.workspace-context > span:last-child {
+  display: block;
+}
+
+.topbar-workspace.workspace-context strong {
+  font-size: 14px;
+}
+
+.topbar-workspace.workspace-context small {
+  font-size: 10.5px;
+}
+
+.shell-menu {
+  display: grid;
+  width: 32px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #24436e;
+}
+
+.top-actions .topbar-filter {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #344361;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.topbar-control select,
+.topbar-control input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.topbar-control select { width: 118px; }
+.topbar-date-control input { width: 104px; }
+.topbar-date-control span { color: #8591a6; font-size: 10px; }
+
+.top-actions .round-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #041a40, #0b3d7b);
+  color: #10c8e6;
+}
+
+.button {
+  border-radius: 10px;
+  border: 1px solid transparent;
+  padding: 10px 15px;
+  font-weight: 600;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.button.primary { background: linear-gradient(135deg, #0b66e3, #0754c8); color: #fff; }
+.button.secondary { background: #fff; border-color: #cfe0f7; color: #0b66e3; }
+.button.ghost { background: #f7f9fc; border-color: var(--line); color: #35425c; }
+.button.danger { background: #fff3f3; border-color: #ffcaca; color: #d9363e; }
+
+.modal-card {
+  width: min(1040px, calc(100vw - 80px));
+  max-height: 90vh;
+  border-radius: 24px;
+}
+
+.modal-close-wrap {
+  display: contents;
+}
+
+.modal-close {
+  font-size: 0;
+}
+
+.modal-card .modal-form {
+  padding: 0;
+}
+
+.field > div:not(.field-control) {
+  min-height: 42px;
+}
+
+/* .filter-field and .search-field wrappers really are the bordered control, so
+   the element inside them stays bare. */
+.filter-field > div > select,
+.search-field > input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #233653;
+}
+
+/* --- One border per form control ----------------------------------------
+   .field-control is only a layout column (control + error text). The handoff's
+   `.field > div` rule painted a 42px/10px-radius box around it while somway.css
+   styles the real <input> as a 52px/12px-radius control, so both boxes drew a
+   border at mismatched sizes. The input is the control; the wrapper is not. */
+/* Two classes so this outranks the handoff's `.field > div` (0,1,1). */
+.field > .field-control,
+.field-control {
+  min-height: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  gap: 6px;
+}
+
+.field-control > input,
+.field-control > select,
+.field-control > textarea,
+.field-control > .password-field > input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d4e0eb;
+  border-radius: 12px;
+  background: #fff;
+  color: #233653;
+  outline: 0;
+}
+
+.field-control > input:focus,
+.field-control > select:focus,
+.field-control > textarea:focus,
+.field-control > .password-field > input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(0, 183, 212, 0.14);
+}
+
+.filter-field > div > select {
+  appearance: none;
+  flex: 1;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.search-field > input {
+  height: 100%;
+  padding: 0;
+  font-size: 11px;
+}
+
+.row-actions.action-group .small-icon {
+  width: 29px;
+  height: 29px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #54637c;
+}
+
+.row-actions.action-group .payment-action {
+  width: auto;
+  padding: 0 9px;
+  color: #0b66e3;
+}
+
+.kpi.metric-card {
+  border-radius: 15px;
+}
+
+.table-shell.table-wrap {
+  border-radius: 14px;
+}
+
+.empty {
+  border-radius: 14px;
+}
+
+.public-logo-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  text-decoration: none;
+}
+
+.public-nav .public-logo-lockup .brand-mark,
+.public-footer .public-logo-lockup .brand-mark {
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  object-fit: contain;
+  filter: brightness(0) invert(1) drop-shadow(0 4px 10px rgba(0, 183, 212, 0.2));
+}
+
+.public-logo-lockup > span > strong,
+.public-logo-lockup > span > small {
+  display: block;
+  color: #fff;
+}
+
+.public-logo-lockup > span > strong {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.public-logo-lockup > span > strong span { color: #20d5ef; }
+.public-logo-lockup > span > small {
+  margin-top: 5px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+}
+
+.public-nav .button { color: #fff; }
+
+.hero.public-hero-live {
+  min-height: min(620px, calc(100vh - 72px));
+  display: flex;
+  align-items: center;
+  isolation: isolate;
+  background: #031735;
+}
+
+.hero.public-hero-live::before,
+.hero.public-hero-live::after { display: none; }
+
+.hero-media,
+.hero-shade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-media { object-fit: cover; object-position: center; z-index: -2; }
+.hero-shade {
+  z-index: -1;
+  background: linear-gradient(90deg, rgba(3, 23, 53, 0.96) 0%, rgba(3, 31, 73, 0.83) 45%, rgba(3, 23, 53, 0.18) 100%);
+}
+
+.public-tracking-head { margin-bottom: 16px; }
+.public-tracking-head h3 { color: #fff; font-size: 22px; }
+.public-tracking-head p { color: #b7cae5; }
+/* The generic `.panel-head h3/p` colours further down this file carry the
+   same specificity and land later, so on the dark tracking panel the
+   heading rendered navy-on-navy. Qualify by the panel to outrank them. */
+.tracking-public .public-tracking-head h3 { color: #fff; }
+.tracking-public .public-tracking-head p { color: #b7cae5; }
+.public-tracking-head .subtabs { margin: 0; }
+.public-tracking-form { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 10px; }
+.public-tracking-form .search-field { width: 100%; }
+.tracking-public .search-field input { color: #fff; }
+.tracking-public .search-field input::placeholder { color: #a9bedb; }
+.public-result { min-height: 42px; margin-top: 14px; color: #c8d9ef; font-size: 11px; }
+.public-result-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid rgba(255,255,255,.12); border-radius: 13px; overflow: hidden; }
+.public-result-grid > div { padding: 14px; border-right: 1px solid rgba(255,255,255,.1); }
+.public-result-grid > div:last-child { border-right: 0; }
+.public-result-grid span,
+.public-result-grid strong { display: block; }
+.public-result-grid span { color: #91a9c8; font-size: 9px; }
+.public-result-grid strong { margin-top: 5px; color: #fff; font-size: 11px; }
+.branch-card .subtabs { margin-top: 13px; }
+.branch-card .subtabs a { border: 1px solid #dbe4ef; background: #fff; border-radius: 9px; padding: 8px 12px; font-size: 10px; color: #0b66e3; }
+.public-contact-list { margin-top: 16px; }
+.public-contact-list span { display: flex; align-items: center; gap: 9px; color: #53647e; font-size: 10px; }
+.public-contact-copy .button { margin-top: 18px; }
+.whatsapp p { color: #c9dbef; }
+.public-footer-brand .public-logo-lockup { margin-bottom: 10px; }
+
+@media (max-width: 1279px) {
+  body { min-width: 0; }
+  .app-shell { grid-template-columns: minmax(0, 1fr); }
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: min(320px, 86vw);
+    transform: translateX(-105%);
+    transition: transform 220ms ease;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .mobile-menu { display: grid; }
+  .metrics-grid.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .metrics-grid.five { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .public-links { gap: 16px; }
+}
+
+@media (max-width: 767px) {
+  .topbar { padding: 0 14px; }
+  .top-actions > button:not(.icon-btn):not(.round-mark),
+  .top-actions .site-link,
+  .top-actions .role-pill,
+  .top-actions .topbar-filter { display: none; }
+  .page-wrap.content { padding: 16px 14px 30px; }
+  .metrics-grid,
+  .metrics-grid.six,
+  .metrics-grid.five,
+  .split-2,
+  .split-even,
+  .split-3,
+  .content-grid,
+  .form-grid { grid-template-columns: 1fr; }
+  .field.full { grid-column: auto; }
+  .page-header { flex-direction: column; gap: 14px; }
+  .page-actions { width: 100%; flex-wrap: wrap; }
+  .modal-backdrop { padding: 0; align-items: end; }
+  .modal-card {
+    width: 100%;
+    max-height: 96vh;
+    border-radius: 20px 20px 0 0;
+    padding: 22px 18px;
+  }
+  .modal-grid.with-side { grid-template-columns: 1fr; }
+  .public-nav { height: 64px; padding: 0 18px; }
+  .public-logo-lockup > span > strong { font-size: 17px; }
+  .public-links a:not(.button) { display: none; }
+  .public-links .button { padding: 9px 11px; font-size: 10px; }
+  .hero.public-hero-live { min-height: 610px; padding: 48px 22px; align-items: flex-end; }
+  .hero-copy h1 { font-size: 38px; }
+  .hero-shade { background: linear-gradient(0deg, rgba(3,23,53,.98) 0%, rgba(3,31,73,.8) 62%, rgba(3,23,53,.25) 100%); }
+  .services-grid,
+  .public-branches,
+  .contact-grid,
+  .public-footer,
+  .public-result-grid { grid-template-columns: 1fr; }
+  .public-section { padding: 34px 20px; }
+  .tracking-public { margin: 0 20px 34px; padding: 18px; }
+  /* Heading and the Cargo/Visa switch each get a full-width row. Side by
+     side they starve the heading to a few characters per line and push
+     "Visa Application" off the right edge. */
+  .public-tracking-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .public-tracking-head .subtabs {
+    width: 100%;
+    gap: 8px;
+  }
+  .public-tracking-head .subtabs > button {
+    flex: 1 1 0;
+    text-align: center;
+    justify-content: center;
+  }
+  .public-tracking-form { grid-template-columns: 1fr; }
+  .branch-card { grid-template-columns: 1fr; }
+  .public-result-grid > div { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.1); }
+  .public-result-grid > div:last-child { border-bottom: 0; }
+  .public-footer { padding: 30px 20px 22px; }
+  .footer-bottom { align-items: flex-start; gap: 8px; flex-direction: column; }
+}
+
+/* Authoritative SomWay horizontal logo supplied by the owner. */
+.brand-master-logo {
+  display: block;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.sidebar-brand {
+  min-height: 78px;
+  padding: 0 0 8px !important;
+}
+
+.sidebar-brand .sidebar-logo {
+  width: min(100%, 220px);
+  height: 76px;
+  max-height: none;
+  object-fit: cover;
+  object-position: center;
+  filter: none;
+}
+
+.public-logo-lockup .public-header-logo,
+.public-logo-lockup .public-footer-logo {
+  width: 220px;
+  height: 68px;
+  object-fit: cover;
+  object-position: center;
+  filter: none;
+}
+
+.public-footer .public-logo-lockup .public-footer-logo {
+  width: 210px;
+  height: 72px;
+}
+
+.auth-brand-logo {
+  width: min(100%, 300px);
+  height: 104px;
+  object-fit: cover;
+  object-position: center;
+  filter: none;
+}
+
+.loading-brand-logo {
+  width: min(78vw, 320px);
+  height: 138px;
+  margin: auto;
+  border-radius: 6px;
+}
+
+.loading-screen {
+  background: #061b3d;
+  color: #dce8f9;
+}
+
+/* The SomWay lockup is a wide horizontal mark. `object-fit: cover` cropped
+   it to fill a fixed 190x72 box, which is why only the middle of the wordmark
+   showed. It must scale to fit, and shrink with the card on a phone. */
+.receipt-brand-logo {
+  width: clamp(120px, 42vw, 190px);
+  height: auto;
+  max-height: 62px;
+  padding: 8px 10px;
+  background: #061b3d;
+  object-fit: contain;
+  object-position: left center;
+  border-radius: 8px;
+}
+
+@media (max-width: 590px) {
+  .public-logo-lockup .public-header-logo {
+    width: 154px;
+    height: 54px;
+  }
+
+  .public-footer .public-logo-lockup .public-footer-logo {
+    width: 190px;
+    height: 68px;
+  }
+
+  .auth-brand-logo {
+    width: 230px;
+    height: 100px;
+  }
+}
+
+/* Grid tracks must be allowed to shrink below their content's intrinsic
+   minimum. A panel holding a DataTable (table has min-width:900px) otherwise
+   forces the first track wide and starves the adjacent column, collapsing the
+   dashboard side panels to ~136px. The table scrolls inside .table-wrap. */
+.split-2 {
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.8fr);
+}
+
+/* The handoff's `.panel-head > div:last-child { display: flex }` targets the
+   actions container, but also matches a lone title block, which puts the
+   heading and its subtitle side by side. Keep a solitary title block stacked. */
+.panel-head > div:only-child {
+  display: block;
+}
+
+/* The legacy `.toolbar` rule sets justify-content:space-between, which strands
+   the branch filter against the right edge. Filter rows read left-to-right. */
+.toolbar.filter-row {
+  justify-content: flex-start;
+  align-items: flex-end;
+}
+
+/* In narrow analytics columns a panel's action link must not be squeezed into
+   a second line by the heading beside it. */
+.panel-head > div:last-child:not(:first-child) {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* --- Retire the legacy teal brand token ----------------------------------
+   globals.css uses --green as the primary brand colour in 92 places (73 text,
+   19 surfaces: sidebar, primary button, toast, auth panel, public CTAs).
+   somway.css redefined it to teal (#0aa5b7) but never consumes it itself, so
+   its only effect was tinting whatever somway.css had not already re-stated —
+   leaving teal headings and surfaces scattered through an otherwise navy
+   product. Point it at Primary Navy so every fall-through lands on-brand. */
+:root {
+  --green: #073b78;
+}
+
+/* --- One heading colour scale --------------------------------------------
+   globals.css colours ~70 selectors with var(--green), which somway.css
+   redefines to teal (#0aa5b7). somway.css re-states navy for most headings,
+   so the ones it misses (sign-in, receipt lookup, some panel heads) rendered
+   teal against navy everywhere else. Pin section headings to the ink navy. */
+.auth-panel h2,
+.panel-head h2,
+.panel-head h3,
+.lookup-panel h2,
+.modal > header h2,
+.modal-title h2,
+.close-card h3,
+.tracking-result h2,
+.tracking-placeholder h3,
+.empty h3,
+.empty-receipt h3,
+.receipt-card h2 {
+  color: #0d1b42;
+}
+
+/* --- Sign-in panel brand colour ------------------------------------------
+   .auth-story inherits var(--green), which somway.css redefines to teal
+   (#0aa5b7). That left the sign-in screen teal while the sidebar and the rest
+   of the product are deep navy. Anchor it to the same navy as the sidebar. */
+.auth-story {
+  background: linear-gradient(165deg, #05152d 0%, #073b78 62%, #0b4f96 100%);
+}
+
+.auth-story .eyebrow {
+  color: #80deea;
+}
+
+/* --- Daily Summary ------------------------------------------------------- */
+/* The KPI strip now uses design-system metric cards; two rows of four. */
+.daily-summary-kpis.metrics-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 13px;
+}
+
+/* The icon-beside-content card layout is scoped to .metrics-grid.six upstream;
+   these cards need the same treatment. */
+.daily-summary-kpis > .metric-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-height: 108px;
+  padding: 15px;
+  border-radius: 15px;
+}
+
+.daily-summary-kpis > .metric-card .metric-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+}
+
+/* Several currencies can stack inside one card, so the value block grows
+   instead of the single-line treatment used elsewhere. */
+.daily-summary-kpis .metric-values strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #102a43;
+  white-space: nowrap;
+}
+
+.daily-summary-kpis .metric-values strong + strong {
+  margin-top: 2px;
+}
+
+.daily-summary-analytics {
+  margin-top: 14px;
+}
+
+@media (max-width: 1200px) {
+  .daily-summary-kpis.metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .daily-summary-kpis.metrics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- Financial Reports summary band -------------------------------------- */
+.report-summary-block {
+  margin-top: 16px;
+}
+
+.report-summary-block > .eyebrow {
+  margin-bottom: 10px;
+}
+
+/* Section headings on Financial Reports follow the panel heading scale rather
+   than the oversized display treatment they previously used. */
+.service-performance-header h2,
+.service-group-heading h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0d1b42;
+}
+
+.service-performance-header {
+  margin-bottom: 12px;
+}
+
+/* --- Dashboard greeting band -------------------------------------------- */
+/* Greeting on the left, the four at-a-glance tiles on the right, as one row. */
+.overview-greeting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.overview-greeting-copy h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.4px;
+  color: #102a43;
+}
+
+.overview-greeting-copy p {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #718096;
+}
+
+.overview-greeting-row .overview-status-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #e7edf4;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(16, 42, 67, 0.025);
+}
+
+.overview-greeting-row .overview-status-strip > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 16px;
+  border: 0;
+  border-right: 1px solid #eef2f7;
+}
+
+.overview-greeting-row .overview-status-strip > div:last-child {
+  border-right: 0;
+}
+
+.overview-greeting-row .overview-status-strip .status-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 9px;
+}
+
+.overview-greeting-row .overview-status-strip strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #102a43;
+  white-space: nowrap;
+}
+
+.overview-greeting-row .overview-status-strip strong.negative {
+  color: var(--danger);
+}
+
+.overview-greeting-row .overview-status-strip small {
+  display: block;
+  margin-top: 2px;
+  font-size: 9.5px;
+  color: #8a9bad;
+  white-space: nowrap;
+}
+
+/* --- Bar chart with a labelled y-axis ------------------------------------ */
+.bar-chart-wrap {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.bar-chart-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-bottom: 20px;
+  font-size: 8.5px;
+  color: #9aaabd;
+  text-align: right;
+}
+
+.bar-chart-wrap .bar-chart {
+  position: relative;
+}
+
+.bar-chart-grid {
+  position: absolute;
+  inset: 0 0 20px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.bar-chart-grid i {
+  display: block;
+  height: 1px;
+  background: #edf1f6;
+}
+
+/* --- Cargo tracking status ---------------------------------------------- */
+/* The list is also a .stack, whose 14px gap on top of the row padding pushed
+   each row to ~72px. The reference row is 49px. */
+.dashboard-status-list {
+  gap: 0;
+}
+
+.dashboard-status-row {
+  grid-template-columns: 36px 1fr auto auto;
+  column-gap: 8px;
+  min-height: 49px;
+  padding: 0;
+}
+
+.dashboard-status-row:last-child {
+  border-bottom: 0;
+}
+
+.status-share {
+  min-width: 34px;
+  font-size: 10px;
+  color: #8a9bad;
+  text-align: right;
+}
+
+.dashboard-status-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #edf1f6;
+  font-size: 11px;
+}
+
+.dashboard-status-total span {
+  color: #64748b;
+}
+
+.dashboard-status-total b {
+  font-weight: 700;
+  color: #183b56;
+}
+
+/* --- Bottom row: transactions + top clients + tasks/clients -------------- */
+.dashboard-bottom-row {
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.85fr) minmax(0, 1.1fr);
+}
+
+.top-client-spend {
+  font-size: 11px;
+  font-weight: 700;
+  color: #183b56;
+  white-space: nowrap;
+}
+
+@media (max-width: 1360px) {
+  .dashboard-analytics-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .dashboard-bottom-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .overview-greeting-row .overview-status-strip {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .dashboard-bottom-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-analytics-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .overview-greeting-copy h1 {
+    font-size: 21px;
+  }
+}
+
+/* Branch performance rows on the dashboard analytics band. A legacy rule turns
+   rows inside .stack into grids, which collapses the zero-content progress bar
+   to a 0px track, so these rows are explicitly block-level. */
+.branch-performance > div {
+  display: block;
+}
+
+.branch-performance .progress {
+  width: 100%;
+}
+
+.branch-performance > div + div {
+  margin-top: 14px;
+}
+
+.branch-performance-name {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #183b56;
+}
+
+.branch-performance-figures {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  margin-bottom: 9px;
+}
+
+.branch-performance-figures small {
+  display: block;
+  font-size: 9.5px;
+  color: #8a9bad;
+}
+
+.branch-performance-figures b {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #183b56;
+  white-space: nowrap;
+}
+
+.branch-performance-figures > div:last-child {
+  text-align: right;
+}
+
+/* The public chrome still carried the previous identity's green/blue split
+   accent. SomWay's accent runs brand blue into cyan. */
+.public-nav::before {
+  background: linear-gradient(90deg, var(--blue) 0%, var(--cyan) 100%);
+}
+
+.public-nav nav a::after {
+  background: linear-gradient(90deg, var(--blue), var(--cyan));
+}
+
+.public-nav nav a:hover {
+  color: var(--cyan);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --- Daily Summary layout ------------------------------------------------
+   Wide reporting column with a fixed closing rail on the right, matching the
+   supplied reference. The rail drops beneath the report below 1400px. */
+.ds-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  align-items: start;
+  gap: 16px;
+}
+
+.ds-main {
+  min-width: 0;
+}
+
+.ds-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Calendar glyph beside the page title, as the design shows. */
+.page-title-icon {
+  display: inline-grid;
+  place-items: center;
+  margin-left: 9px;
+  color: #6f8bb0;
+  vertical-align: middle;
+}
+
+/* The day state and the export action close out the filter row. */
+.ds-filter-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  align-self: end;
+  min-height: 42px;
+}
+
+.ds-filter-actions .status-badge,
+.ds-filter-actions .badge {
+  white-space: nowrap;
+}
+
+/* The filter row carries the export action on its trailing edge, so it needs a
+   fourth track that absorbs the remaining width. */
+.daily-summary-filters {
+  grid-template-columns: repeat(3, minmax(150px, 240px)) minmax(0, 1fr);
+  align-items: end;
+}
+
+.daily-summary-filters .ds-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #0b66e3;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.daily-summary-filters .ds-export:disabled {
+  color: #a8b6c8;
+  cursor: not-allowed;
+}
+
+/* --- KPI cards ----------------------------------------------------------- */
+.daily-summary-kpis > .metric-card {
+  position: relative;
+  padding-right: 30px;
+}
+
+/* Opens the branch-by-branch breakdown for that one figure. Centred on the
+   card's trailing edge, matching the chevron in the design. */
+.ds-kpi-more {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-top: -12px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #a8b6c8;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+/* The chevron glyph points right when closed and turns down when open. */
+.ds-kpi-more svg {
+  transition: transform 180ms ease;
+}
+
+.ds-kpi-more[aria-expanded="true"] {
+  background: #e8f1ff;
+  color: #0b66e3;
+}
+
+.ds-kpi-more[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+.ds-kpi-more:hover {
+  background: #eef3f9;
+  color: #35425c;
+}
+
+.daily-summary-kpis > .metric-card.is-open {
+  border-color: #b9d4f7;
+  box-shadow: 0 10px 26px rgba(11, 102, 227, 0.12);
+}
+
+/* Delta and caption sit on one line each rather than breaking mid-figure. */
+.daily-summary-kpis .metric-foot {
+  flex-wrap: wrap;
+  row-gap: 1px;
+  font-size: 8.5px;
+}
+
+.daily-summary-kpis .metric-foot > span {
+  white-space: nowrap;
+}
+
+.ds-kpi-detail {
+  margin-top: 13px;
+}
+
+/* --- Three-panel analytics rows ------------------------------------------ */
+.ds-charts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+/* Empty states inside a chart panel keep the row height even instead of
+   inflating one panel far past its neighbours. */
+.ds-charts .empty-state,
+.ds-charts .empty {
+  min-height: 0;
+  padding: 22px 16px;
+}
+
+/* No clipping here: a table wider than its panel has to scroll inside the
+   panel, otherwise the trailing columns are silently cut off. */
+.ds-charts > .panel {
+  min-width: 0;
+}
+
+.ds-charts .panel-head {
+  gap: 10px;
+  padding: 15px 16px 9px;
+}
+
+.ds-charts .panel-head h3 {
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.ds-charts .panel-head p {
+  font-size: 9px;
+}
+
+.ds-charts .panel-head .text-button {
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.ds-charts .table-wrap {
+  overflow-x: auto;
+}
+
+.ds-charts .table-wrap table {
+  min-width: 0;
+}
+
+.ds-charts .table-wrap th,
+.ds-charts .table-wrap td {
+  padding: 8px 6px;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.ds-charts .table-wrap th:first-child,
+.ds-charts .table-wrap td:first-child {
+  padding-left: 10px;
+}
+
+.ds-charts .table-wrap th:last-child,
+.ds-charts .table-wrap td:last-child {
+  padding-right: 10px;
+}
+
+/* The row names its currency once, so the figures beside it stay bare and the
+   four columns fit the panel without being cut off. */
+.ds-charts .table-wrap td small {
+  display: block;
+  margin-top: 1px;
+  color: #8190aa;
+  font-size: 8.5px;
+  font-weight: 600;
+}
+
+.ds-total-row td {
+  border-top: 1px solid var(--line);
+  font-weight: 700;
+  color: #0d1b42;
+}
+
+/* --- Donut legend with share above amount -------------------------------- */
+/* Three panels to a row leaves roughly 300px, so the ring shrinks and the
+   legend is allowed to fall below its natural 180px minimum. */
+.ds-charts .donut-wrap {
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.ds-charts .donut {
+  width: 116px;
+  height: 116px;
+}
+
+.ds-charts .donut:after {
+  width: 70px;
+  height: 70px;
+}
+
+.ds-charts .donut strong {
+  font-size: 12px;
+}
+
+.ds-charts .legend {
+  min-width: 0;
+}
+
+.legend-detailed > div {
+  align-items: start;
+  margin: 11px 0;
+}
+
+.legend-detailed b {
+  text-align: right;
+  color: #0d1b42;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.legend-detailed b em {
+  display: block;
+  color: #7f8da4;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+/* --- Collections against expenses ---------------------------------------- */
+.grouped-bars {
+  padding: 0 16px 14px;
+}
+
+.grouped-bars-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.grouped-bars-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #61708c;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.grouped-bars-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+}
+
+.grouped-bars .bar-chart {
+  height: 196px;
+  background: none;
+}
+
+/* Two bars share one slot, so they sit side by side rather than stacked. */
+.bar-pair {
+  height: calc(100% - 20px);
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+}
+
+.bar-pair i {
+  width: 14px;
+  min-width: 9px;
+  max-width: 22%;
+  min-height: 3px;
+  border-radius: 4px 4px 1px 1px;
+}
+
+.grouped-bars .bar-group > span {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Client and route leaderboards --------------------------------------- */
+.ds-rank-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0 18px 14px;
+}
+
+.ds-rank-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 0;
+  border-bottom: 1px solid #f0f4f9;
+}
+
+.ds-rank-row:last-child {
+  border-bottom: 0;
+}
+
+.ds-avatar,
+.ds-route-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  background: #e8f1ff;
+  color: #0b66e3;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+/* Client initials sit in a circle; route markers keep the squared badge. */
+.ds-avatar {
+  border-radius: 50%;
+}
+
+.ds-route-icon {
+  border-radius: 9px;
+}
+
+.ds-route-arrow {
+  margin: 0 5px;
+  color: #8190aa;
+  font-style: normal;
+}
+
+.ds-rank-name {
+  overflow: hidden;
+  color: #0d1b42;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-rank-row b {
+  color: #0d1b42;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.ds-rank-row em {
+  color: #7f8da4;
+  font-size: 9px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+/* --- Closing checklist ---------------------------------------------------- */
+.ds-checklist .panel-head {
+  padding: 16px 18px 10px;
+}
+
+.ds-progress-count {
+  color: #0b66e3;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ds-progress {
+  height: 5px;
+  margin: 0 18px 14px;
+  border-radius: 999px;
+  background: #eaeff6;
+  overflow: hidden;
+}
+
+.ds-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0b66e3, #00a9c7);
+  transition: width 260ms ease;
+}
+
+.ds-check-list {
+  margin: 0;
+  padding: 0 18px;
+  list-style: none;
+}
+
+.ds-check-list li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+}
+
+.ds-check-box {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #d8e2ee;
+  border-radius: 5px;
+  background: #fff;
+  color: transparent;
+}
+
+.ds-check-list li.is-done .ds-check-box {
+  border-color: #18a24b;
+  background: #18a24b;
+  color: #fff;
+}
+
+.ds-check-label {
+  overflow: hidden;
+  color: #35425c;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-check-list li.is-done .ds-check-label {
+  color: #0d1b42;
+}
+
+.ds-check-list time {
+  color: #93a2b8;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.ds-check-state {
+  display: grid;
+  place-items: center;
+  color: #cbd6e3;
+}
+
+.ds-check-list li.is-done .ds-check-state {
+  color: #18a24b;
+}
+
+.ds-check-list li.is-pending .ds-check-state {
+  color: #f59e0b;
+}
+
+.ds-checklist-foot {
+  padding: 12px 18px 16px;
+}
+
+.ds-checklist-foot .button {
+  width: 100%;
+  justify-content: center;
+}
+
+.ds-checklist-foot > span {
+  display: block;
+  color: #8190aa;
+  font-size: 9.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* --- Activity timeline ---------------------------------------------------- */
+.ds-timeline-panel .panel-head {
+  padding: 16px 18px 10px;
+}
+
+.ds-timeline {
+  margin: 0;
+  padding: 0 18px 16px;
+  list-style: none;
+}
+
+/* Time, action and actor sit on one line, as the design shows. */
+.ds-timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 0 14px 16px;
+}
+
+/* The rail and dot are drawn rather than pulled in as assets. */
+.ds-timeline li:before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0b66e3;
+}
+
+.ds-timeline li:after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 0;
+  left: 3.5px;
+  width: 1px;
+  background: #e7ecf3;
+}
+
+.ds-timeline li:last-child {
+  padding-bottom: 0;
+}
+
+.ds-timeline li:last-child:after {
+  display: none;
+}
+
+.ds-timeline li.ds-dot-green:before {
+  background: #18a24b;
+}
+
+.ds-timeline li.ds-dot-orange:before {
+  background: #f59e0b;
+}
+
+.ds-timeline li.ds-dot-red:before {
+  background: #e64141;
+}
+
+.ds-timeline li.ds-dot-violet:before {
+  background: #7c3aed;
+}
+
+.ds-timeline time {
+  color: #93a2b8;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.ds-timeline-action {
+  overflow: hidden;
+  color: #0d1b42;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-timeline-actor {
+  overflow: hidden;
+  max-width: 96px;
+  color: #8190aa;
+  font-size: 9px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1400px) {
+  .ds-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ds-rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .ds-rail > .panel {
+    flex: 1 1 300px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .ds-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ds-rail {
+    flex-direction: column;
+  }
+}
+
+/* Desktop sidebar collapse. Below 1280px the sidebar is an overlay drawer
+   driven by `.sidebar.open`; at desktop widths it is a grid column, so the
+   topbar menu button collapses that column instead. */
+@media (min-width: 1280px) {
+  .sidebar {
+    transition:
+      transform 220ms ease,
+      opacity 180ms ease;
+  }
+  .app-shell.nav-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr);
+  }
+  .app-shell.nav-collapsed .sidebar {
+    transform: translateX(-100%);
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Phone layout (<=767px).
+
+   The app is used one-handed in the field, so the registers become
+   stacked cards rather than a 900px table scrolled sideways, and the
+   branch scope stays reachable instead of being hidden.
+   --------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  /* Registers as stacked cards. Column names come from each cell's
+     data-label, mirrored from <thead> by useStackedTableLabels(). */
+  .table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+  .table-wrap table {
+    display: block;
+    min-width: 0;
+  }
+  .table-wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .table-wrap tbody {
+    display: block;
+  }
+  .table-wrap tbody tr {
+    display: block;
+    margin-bottom: 12px;
+    padding: 2px 0;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(3, 23, 53, 0.07);
+  }
+  .table-wrap tbody tr:last-child {
+    margin-bottom: 0;
+  }
+  .table-wrap tbody tr:hover {
+    background: #fff;
+  }
+  /* Label above value rather than a two-column row: cells hold arbitrary
+     markup (`<strong>ref</strong><br>date`), and any side-by-side layout
+     would turn each child -- including the bare text node after the <br> --
+     into a separate column item, dropping the second line under the label. */
+  .table-wrap td {
+    display: block;
+    border-top: 0;
+    border-bottom: 1px solid #eef2f7;
+    padding: 9px 14px;
+    font-size: 12.5px;
+  }
+  .table-wrap tbody tr td:last-child {
+    border-bottom: 0;
+  }
+  .table-wrap td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    color: #64748b;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  /* Action cells carry a blank header, so they get no data-label. Their
+     buttons share the full card width and stay thumb-sized. */
+  .table-wrap td:not([data-label])::before {
+    content: none;
+  }
+  .table-wrap td:not([data-label]) {
+    padding: 12px 14px;
+  }
+  .table-wrap .row-actions {
+    width: 100%;
+    gap: 8px;
+    justify-content: stretch;
+  }
+  .table-wrap .row-actions > * {
+    flex: 1 1 0;
+    min-height: 42px;
+  }
+
+  /* The topbar scrolls sideways as one strip. Branch scope and the date
+     range drive every module's filter, so nothing may be hidden, and
+     wrapping them onto extra rows eats the screen before the page even
+     starts. */
+  .topbar {
+    height: auto;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .topbar::-webkit-scrollbar {
+    display: none;
+  }
+  .topbar > *,
+  .top-actions > * {
+    flex: 0 0 auto;
+  }
+  .top-actions {
+    flex-wrap: nowrap;
+  }
+  .top-actions .topbar-filter {
+    display: flex;
+    flex: 0 0 auto;
+  }
+
+  /* Tap targets. */
+  .row-actions button,
+  .page-actions button,
+  .modal-actions button,
+  .subtabs button,
+  .modal-form input,
+  .modal-form select,
+  .public-tracking-form input,
+  .public-tracking-form button {
+    min-height: 42px;
+  }
+  .icon-btn,
+  .round-mark {
+    min-height: 40px;
+    min-width: 40px;
+  }
+}
+
+/* Tab strips scroll instead of clipping. The registers carry up to five
+   status tabs, which cannot fit any phone width, and wrapping them makes
+   the row height jump as the active filter changes. */
+@media (max-width: 767px) {
+  .tabs,
+  .subtabs,
+  .status-kind-tabs,
+  .public-tracking-head .subtabs {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar,
+  .subtabs::-webkit-scrollbar,
+  .status-kind-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .tabs > button,
+  .subtabs > button,
+  .status-kind-tabs > button {
+    flex: 0 0 auto;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Notifications bell and profile.
+   --------------------------------------------------------------------- */
+.notif-anchor {
+  position: relative;
+  display: flex;
+}
+.notif-anchor .icon-btn {
+  position: relative;
+}
+.notif-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #e2483d;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  box-shadow: 0 0 0 2px #fff;
+}
+/* Same pattern as .nav-scrim: a transparent full-screen button so a tap
+   anywhere outside the panel dismisses it. */
+.notif-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: 0;
+  background: transparent;
+}
+/* Anchored to the viewport, not the bell: the panel is rendered outside the
+   topbar so the topbar's horizontal scrolling cannot clip it. */
+.notif-panel {
+  position: fixed;
+  top: 74px;
+  right: 18px;
+  z-index: 41;
+  width: min(360px, calc(100vw - 28px));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 46px rgba(3, 23, 53, 0.18);
+  overflow: hidden;
+}
+.notif-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+  color: #0d1b42;
+}
+.notif-list {
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+}
+.notif-empty {
+  padding: 20px 16px;
+  color: #73829a;
+  font-size: 11.5px;
+  text-align: center;
+}
+.notif-item {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 16px;
+  gap: 10px;
+  align-items: start;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid #eef2f7;
+  background: #fff;
+  text-align: left;
+  color: #31415e;
+}
+.notif-item:last-child {
+  border-bottom: 0;
+}
+.notif-item:hover {
+  background: #f7fbff;
+}
+.notif-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+}
+.notif-high {
+  background: #e2483d;
+}
+.notif-medium {
+  background: #f0a02a;
+}
+.notif-low {
+  background: #0b66e3;
+}
+.notif-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.notif-body strong {
+  font-size: 12px;
+  color: #0d1b42;
+}
+.notif-ref {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0b66e3;
+  overflow-wrap: anywhere;
+}
+.notif-detail {
+  font-size: 10.5px;
+  color: #73829a;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-profile {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.sidebar-profile:hover strong {
+  text-decoration: underline;
+}
+.sidebar-profile > span {
+  display: grid;
+  min-width: 0;
+}
+.sidebar-profile strong,
+.sidebar-profile span span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.avatar-photo {
+  object-fit: cover;
+  border-radius: 50%;
+}
+.profile-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+/* `.avatar` fills with rgba(255,255,255,.1), which only reads against the
+   dark sidebar. On the white modal it needs its own solid ground. */
+.profile-photo {
+  width: 76px;
+  height: 76px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #041a40, #0b3d7b);
+  color: #fff;
+  font-size: 22px;
+}
+.profile-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.profile-photo-actions .button {
+  cursor: pointer;
+}
+.form-notice {
+  margin: 0 0 4px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #eaf7ee;
+  color: #1c6b3a;
+  font-size: 11.5px;
+}
+
+/* Account menu on the topbar avatar. */
+.account-anchor {
+  position: relative;
+  display: flex;
+}
+.account-button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  display: grid;
+  place-items: center;
+}
+.account-button .avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(145deg, #041a40, #0b3d7b);
+  color: #fff;
+  font-size: 13px;
+}
+.account-button:hover .avatar {
+  box-shadow: 0 0 0 3px rgba(11, 102, 227, 0.18);
+}
+.account-menu {
+  position: fixed;
+  top: 74px;
+  right: 18px;
+  z-index: 41;
+  width: 232px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 46px rgba(3, 23, 53, 0.18);
+}
+.account-identity {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 12px 12px 0 0;
+  background: transparent;
+  text-align: left;
+}
+.account-identity .avatar {
+  background: linear-gradient(145deg, #041a40, #0b3d7b);
+  color: #fff;
+  font-size: 13px;
+}
+.account-identity > span {
+  display: grid;
+  min-width: 0;
+}
+.account-identity strong {
+  font-size: 12.5px;
+  color: #0d1b42;
+}
+.account-identity span span {
+  font-size: 10.5px;
+  color: #73829a;
+}
+.account-identity strong,
+.account-identity span span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #31415e;
+  font-size: 12.5px;
+  text-align: left;
+}
+.account-action:hover {
+  background: #f2f7fd;
+}
+.account-signout {
+  color: #d9363e;
+}
+
+@media (max-width: 767px) {
+  .notif-panel,
+  .account-menu {
+    top: 62px;
+    right: 12px;
+    width: min(340px, calc(100vw - 24px));
+  }
+}
+
+/* The handoff sheet lays `.sidebar-user` out as `42px 1fr 18px` for a bare
+   avatar, name block and sign-out button. The profile button now wraps the
+   avatar and the name together, so it needs the flexible track -- otherwise
+   it lands in the 42px column and the name and role are clipped away. */
+.sidebar-user {
+  grid-template-columns: minmax(0, 1fr) 18px;
+}
+
+/* =====================================================================
+   CANONICAL CONTROLS
+
+   Four stylesheets stack in this app and each redefines the same
+   components: `.button` has 35 rule blocks, `.panel` 34, `.metric-card`
+   25, and `.button.primary` alone had four different backgrounds. Which
+   one won depended on source order, so the same control rendered
+   differently depending on the wrapper it sat in.
+
+   This block is the single source of truth. It loads last, so it wins.
+   Colour communicates PURPOSE, not decoration:
+     primary   the one main action on the screen
+     secondary an alternative action of equal safety
+     ghost     neutral, cancel, dismiss
+     danger    destructive and irreversible
+   ===================================================================== */
+:root {
+  --ui-radius: 12px;
+  --ui-radius-lg: 16px;
+  --ui-control-h: 44px;
+  --ui-border: #d7e2ee;
+  --ui-ink: #233653;
+  --ui-muted: #6d7f98;
+  --ui-brand: #0b66e3;
+  --ui-brand-dark: #0754c8;
+  --ui-danger: #d9363e;
+  --ui-surface: #fff;
+}
+
+/* --- Buttons ------------------------------------------------------- */
+button.primary,
+button.secondary,
+button.ghost,
+button.danger,
+.button.primary,
+.button.secondary,
+.button.ghost,
+.button.danger {
+  min-height: var(--ui-control-h);
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  transition: filter 0.15s ease, background 0.15s ease;
+}
+button.primary,
+.button.primary {
+  background: linear-gradient(135deg, var(--ui-brand), var(--ui-brand-dark));
+  border-color: transparent;
+  color: #fff;
+}
+button.secondary,
+.button.secondary {
+  background: var(--ui-surface);
+  border-color: #cfe0f7;
+  color: var(--ui-brand);
+}
+button.ghost,
+.button.ghost {
+  background: #f4f7fb;
+  border-color: var(--ui-border);
+  color: #35425c;
+}
+button.danger,
+.button.danger {
+  background: #fff5f5;
+  border-color: #f5c6c6;
+  color: var(--ui-danger);
+}
+button.primary:hover,
+button.secondary:hover,
+button.ghost:hover,
+button.danger:hover,
+.button.primary:hover,
+.button.secondary:hover,
+.button.ghost:hover,
+.button.danger:hover {
+  filter: brightness(0.97);
+}
+button.primary:disabled,
+button.secondary:disabled,
+button.ghost:disabled,
+button.danger:disabled,
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+/* --- Form controls -------------------------------------------------
+   One height, one radius, one border, one text colour everywhere a
+   value is typed or chosen. */
+.field-control > input,
+.field-control > select,
+.field-control > textarea,
+.field-control > .password-field > input,
+.modal-form input,
+.modal-form select,
+.modal-form textarea,
+.filter-panel input,
+.filter-panel select {
+  min-height: var(--ui-control-h);
+  padding: 0 13px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  font-family: inherit;
+  font-size: 13px;
+}
+.field-control > textarea,
+.modal-form textarea {
+  min-height: 96px;
+  padding: 11px 13px;
+  line-height: 1.5;
+}
+.field-control > input::placeholder,
+.modal-form input::placeholder,
+.modal-form textarea::placeholder,
+.search-field input::placeholder {
+  color: #93a3b8;
+}
+.field-control > input:focus,
+.field-control > select:focus,
+.field-control > textarea:focus,
+.field-control > .password-field > input:focus,
+.modal-form input:focus,
+.modal-form select:focus,
+.modal-form textarea:focus {
+  border-color: var(--ui-brand);
+  box-shadow: 0 0 0 3px rgba(11, 102, 227, 0.13);
+  outline: 0;
+}
+.field-control > input:disabled,
+.modal-form input:disabled,
+.modal-form select:disabled {
+  background: #f2f5f9;
+  color: #7a8aa1;
+}
+
+/* The search and filter wrappers ARE the control, so they take the same
+   metrics and the element inside them stays bare. */
+/* somway.css gives `.search-box` a `flex: 1 1 280px`. That reads as a width
+   while the toolbar is a row, but the toolbar stacks into a column on narrow
+   screens and the 280px basis then applies to the HEIGHT, rendering the
+   search box ~280px tall. The basis has to be auto so the control keeps its
+   own height whichever way the toolbar flows. */
+.search-box,
+.search-box.search-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+}
+.search-field,
+.filter-field > div {
+  min-height: var(--ui-control-h);
+  max-height: var(--ui-control-h);
+  padding: 0 13px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ui-muted);
+}
+.search-field input,
+.filter-field > div > select {
+  min-height: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink);
+  font-size: 13px;
+}
+.search-field:focus-within,
+.filter-field > div:focus-within {
+  border-color: var(--ui-brand);
+  box-shadow: 0 0 0 3px rgba(11, 102, 227, 0.13);
+}
+
+/* --- Surfaces ------------------------------------------------------- */
+.panel,
+.metric-card {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+.panel {
+  padding: 18px;
+}
+
+/* On a phone the toolbar stacks, so its controls share one full-width
+   column instead of the search box spanning and the filter floating. */
+@media (max-width: 767px) {
+  .toolbar.filter-row {
+    align-items: stretch;
+  }
+  .toolbar.filter-row > .filter-field,
+  .toolbar.filter-row > .search-box {
+    width: 100%;
+  }
+}
+
+/* The status strip is a wrapping flex row, so its items are content-sized and
+   the second row never lines up under the first (measured 10px out). A wrapped
+   flex row cannot make columns; a grid can. */
+@media (max-width: 900px) {
+  .overview-greeting-row .overview-status-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .overview-greeting-row .overview-status-strip > div {
+    border-right: 1px solid #eef2f7;
+    border-bottom: 1px solid #eef2f7;
+  }
+  .overview-greeting-row .overview-status-strip > div:nth-child(2n) {
+    border-right: 0;
+  }
+  .overview-greeting-row .overview-status-strip > div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+}
+
+/* Cards in a grid row stretch to the tallest sibling. Let their content sit
+   centred in that height rather than pinned to the top with dead space under
+   it, so a short chart card still reads as deliberate. */
+.dashboard-analytics-row > .panel {
+  display: flex;
+  flex-direction: column;
+}
+.dashboard-analytics-row > .panel > .donut-wrap {
+  flex: 1;
+}
+
+/* Row actions speak the same purpose language as the main buttons, at table
+   scale: blue takes money, neutral edits, red destroys. They rendered as
+   three identical white outlines, so the colour carried no meaning.
+
+   Colour only -- no sizing here, so the mobile tap-target rule above still
+   wins. Both the class and the aria-label are matched because a few tables
+   render these buttons inline instead of via the shared Actions component. */
+.row-actions .small-icon.payment-action,
+.row-actions > button.payment-action {
+  background: #eaf2ff;
+  border: 1px solid #cfe0f7;
+  color: var(--ui-brand);
+  font-weight: 600;
+}
+.row-actions .small-icon.edit-action,
+.row-actions > button[aria-label="Edit"],
+.row-actions > button[aria-label="View client"] {
+  background: #f4f7fb;
+  border: 1px solid var(--ui-border);
+  color: #35425c;
+}
+.row-actions .small-icon.delete-action,
+.row-actions > button[aria-label="Delete"] {
+  background: #fff5f5;
+  border: 1px solid #f5c6c6;
+  color: var(--ui-danger);
+}
+.row-actions button:hover {
+  filter: brightness(0.96);
+}
+
+/* The same three purpose colours as standalone classes, so record actions
+   outside a table row -- branch Edit/Deactivate, cargo cancel, staff
+   suspend/reset -- read identically to the ones inside it. Applied only to
+   record actions, not to the page's main buttons, which keep
+   primary/secondary/ghost/danger. */
+button.edit-action,
+button.delete-action,
+button.payment-action {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+button.edit-action {
+  border: 1px solid var(--ui-border);
+  background: #f4f7fb;
+  color: #35425c;
+}
+button.delete-action {
+  border: 1px solid #f5c6c6;
+  background: #fff5f5;
+  color: var(--ui-danger);
+}
+button.payment-action {
+  border: 1px solid #cfe0f7;
+  background: #eaf2ff;
+  color: var(--ui-brand);
+}
+button.edit-action:hover,
+button.delete-action:hover,
+button.payment-action:hover {
+  filter: brightness(0.96);
+}
+button.edit-action:disabled,
+button.delete-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+/* ---------------------------------------------------------------------
+   Settings lists.
+
+   `.setting-list > div` is a four-column grid (1fr 70px 1fr 28px) at 10px
+   type. That fits the rate and starting-balance rows, which have exactly
+   four children, so it stays. Two things were wrong with it: the type was
+   far below the 12-13px the rest of the system uses, and its delete button
+   inherited a stray brown (#9a6a67).
+   --------------------------------------------------------------------- */
+.setting-list > div {
+  padding: 12px 0;
+  border-top: 1px solid var(--ui-border);
+  font-size: 12.5px;
+  color: var(--ui-ink);
+}
+.setting-list > div > strong {
+  font-size: 13px;
+  color: #0d1b42;
+}
+.setting-list > div > span {
+  color: var(--ui-muted);
+}
+.setting-list > div > button {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #f5c6c6;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: var(--ui-danger);
+  font-size: 15px;
+  line-height: 1;
+}
+.setting-list > div > button:hover {
+  filter: brightness(0.96);
+}
+
+/* Branch rows carry identity, status and two actions, so they lay out as
+   their own three-part row rather than borrowing the four-column grid. */
+.branch-settings-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.branch-row-main {
+  flex: 1 1 190px;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.branch-row-main strong {
+  font-size: 13.5px;
+  color: #0d1b42;
+}
+.branch-row-main span {
+  color: var(--ui-muted);
+  font-size: 11.5px;
+}
+.branch-row-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.branch-settings-list .badge,
+.branch-settings-list .status-badge {
+  flex: 0 0 auto;
+}
+
+/* On a phone a panel heading and its action button fight over one row, so
+   both wrap ("Branch / management" over "+ Add / Branch"). Stack them: the
+   heading gets the full width and the action sits under it. */
+@media (max-width: 767px) {
+  .panel-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .panel-head > div:last-child:not(:only-child) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .panel-head .button {
+    white-space: nowrap;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Branch country flags.
+   --------------------------------------------------------------------- */
+.branch-flag {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  width: 34px;
+  height: 24px;
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-muted);
+  line-height: 1;
+}
+.branch-flag svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.public-branch-list .branch-flag {
+  width: 40px;
+  height: 28px;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ---------------------------------------------------------------------
+   ONE icon palette.
+
+   Two palettes existed for the same meanings: `.status-icon.*` in
+   globals.css (#0097a7, #1565c0, #e08a00, #2c9a51) and `.tone-*` in the
+   handoff sheet (#0b66e3, #08a9c4, #18a24b, #f59e0b). The same "green"
+   icon rendered two different greens depending on which component drew it.
+
+   Worse, `tone-cream`, `tone-success` and `tone-amber` are used in the UI
+   but were never defined anywhere, so those icons had no tint at all.
+
+   This is the single palette: a soft tinted ground with a saturated glyph,
+   consistent contrast across every hue.
+   --------------------------------------------------------------------- */
+.metric-icon,
+.status-icon {
+  border-radius: 12px;
+}
+.tone-blue,
+.status-icon.blue {
+  background: #e7f0ff;
+  color: #0b66e3;
+}
+.tone-cyan,
+.status-icon.cyan {
+  background: #dff7fb;
+  color: #0898b1;
+}
+.tone-green,
+.tone-success,
+.status-icon.green {
+  background: #e6f7ec;
+  color: #12924a;
+}
+.tone-orange,
+.tone-amber,
+.tone-cream,
+.status-icon.amber,
+.status-icon.orange {
+  background: #fff3de;
+  color: #d9820a;
+}
+.tone-violet,
+.status-icon.violet {
+  background: #f0e9ff;
+  color: #7141e0;
+}
+.tone-pink,
+.status-icon.pink {
+  background: #fde8f2;
+  color: #d93d86;
+}
+.tone-red,
+.tone-danger,
+.status-icon.red {
+  background: #ffe9e9;
+  color: #d9363e;
+}
+.tone-gray,
+.tone-neutral,
+.status-icon.gray {
+  background: #eef2f7;
+  color: #56688a;
+}
+
+/* An office chip carries its country flag ahead of the branch name, so the
+   country is identifiable at a glance in every register, receipt and client
+   record -- not only in Branch management. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.badge .branch-flag {
+  width: 18px;
+  height: 13px;
+  border-radius: 3px;
+  border-width: 1px;
+  font-size: 8px;
+}
+
+/* A branch named as plain text, with its flag: report headings, receipt
+   rows, branch performance, expense breakdowns and the public branch cards. */
+.branch-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.branch-inline > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.branch-inline .branch-flag {
+  width: 20px;
+  height: 14px;
+  border-radius: 3px;
+  font-size: 8px;
+}
+h2 .branch-inline .branch-flag,
+h3 .branch-inline .branch-flag {
+  width: 26px;
+  height: 18px;
+  border-radius: 4px;
+}
+.public-branches .branch-card h3 .branch-flag {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* ---------------------------------------------------------------------
+   Chart text must not overflow its card.
+
+   `.donut-wrap` is a flex row of a fixed 150px donut, a 20px gap and a
+   legend with `min-width: 180px` -- 350px of hard minimum inside a card
+   that is roughly 330px wide on a phone. The legend could not shrink, so
+   its percentage column was pushed past the right edge of the card.
+   --------------------------------------------------------------------- */
+.donut-wrap {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.legend {
+  min-width: 0;
+}
+.legend > div {
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 10px;
+}
+/* The label may ellipsis; the value never truncates, because a clipped
+   percentage is worse than a clipped name. */
+.legend > div > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.legend b {
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Below this width the donut and legend stop competing for one row. */
+@media (max-width: 560px) {
+  .donut-wrap {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .legend {
+    width: 100%;
+  }
+}
+
+/* Axis ticks and bar labels stay inside the plot area too. */
+.bar-chart-axis span {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.bar-group > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------
+   Receipt: on screen and on paper.
+
+   "Download PDF" prints the styled card, so the saved PDF must carry the
+   colour, the logo and the country flag. Browsers drop backgrounds when
+   printing unless print-color-adjust says otherwise.
+   --------------------------------------------------------------------- */
+.receipt-card header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.receipt-card header > div {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.receipt-card dd .branch-inline {
+  justify-content: flex-end;
+}
+.receipt-card dd .branch-flag {
+  width: 22px;
+  height: 15px;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  html,
+  body,
+  .receipt-card,
+  .receipt-card * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Nothing but the receipt reaches the page. */
+  .app-shell > .sidebar,
+  .nav-scrim,
+  .notif-panel,
+  .account-menu,
+  .modal-backdrop,
+  .toast,
+  .receipt-actions,
+  .print-hide {
+    display: none !important;
+  }
+  .receipt-card {
+    max-width: none;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+  .receipt-brand-logo {
+    width: 190px;
+    max-height: 64px;
+  }
+  .receipt-total strong {
+    font-size: 26px;
+  }
+  /* Flags are SVG, so they print as vectors rather than dropping out. */
+  .branch-flag {
+    border: 1px solid #d7e2ee;
+  }
+}

@@ -37,11 +37,13 @@ yarn-error.log*
 # typescript
 next-env.d.ts
 /dist/
-/build/
+/build/*
+!/build/sites-vite-plugin.ts
 /.wrangler/
 /.sites-runtime/
 /.runtime/
-/.openai/
+/.openai/*
+!/.openai/hosting.json
 /outputs/
 /work/
 
@@ -55,3 +57,12 @@ next-env.d.ts
 /backups/
 *.bak
 *.dump
+
+# Local audit screenshots at the repo root (regenerable dev artefacts).
+# Application images live in /public and stay tracked.
+/*.png
+
+# The UI handoff prototype: src/styles.css is imported by app/layout.tsx and
+# must ship, but its 27MB image library is reference material only.
+/somway_ui_handoff/public/
+/somway_ui_handoff/node_modules/

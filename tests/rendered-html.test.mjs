@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-test("renders Macruf public page metadata", async () => {
+test("renders SomWay public page metadata", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
@@ -27,7 +27,7 @@ test("renders Macruf public page metadata", async () => {
     /^text\/html\b/i,
   );
   const html = await response.text();
-  assert.match(html, /<title>Macruf Travel and Cargo Agency<\/title>/i);
+  assert.match(html, /<title>SomWay Travel &amp; Logistics<\/title>/i);
   assert.match(
     html,
     /<meta(?=[^>]*\bname=["']description["'])(?=[^>]*\bcontent=["'][^"']*visa applications[^"']*["'])[^>]*>/i,

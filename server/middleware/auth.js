@@ -9,7 +9,13 @@ export const currentUser = async (req) => {
   const session = await Session.findOne({ tokenHash: hashToken(token), expiresAt: { $gt: new Date() } });
   if (!session) return null;
   const user = await User.findById(session.userId);
-  if (!user || !user.active) return null;
+  // A deleted or suspended account must not keep a working session. Removing
+  // the row here means the account cannot act even if it still holds the
+  // cookie, and the orphaned session does not linger in the database.
+  if (!user || !user.active) {
+    await Session.deleteMany({ userId: session.userId });
+    return null;
+  }
   return user;
 };
 

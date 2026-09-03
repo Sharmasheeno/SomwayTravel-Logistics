@@ -202,7 +202,7 @@ test("reports keep Nairobi USD separate from Mogadishu USD while allowing consol
     const allRows = await buildFinanceReport({ from: "2026-08-01", to: "2026-08-31" });
     assert.equal(nboRows.find((row) => row.currency === "USD").revenue, 100);
     assert.equal(mogRows.find((row) => row.currency === "USD").revenue, 200);
-    assert.deepEqual(allRows.map((row) => [row.branchId, row.currency, row.revenue]).sort(), [[nbo, "KES", 0], [nbo, "USD", 100], [mog, "USD", 200], [hga, "USD", 0]]);
+    assert.deepEqual(allRows.map((row) => [row.branchId, row.currency, row.revenue]).sort(), [[nbo, "USD", 100], [mog, "USD", 200]]);
     assert.equal(allRows.reduce((sum, row) => row.currency === "USD" ? sum + row.revenue : sum, 0), 300);
   });
 });

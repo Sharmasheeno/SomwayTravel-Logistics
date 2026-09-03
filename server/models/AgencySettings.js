@@ -4,10 +4,15 @@ const agencySettingsSchema = new mongoose.Schema(
   {
     key: { type: String, required: true, unique: true, default: "singleton" },
     agencyName: { type: String, default: "Macruf Travel and Cargo Agency" },
+    timezone: { type: String, default: "Africa/Mogadishu" },
+    businessDayStart: { type: String, default: "07:00" },
+    businessDayEnd: { type: String, default: "18:00" },
   },
-  { strict: true }
+  { strict: true },
 );
 
-const AgencySettings = mongoose.models.AgencySettings || mongoose.model("AgencySettings", agencySettingsSchema);
+const AgencySettings =
+  mongoose.models.AgencySettings ||
+  mongoose.model("AgencySettings", agencySettingsSchema);
 
 export default AgencySettings;

@@ -91,7 +91,7 @@ test("operator cannot create cargo with the same origin and destination branch",
     await assert.rejects(
       writeEntity({
         collection: "cargo",
-        record: { id: "cargo-same", tracking: "HGA-1", originBranchId: hargeisa, destinationBranchId: hargeisa, origin: "Hargeisa Office", destination: "Hargeisa Office", senderPhone: "+252610000001" },
+        record: { id: "cargo-same", tracking: "HGA-1", originBranchId: hargeisa, destinationBranchId: hargeisa, origin: "Hargeisa Office", destination: "Hargeisa Office", senderPhone: "+252610000001", rateNote: "Flight test" },
         user: { id: "u2", name: "Hargeisa Operator", role: "operator", assignedBranchId: hargeisa },
       }),
       /different/

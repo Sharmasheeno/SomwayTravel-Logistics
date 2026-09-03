@@ -17,6 +17,7 @@ const paymentSchema = new mongoose.Schema(
     notes: { type: String, default: "", trim: true },
     receivedByUserId: { type: String, default: "" },
     migrationKey: { type: String, default: "", index: true },
+    idempotencyKey: { type: String, trim: true },
     status: { type: String, enum: ["active", "void"], default: "active", index: true },
     voidedAt: { type: String, default: "" },
     voidedByUserId: { type: String, default: "" },
@@ -24,6 +25,10 @@ const paymentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+paymentSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
+paymentSchema.index({ transactionType: 1, transactionId: 1, status: 1, paymentDate: 1 });
+paymentSchema.index({ branchId: 1, currency: 1, paymentMethodId: 1, paymentDate: 1, status: 1 });
 
 const Payment = mongoose.models.Payment || mongoose.model("Payment", paymentSchema);
 

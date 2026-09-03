@@ -7,17 +7,29 @@ const router = express.Router();
 const clean = (value) => String(value || "").trim();
 const cleanCode = (value) => clean(value).toUpperCase();
 
-const branchPayload = (body) => ({
-  name: clean(body?.name),
-  code: cleanCode(body?.code),
-  city: clean(body?.city),
-  country: clean(body?.country),
-  defaultCurrency: clean(body?.defaultCurrency),
-  allowedCurrencies: Array.isArray(body?.allowedCurrencies) ? [...new Set(body.allowedCurrencies.map((currency) => clean(currency).toUpperCase()).filter(Boolean))] : [clean(body?.defaultCurrency)].filter(Boolean),
-  phone: clean(body?.phone),
-  email: clean(body?.email).toLowerCase(),
-  address: clean(body?.address),
-});
+const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key);
+
+export const branchPayload = (body, existing = null) => {
+  const source = body || {};
+  const current = existing || {};
+  const read = (key) => hasOwn(source, key) ? source[key] : current[key];
+  const defaultCurrency = clean(read("defaultCurrency")).toUpperCase();
+  const currencySource = hasOwn(source, "allowedCurrencies") ? source.allowedCurrencies : current.allowedCurrencies;
+  const allowedCurrencies = Array.isArray(currencySource)
+    ? [...new Set(currencySource.map((currency) => clean(currency).toUpperCase()).filter(Boolean))]
+    : [defaultCurrency].filter(Boolean);
+  return {
+    name: clean(read("name")),
+    code: cleanCode(read("code")),
+    city: clean(read("city")),
+    country: clean(read("country")),
+    defaultCurrency,
+    allowedCurrencies,
+    phone: clean(read("phone")),
+    email: clean(read("email")).toLowerCase(),
+    address: clean(read("address")),
+  };
+};
 
 const validateBranchPayload = (payload) => {
   if (!payload.name || !payload.city || !payload.country || !["KES", "USD"].includes(payload.defaultCurrency)) return "Name, city, country and default currency are required.";
@@ -49,7 +61,7 @@ router.post("/", requireOwner, async (req, res) => {
 router.patch("/:id", requireOwner, async (req, res) => {
   const branch = await Branch.findById(req.params.id);
   if (!branch) return res.status(404).json({ error: "Branch not found." });
-  const payload = branchPayload({ ...plainBranch(branch), ...req.body });
+  const payload = branchPayload(req.body, plainBranch(branch));
   const error = validateBranchPayload(payload);
   if (error) return res.status(400).json({ error });
   const duplicate = await Branch.findOne({ _id: { $ne: branch._id }, $or: [{ code: payload.code }, { name: payload.name }] });

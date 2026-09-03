@@ -1,8 +1,32 @@
 import express from "express";
 import { requireUser } from "../middleware/auth.js";
-import { deleteEntity, readVisibleAgencyData, writeEntity } from "../lib/entityPersistence.js";
+import {
+  deleteEntity,
+  readVisibleAgencyData,
+  writeCargoWithInitialPayment,
+  writeEntity,
+} from "../lib/entityPersistence.js";
 
 const router = express.Router();
+
+router.post("/cargo/with-payment", requireUser, async (req, res, next) => {
+  try {
+    await writeCargoWithInitialPayment({
+      record: req.body?.record,
+      initialPayment: {
+        ...(req.body?.initialPayment || {}),
+        idempotencyKey:
+          req.get("Idempotency-Key") || req.body?.initialPayment?.idempotencyKey,
+      },
+      user: req.user,
+      action: req.body?.action,
+    });
+    return res.status(201).json({ ok: true, data: await readVisibleAgencyData(req.user) });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    return next(error);
+  }
+});
 
 router.post("/:collection", requireUser, async (req, res, next) => {
   try {

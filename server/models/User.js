@@ -36,6 +36,20 @@ const userSchema = new mongoose.Schema(
       ref: "Branch",
       default: null,
     },
+    phone: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    // Client-resized data URI. Held on the document so avatars ride along in
+    // the existing mongodump backups and need no static file hosting or
+    // nginx path of their own. The cap is ~300KB of base64, comfortably
+    // above a 256px JPEG and far below the 15mb JSON body limit.
+    avatarUrl: {
+      type: String,
+      default: "",
+      maxlength: 400000,
+    },
     isOwner: {
       type: Boolean,
       default: false,
@@ -71,6 +85,8 @@ userSchema.methods.toSafeObject = function toSafeObject(includeLink = false) {
     id: this._id.toString(),
     name: this.name,
     username: this.email,
+    phone: this.phone || "",
+    avatarUrl: this.avatarUrl || "",
     role: this.role,
     assignedBranchId: this.assignedBranchId ? this.assignedBranchId.toString() : null,
     active: this.active,

@@ -14,6 +14,10 @@ const supplierSchema = new mongoose.Schema(
     paid: { type: Number, default: 0 },
     dueDate: { type: String, default: "" },
     notes: { type: String, default: "" },
+    recordStatus: { type: String, enum: ["active", "cancelled"], default: "active", index: true },
+    cancelledAt: { type: String, default: "" },
+    cancelledByUserId: { type: String, default: "" },
+    cancellationReason: { type: String, default: "" },
   },
   { strict: true }
 );

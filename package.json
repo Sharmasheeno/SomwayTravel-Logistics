@@ -7,11 +7,11 @@
   },
   "scripts": {
     "install:ci": "bash scripts/install-ci.sh",
-    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
+    "dev": "vite",
     "build": "vite build",
-    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
+    "start": "vinext start",
     "test": "npm run build && node --test tests/*.test.mjs",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern node_modules",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern node_modules --ignore-pattern somway_ui_handoff",
     "db:local:init": "bash scripts/sites-env.sh -- wrangler d1 execute site-creator-d1 --local --config dist/server/wrangler.json --file drizzle/0000_sturdy_network.sql",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
     "server": "node server/index.js",
@@ -19,6 +19,7 @@
     "seed:users": "node scripts/seed-default-users.js"
   },
   "dependencies": {
+    "@fontsource/poppins": "^5.3.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

@@ -1,4 +1,9 @@
-import { cargoStatusLabel, normalizeCargoStatus, publicCargoTimeline } from "./cargoWorkflow.js";
+import {
+  cargoStatusLabel,
+  normalizeCargoStatus,
+  publicCargoTimeline,
+} from "./cargoWorkflow.js";
+import { normalizeServiceStatus } from "./serviceWorkflow.js";
 
 export const publicCargoPayload = (item) => ({
   kind: "cargo",
@@ -17,7 +22,7 @@ export const publicVisaPayload = (item) => ({
   reference: item.ref,
   destination: item.destination,
   visaType: item.visaType,
-  status: item.status,
+  status: normalizeServiceStatus("visa", item.status),
   date: item.appDate,
   office: item.office,
 });

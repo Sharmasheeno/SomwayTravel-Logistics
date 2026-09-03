@@ -15,6 +15,16 @@ const dailyCloseSchema = new mongoose.Schema(
     notes: { type: String, default: "" },
     reviewed: { type: Boolean, default: false },
     reviewedBy: { type: String, default: "" },
+    openingBalance: { type: Number, default: 0 },
+    totalCollections: { type: Number, default: 0 },
+    totalExpenses: { type: Number, default: 0 },
+    totalRefunds: { type: Number, default: 0 },
+    expectedBalance: { type: Number, default: 0 },
+    difference: { type: Number, default: 0 },
+    status: { type: String, enum: ["closed", "reopened"], default: "closed", index: true },
+    closedByUserId: { type: String, default: "" },
+    closedAt: { type: String, default: "" },
+    reopenHistory: [{ reopenedAt: String, reopenedByUserId: String, reason: String }],
   },
   { strict: true }
 );

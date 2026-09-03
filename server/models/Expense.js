@@ -17,6 +17,10 @@ const expenseSchema = new mongoose.Schema(
     paidBy: { type: String, default: "" },
     notes: { type: String, default: "" },
     createdBy: { type: String, default: "" },
+    recordStatus: { type: String, enum: ["active", "void"], default: "active", index: true },
+    voidedAt: { type: String, default: "" },
+    voidedByUserId: { type: String, default: "" },
+    voidReason: { type: String, default: "" },
   },
   { strict: true }
 );

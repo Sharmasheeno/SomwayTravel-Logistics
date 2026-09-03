@@ -37,12 +37,23 @@ export const seedCoreBranches = async () => {
   for (const branch of LEGACY_BRANCHES) {
     const existing = await Branch.findOne({ code: branch.code });
     if (existing) {
-      const before = JSON.stringify(plainBranch(existing));
-      Object.assign(existing, { ...branch, isActive: true });
-      await existing.save();
-      const after = JSON.stringify(plainBranch(existing));
-      if (before === after) result.skipped += 1;
-      else result.updated += 1;
+      let changed = false;
+      for (const field of ["name", "city", "country", "defaultCurrency"]) {
+        if (!existing[field]) {
+          existing[field] = branch[field];
+          changed = true;
+        }
+      }
+      if (!Array.isArray(existing.allowedCurrencies) || existing.allowedCurrencies.length === 0) {
+        existing.allowedCurrencies = branch.allowedCurrencies;
+        changed = true;
+      }
+      if (changed) {
+        await existing.save();
+        result.updated += 1;
+      } else {
+        result.skipped += 1;
+      }
       continue;
     }
     await Branch.create({ ...branch, isActive: true });

@@ -4,8 +4,22 @@ import Visa from "../models/Visa.js";
 import { requireUser } from "../middleware/auth.js";
 import { getUserBranchScope } from "../lib/branches.js";
 import { cargoStatusLabel } from "../lib/cargoWorkflow.js";
+import { buildNotifications } from "../lib/notifications.js";
 
 const router = express.Router();
+
+// The topbar bell. Alerts are derived from live records on each read rather
+// than stored, so nothing can drift out of sync with the underlying data and
+// there is no read/unread state to migrate.
+router.get("/", requireUser, async (req, res, next) => {
+  try {
+    const result = await buildNotifications({ user: req.user });
+    res.set("Cache-Control", "no-store");
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+});
 
 const escapeHtml = (value) =>
   String(value ?? "").replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character] || character);

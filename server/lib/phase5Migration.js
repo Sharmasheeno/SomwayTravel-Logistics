@@ -7,16 +7,29 @@ import Supplier from "../models/Supplier.js";
 import SupplierPayment from "../models/SupplierPayment.js";
 import Ticket from "../models/Ticket.js";
 import Visa from "../models/Visa.js";
-import { LEGACY_PAYMENT_METHODS, assertBranchPaymentMethod, canonicalPaymentCode } from "./finance.js";
+import {
+  LEGACY_PAYMENT_METHODS,
+  assertBranchPaymentMethod,
+  canonicalPaymentCode,
+  cargoCustomerCharge,
+} from "./finance.js";
 
 const branchRules = {
   NBO: { defaultCurrency: "KES", allowedCurrencies: ["KES", "USD"] },
   MOG: { defaultCurrency: "USD", allowedCurrencies: ["USD"] },
 };
 
-const stats = () => ({ scanned: 0, created: 0, linked: 0, skipped: 0, unresolved: [] });
-const totalFor = (type, row) => type === "cargo" ? (row.weight || 0) * (row.rate || 0) : row.amount || 0;
-const branchIdFor = (type, row) => type === "cargo" ? row.paidByBranchId || row.originBranchId : row.branchId;
+const stats = () => ({
+  scanned: 0,
+  created: 0,
+  linked: 0,
+  skipped: 0,
+  unresolved: [],
+});
+const totalFor = (type, row) =>
+  type === "cargo" ? cargoCustomerCharge(row) : row.amount || 0;
+const branchIdFor = (type, row) =>
+  type === "cargo" ? row.paidByBranchId || row.originBranchId : row.branchId;
 
 const seedPaymentMethods = async () => {
   const result = stats();
@@ -24,12 +37,28 @@ const seedPaymentMethods = async () => {
     result.scanned += 1;
     const existing = await PaymentMethod.findOne({ code: method.code });
     if (existing) {
-      Object.assign(existing, method, { id: existing.id || `pm_${method.code}`, isActive: existing.isActive !== false });
-      await existing.save();
+      let changed = false;
+      if (!existing.id) {
+        existing.id = `pm_${method.code}`;
+        changed = true;
+      }
+      if (!existing.name) {
+        existing.name = method.name;
+        changed = true;
+      }
+      if (!existing.type) {
+        existing.type = method.type;
+        changed = true;
+      }
+      if (changed) await existing.save();
       result.skipped += 1;
       continue;
     }
-    await PaymentMethod.create({ ...method, id: `pm_${method.code}`, isActive: true });
+    await PaymentMethod.create({
+      ...method,
+      id: `pm_${method.code}`,
+      isActive: true,
+    });
     result.created += 1;
   }
   return result;
@@ -39,12 +68,23 @@ const seedBranchCurrencyRules = async () => {
   const result = stats();
   for (const branch of await Branch.find({})) {
     result.scanned += 1;
-    const rule = branchRules[branch.code] || { defaultCurrency: branch.defaultCurrency, allowedCurrencies: branch.allowedCurrencies?.length ? branch.allowedCurrencies : [branch.defaultCurrency].filter(Boolean) };
-    branch.defaultCurrency = rule.defaultCurrency;
-    branch.allowedCurrencies = rule.allowedCurrencies;
-    if (branchRules[branch.code]) branch.isActive = true;
-    await branch.save();
-    result.linked += 1;
+    const rule = branchRules[branch.code];
+    let changed = false;
+    if (!branch.defaultCurrency && rule?.defaultCurrency) {
+      branch.defaultCurrency = rule.defaultCurrency;
+      changed = true;
+    }
+    if (
+      (!branch.allowedCurrencies || branch.allowedCurrencies.length === 0) &&
+      rule?.allowedCurrencies
+    ) {
+      branch.allowedCurrencies = rule.allowedCurrencies;
+      changed = true;
+    }
+    if (changed) {
+      await branch.save();
+      result.linked += 1;
+    } else result.skipped += 1;
   }
   return result;
 };
@@ -55,16 +95,37 @@ const seedBranchMethods = async () => {
   const methods = await PaymentMethod.find({});
   const byCode = new Map(methods.map((method) => [method.code, method]));
   for (const branch of branches) {
-    const configs = branch.code === "NBO"
-      ? [{ code: "cash", currencies: ["KES", "USD"], cash: true }, { code: "mpesa", currencies: ["KES"], cash: false }, { code: "bank", currencies: ["KES", "USD"], cash: false }]
-      : branch.code === "MOG"
-        ? [{ code: "evc_plus", currencies: ["USD"], cash: false }, { code: "bank", currencies: ["USD"], cash: false }]
-        : [{ code: "cash", currencies: branch.allowedCurrencies || [], cash: true }, { code: "bank", currencies: branch.allowedCurrencies || [], cash: false }];
-    const configuredMethodIds = configs.map((config) => byCode.get(config.code)?._id).filter(Boolean);
-    await BranchPaymentMethod.updateMany(
-      { branchId: branch._id, paymentMethodId: { $nin: configuredMethodIds } },
-      { $set: { isActive: false } }
-    );
+    const configs =
+      branch.code === "NBO"
+        ? [
+            { code: "cash", currencies: ["KES", "USD"], cash: true },
+            { code: "mpesa", currencies: ["KES"], cash: false },
+            { code: "bank", currencies: ["KES", "USD"], cash: false },
+          ]
+        : branch.code === "MOG"
+          ? [
+              { code: "evc_plus", currencies: ["USD"], cash: false },
+              { code: "bank", currencies: ["USD"], cash: false },
+            ]
+          : [
+              {
+                code: "cash",
+                currencies: branch.allowedCurrencies || [],
+                cash: true,
+              },
+              {
+                code: "bank",
+                currencies: branch.allowedCurrencies || [],
+                cash: false,
+              },
+            ];
+    const existingConfigs = await BranchPaymentMethod.find({
+      branchId: branch._id,
+    });
+    if (existingConfigs.length) {
+      result.skipped += existingConfigs.length;
+      continue;
+    }
     for (const config of configs) {
       result.scanned += 1;
       const method = byCode.get(config.code);
@@ -74,8 +135,15 @@ const seedBranchMethods = async () => {
       }
       await BranchPaymentMethod.findOneAndUpdate(
         { branchId: branch._id, paymentMethodId: method._id },
-        { $set: { id: `bpm_${branch.code.toLowerCase()}_${config.code}`, allowedCurrencies: config.currencies, isActive: true, countsAsPhysicalCash: config.cash } },
-        { upsert: true, setDefaultsOnInsert: true }
+        {
+          $set: {
+            id: `bpm_${branch.code.toLowerCase()}_${config.code}`,
+            allowedCurrencies: config.currencies,
+            isActive: true,
+            countsAsPhysicalCash: config.cash,
+          },
+        },
+        { upsert: true, setDefaultsOnInsert: true },
       );
       result.linked += 1;
     }
@@ -104,9 +172,15 @@ const migrateCustomerPayments = async (Model, type) => {
     }
     let method;
     try {
-      ({ method } = await assertBranchPaymentMethod({ branchId, currency: row.currency, paymentMethod: row.paymentMethod }));
+      ({ method } = await assertBranchPaymentMethod({
+        branchId,
+        currency: row.currency,
+        paymentMethod: row.paymentMethod,
+      }));
     } catch {
-      result.unresolved.push(`${type}:${row.id}:${row.paymentMethod}:${row.currency}`);
+      result.unresolved.push(
+        `${type}:${row.id}:${row.paymentMethod}:${row.currency}`,
+      );
       continue;
     }
     await Payment.create({
@@ -120,7 +194,12 @@ const migrateCustomerPayments = async (Model, type) => {
       currency: row.currency,
       paymentMethodId: method._id,
       paymentMethod: method.name,
-      paymentDate: row.paymentDate || row.saleDate || row.appDate || row.dateIn || new Date().toISOString().slice(0, 10),
+      paymentDate:
+        row.paymentDate ||
+        row.saleDate ||
+        row.appDate ||
+        row.dateIn ||
+        new Date().toISOString().slice(0, 10),
       receivedByUserId: row.createdBy || "",
       migrationKey,
       notes: "Phase 5 migration from legacy paid=true record.",
@@ -177,15 +256,31 @@ const normalizeRefundAccounting = async (Model, type) => {
       changed = true;
     }
     const paymentResult = await Payment.updateMany(
-      { transactionType: type, transactionId: row.id, flow: { $ne: "outbound" } },
-      { $set: { flow: "outbound" } }
+      {
+        transactionType: type,
+        transactionId: row.id,
+        flow: { $ne: "outbound" },
+      },
+      { $set: { flow: "outbound" } },
     );
     if (paymentResult.modifiedCount) changed = true;
     const payableId = `payable_${type}_${row.id}`;
-    const hasPayablePayments = await SupplierPayment.exists({ supplierBillId: payableId, status: { $ne: "void" } });
+    const hasPayablePayments = await SupplierPayment.exists({
+      supplierBillId: payableId,
+      status: { $ne: "void" },
+    });
     if (!hasPayablePayments) {
-      const deleted = await Supplier.deleteOne({ id: payableId });
-      if (deleted.deletedCount) changed = true;
+      const cancelled = await Supplier.findOneAndUpdate(
+        { id: payableId, recordStatus: { $ne: "cancelled" } },
+        {
+          $set: {
+            recordStatus: "cancelled",
+            cancelledAt: new Date().toISOString(),
+            cancellationReason: `Automatic payable cancelled because ${type} ${row.ref || row.id} is a refund.`,
+          },
+        },
+      );
+      if (cancelled) changed = true;
     }
     if (changed) result.linked += 1;
     else result.skipped += 1;
@@ -201,9 +296,13 @@ const linkLegacyMethodIds = async (Model, field = "paymentMethod") => {
       result.skipped += 1;
       continue;
     }
-    const method = await PaymentMethod.findOne({ code: canonicalPaymentCode(row[field]) });
+    const method = await PaymentMethod.findOne({
+      code: canonicalPaymentCode(row[field]),
+    });
     if (!method) {
-      result.unresolved.push(`${Model.modelName}:${row.id || row._id}:${row[field]}`);
+      result.unresolved.push(
+        `${Model.modelName}:${row.id || row._id}:${row[field]}`,
+      );
       continue;
     }
     row.paymentMethodId = method._id;
@@ -230,8 +329,12 @@ export const runPhase5Migration = async () => {
       tickets: await linkLegacyMethodIds(Ticket),
       visas: await linkLegacyMethodIds(Visa),
       cargo: await linkLegacyMethodIds(Cargo),
-      expenses: await linkLegacyMethodIds((await import("../models/Expense.js")).default),
-      closes: await linkLegacyMethodIds((await import("../models/DailyClose.js")).default),
+      expenses: await linkLegacyMethodIds(
+        (await import("../models/Expense.js")).default,
+      ),
+      closes: await linkLegacyMethodIds(
+        (await import("../models/DailyClose.js")).default,
+      ),
     },
   };
 };

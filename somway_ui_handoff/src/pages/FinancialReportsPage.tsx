@@ -1,0 +1,14 @@
+import React from 'react';
+import { BarChart, Button, DataTable, FilterField, MetricCard, PageHeader, Panel } from '../components/UI';
+
+export default function FinancialReportsPage(){
+ const serviceRows=[['Cargo','128','620,000','492,000','216,000','276,000','44.5%'],['Visa Services','156','330,000','270,000','81,000','189,000','56.6%'],['Ticketing','98','210,000','168,000','63,000','105,000','50.0%'],['Other Services','42','85,000','55,500','21,200','34,300','40.4%']];
+ const ledger=[['Mogadishu Office','USD','EVC Plus','4','445,500','12,320','433,180'],['Nairobi Office','KES','M-Pesa','12','1,240,000','0','1,240,000']];
+ return <>
+  <PageHeader title="Financial Reports" subtitle="Comprehensive view of financial performance, collections and profitability." actions={<><Button variant="secondary" icon="download">Export Report</Button><Button icon="download">Download PDF Report</Button></>}/>
+  <Panel><div className="filter-row" style={{margin:0}}><FilterField label="Branch" value="All Branches" icon="building"/><FilterField label="Currency" value="All Currencies" icon="money"/><FilterField label="Date Range" value="May 1 – May 31, 2025" icon="calendar"/><FilterField label="Report Type" value="Summary Overview" icon="chart"/><Button>Apply Filters</Button><Button variant="ghost">Reset</Button></div></Panel>
+  <div className="metrics-grid six" style={{marginTop:14}}><MetricCard icon="wallet" label="Customer Charges" value="USD 1,245,000" delta="↑ 18.4%" tone="blue"/><MetricCard icon="money" label="Payments Received" value="USD 985,500" delta="↑ 15.1%" tone="green"/><MetricCard icon="receipt" label="Direct Cost" value="USD 438,200" delta="↑ 17.0%" tone="orange"/><MetricCard icon="trend" label="Profit" value="USD 807,300" delta="↑ 21.3%" tone="violet"/><MetricCard icon="refresh" label="Refunds" value="USD 12,320" delta="- 6.1%" tone="pink"/><MetricCard icon="wallet" label="Net Revenue" value="USD 795,000" delta="↑ 20.2%" tone="blue"/></div>
+  <div className="split-even" style={{marginTop:14}}><Panel title="Charges, Payments, Cost & Profit by Service"><DataTable columns={['Service','Transactions','Customer Charges','Payments Received','Direct Cost','Profit','Profit Margin']} rows={serviceRows}/></Panel><Panel title="Ledger: Receipts & Refunds"><DataTable columns={['Branch','Currency','Method','Transactions','Received','Refunds','Net Received']} rows={ledger}/><div className="kpi-strip" style={{marginTop:14}}><div className="mini-kpi"><span>Total Received</span><strong>USD 445,500</strong></div><div className="mini-kpi"><span>Total Refunds</span><strong>USD 12,320</strong></div><div className="mini-kpi"><span>Net Received</span><strong>USD 433,180</strong></div></div></Panel></div>
+  <Panel title="Six-Month Trend: Payments Received vs Profit" style={{marginTop:14} as any}><BarChart values={[530,564,619,700,760,985]} labels={['Dec','Jan','Feb','Mar','Apr','May']} dual/></Panel>
+ </>
+}

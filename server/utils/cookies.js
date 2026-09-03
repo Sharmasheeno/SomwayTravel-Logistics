@@ -1,5 +1,13 @@
 export const SESSION_COOKIE = "macruf_session";
-const SESSION_MAX_AGE = 60 * 60 * 24 * 14;
+
+// The cookie is marked Secure only when the site is actually served over
+// HTTPS. A Secure cookie sent from an http:// origin is discarded by the
+// browser outright, which would silently break sign-in on a plain-HTTP
+// deployment. Set COOKIE_SECURE=true once TLS is in front of the app.
+const secureFlag = () =>
+  String(process.env.COOKIE_SECURE || "").toLowerCase() === "true"
+    ? "; Secure"
+    : "";
 
 export const readCookie = (req, name) => {
   const header = req.headers.cookie || "";
@@ -10,13 +18,15 @@ export const readCookie = (req, name) => {
   return part ? decodeURIComponent(part.slice(name.length + 1)) : "";
 };
 
-export const setSessionCookie = (res, token, maxAge = SESSION_MAX_AGE) => {
+// No Max-Age: this is a browser-session cookie, so closing the browser ends
+// the sign-in and returning to the site requires logging in again.
+export const setSessionCookie = (res, token) => {
   res.append(
     "Set-Cookie",
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly${secureFlag()}; SameSite=Lax`
   );
 };
 
 export const clearSessionCookie = (res) => {
-  res.append("Set-Cookie", `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+  res.append("Set-Cookie", `${SESSION_COOKIE}=; Path=/; HttpOnly${secureFlag()}; SameSite=Lax; Max-Age=0`);
 };

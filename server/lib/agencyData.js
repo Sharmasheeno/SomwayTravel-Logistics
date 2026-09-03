@@ -15,7 +15,11 @@ import Payment from "../models/Payment.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import SupplierPayment from "../models/SupplierPayment.js";
 import { getUserBranchScope, plainBranch } from "./branches.js";
-import { normalizePhone } from "./phone.js";
+import { normalizeServiceStatus } from "./serviceWorkflow.js";
+import {
+  cargoCustomerCharge,
+  deriveCustomerFinanceSummary,
+} from "./finance.js";
 
 export const OFFICE_SCOPED_MODELS = {
   tickets: Ticket,
@@ -31,10 +35,19 @@ export const SHARED_MODELS = {
   startingBalances: StartingBalance,
 };
 
-export const ALL_ENTITY_MODELS = { ...OFFICE_SCOPED_MODELS, ...SHARED_MODELS, clients: Client, activities: Activity };
+export const ALL_ENTITY_MODELS = {
+  ...OFFICE_SCOPED_MODELS,
+  ...SHARED_MODELS,
+  clients: Client,
+  activities: Activity,
+};
 
 export const officeForRole = (role) =>
-  role === "officer_nairobi" ? "Nairobi" : role === "officer_mogadishu" ? "Mogadishu" : null;
+  role === "officer_nairobi"
+    ? "Nairobi"
+    : role === "officer_mogadishu"
+      ? "Mogadishu"
+      : null;
 
 export const toPlain = (doc) => {
   const object = doc.toObject ? doc.toObject() : doc;
@@ -43,6 +56,8 @@ export const toPlain = (doc) => {
   delete rest.__v;
   return rest;
 };
+
+const moneyRound = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
 export const defaultAgencyData = {
   agencyName: "Macruf Travel and Cargo Agency",
@@ -83,13 +98,15 @@ export const readAgencyData = async () => {
     payments,
     supplierPayments,
   ] = await Promise.all([
-    AgencySettings.findOne({ key: "singleton" }).then((row) => row?.agencyName || defaultAgencyData.agencyName),
-    Ticket.find({}),
+    AgencySettings.findOne({ key: "singleton" }).then(
+      (row) => row?.agencyName || defaultAgencyData.agencyName,
+    ),
+    Ticket.find({ recordStatus: { $ne: "archived" } }),
     Cargo.find({}),
-    Visa.find({}),
+    Visa.find({ recordStatus: { $ne: "archived" } }),
     Expense.find({}),
     Supplier.find({}),
-    Client.find({}),
+    Client.find({ isActive: { $ne: false } }),
     DailyClose.find({}),
     Rate.find({}),
     StartingBalance.find({}),
@@ -102,14 +119,56 @@ export const readAgencyData = async () => {
   ]);
 
   const paymentMethodIdByMongoId = new Map(
-    paymentMethods.map((method) => [method._id.toString(), method.id])
+    paymentMethods.map((method) => [method._id.toString(), method.id]),
   );
+  const paymentsByTransaction = new Map();
+  for (const payment of payments) {
+    const key = `${payment.transactionType}:${payment.transactionId}`;
+    const group = paymentsByTransaction.get(key) || [];
+    group.push(payment);
+    paymentsByTransaction.set(key, group);
+  }
+  const withCustomerFinance = (transactionType, item) => {
+    const plain = toPlain(item);
+    const total =
+      transactionType === "cargo"
+        ? cargoCustomerCharge(plain)
+        : moneyRound(plain.amount || 0);
+    const transactionPayments =
+      paymentsByTransaction.get(`${transactionType}:${plain.id}`) || [];
+    const summary = deriveCustomerFinanceSummary({
+      totalCharge: total,
+      payments: transactionPayments,
+    });
+    const latestPaymentDate = transactionPayments
+      .filter((payment) => payment.status !== "void")
+      .reduce(
+        (latest, payment) =>
+          String(payment.paymentDate || "") > latest
+            ? String(payment.paymentDate || "")
+            : latest,
+        "",
+      );
+    return {
+      ...plain,
+      ...(transactionType === "ticket"
+        ? { status: normalizeServiceStatus("ticket", plain.status) }
+        : transactionType === "visa"
+          ? { status: normalizeServiceStatus("visa", plain.status) }
+          : {}),
+      ...summary,
+      amountPaid: summary.totalPaid,
+      balance: summary.balanceDue,
+      paid: summary.paymentStatus === "paid",
+      paymentDate: latestPaymentDate || plain.paymentDate || "",
+    };
+  };
 
   return {
     agencyName,
-    tickets: tickets.map(toPlain),
-    cargo: cargo.map(toPlain),
-    visas: visas.map(toPlain),
+    tickets: tickets.map((row) => withCustomerFinance("ticket", row)),
+    cargo: cargo.map((row) => withCustomerFinance("cargo", row)),
+    visas: visas.map((row) => withCustomerFinance("visa", row)),
     expenses: expenses.map(toPlain),
     suppliers: suppliers.map(toPlain),
     clients: clients.map(toPlain),
@@ -124,7 +183,9 @@ export const readAgencyData = async () => {
       return {
         ...plain,
         branchId: row.branchId?.toString?.() || String(plain.branchId || ""),
-        paymentMethodId: paymentMethodIdByMongoId.get(row.paymentMethodId?.toString?.()) || String(plain.paymentMethodId || ""),
+        paymentMethodId:
+          paymentMethodIdByMongoId.get(row.paymentMethodId?.toString?.()) ||
+          String(plain.paymentMethodId || ""),
       };
     }),
     payments: payments.map(toPlain),
@@ -134,29 +195,64 @@ export const readAgencyData = async () => {
 
 const hideCost = (items) => (items || []).map((item) => ({ ...item, cost: 0 }));
 
-const sameBranch = (item, field, branchId) => String(item?.[field] || "") === branchId;
+const sameBranch = (item, field, branchId) =>
+  String(item?.[field] || "") === branchId;
 
 export const visibleData = (source, userOrRole, safeUsers) => {
   const data = { ...defaultAgencyData, ...source, users: safeUsers };
   const role = typeof userOrRole === "string" ? userOrRole : userOrRole?.role;
-  const scope = typeof userOrRole === "string" ? { kind: officeForRole(role) ? "legacyOffice" : role === "consultant" ? "readOnly" : "all" } : getUserBranchScope(userOrRole);
+  const scope =
+    typeof userOrRole === "string"
+      ? {
+          kind: officeForRole(role)
+            ? "legacyOffice"
+            : role === "consultant"
+              ? "readOnly"
+              : "all",
+        }
+      : getUserBranchScope(userOrRole);
   if (scope.kind === "readOnly") return data;
   if (scope.kind === "branch") {
     const branchId = scope.branchId;
     return {
       ...data,
-      branches: (data.branches || []).filter((branch) => branch.id === branchId),
-      tickets: hideCost((data.tickets || []).filter((item) => sameBranch(item, "branchId", branchId))),
-      cargo: hideCost((data.cargo || []).filter((item) => sameBranch(item, "originBranchId", branchId) || sameBranch(item, "destinationBranchId", branchId) || sameBranch(item, "paidByBranchId", branchId))),
-      visas: hideCost((data.visas || []).filter((item) => sameBranch(item, "branchId", branchId))),
-      expenses: (data.expenses || []).filter((item) => sameBranch(item, "branchId", branchId)),
-      closes: (data.closes || []).filter((item) => sameBranch(item, "branchId", branchId)),
+      branches: (data.branches || []).filter(
+        (branch) => branch.id === branchId,
+      ),
+      tickets: hideCost(
+        (data.tickets || []).filter((item) =>
+          sameBranch(item, "branchId", branchId),
+        ),
+      ),
+      cargo: hideCost(
+        (data.cargo || []).filter(
+          (item) =>
+            sameBranch(item, "originBranchId", branchId) ||
+            sameBranch(item, "destinationBranchId", branchId) ||
+            sameBranch(item, "paidByBranchId", branchId),
+        ),
+      ),
+      visas: hideCost(
+        (data.visas || []).filter((item) =>
+          sameBranch(item, "branchId", branchId),
+        ),
+      ),
+      expenses: (data.expenses || []).filter((item) =>
+        sameBranch(item, "branchId", branchId),
+      ),
+      closes: (data.closes || []).filter((item) =>
+        sameBranch(item, "branchId", branchId),
+      ),
       suppliers: [],
       rates: [],
       startingBalances: [],
       paymentMethods: data.paymentMethods || [],
-      branchPaymentMethods: (data.branchPaymentMethods || []).filter((item) => sameBranch(item, "branchId", branchId)),
-      payments: (data.payments || []).filter((item) => sameBranch(item, "branchId", branchId)),
+      branchPaymentMethods: (data.branchPaymentMethods || []).filter((item) =>
+        sameBranch(item, "branchId", branchId),
+      ),
+      payments: (data.payments || []).filter((item) =>
+        sameBranch(item, "branchId", branchId),
+      ),
       supplierPayments: [],
       activities: [],
     };
@@ -165,9 +261,13 @@ export const visibleData = (source, userOrRole, safeUsers) => {
   if (!office) return data;
   return {
     ...data,
-    tickets: hideCost((data.tickets || []).filter((item) => item.office === office)),
+    tickets: hideCost(
+      (data.tickets || []).filter((item) => item.office === office),
+    ),
     cargo: hideCost(data.cargo || []),
-    visas: hideCost((data.visas || []).filter((item) => item.office === office)),
+    visas: hideCost(
+      (data.visas || []).filter((item) => item.office === office),
+    ),
     expenses: (data.expenses || []).filter((item) => item.office === office),
     closes: (data.closes || []).filter((item) => item.office === office),
     suppliers: [],
@@ -175,107 +275,4 @@ export const visibleData = (source, userOrRole, safeUsers) => {
     startingBalances: [],
     activities: [],
   };
-};
-
-const replaceCollection = async (Model, items) => {
-  const list = Array.isArray(items) ? items : [];
-  await Model.deleteMany({});
-  if (list.length) await Model.insertMany(list, { ordered: false });
-};
-
-const replaceOfficeSlice = async (Model, items, office) => {
-  const list = (Array.isArray(items) ? items : []).filter((item) => item?.office === office);
-  await Model.deleteMany({ office });
-  if (list.length) await Model.insertMany(list, { ordered: false });
-};
-
-const writeCostPreservingOfficeSlice = async (Model, items, office) => {
-  const list = (Array.isArray(items) ? items : []).filter((item) => item?.office === office);
-  const existing = await Model.find({ office });
-  const costById = new Map(existing.map((item) => [item.id, item.cost || 0]));
-  const withPreservedCost = list.map((item) => ({ ...item, cost: costById.get(item.id) || 0 }));
-  await Model.deleteMany({ office });
-  if (withPreservedCost.length) await Model.insertMany(withPreservedCost, { ordered: false });
-};
-
-const mergeSharedCargo = async (incoming) => {
-  const list = Array.isArray(incoming) ? incoming : [];
-  const existing = await Cargo.find({});
-  const existingById = new Map(existing.map((doc) => [doc.id, doc]));
-  for (const item of list) {
-    const current = existingById.get(item.id);
-    const incomingIsNewer = !current || String(item.updatedAt || "") >= String(current.updatedAt || "");
-    if (!incomingIsNewer) continue;
-    const cost = current ? current.cost || 0 : 0;
-    await Cargo.findOneAndUpdate(
-      { id: item.id },
-      { $set: { ...item, cost } },
-      { upsert: true, setDefaultsOnInsert: true }
-    );
-  }
-};
-
-const mergeClients = async (incoming) => {
-  const list = Array.isArray(incoming) ? incoming : [];
-  for (const item of list) {
-    const normalized = normalizePhone(item.phone || item.id, { office: item.homeOffice });
-    if (!normalized) continue;
-    await Client.findOneAndUpdate(
-      { normalizedPhone: normalized },
-      { $set: { ...item, normalizedPhone: normalized } },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-  }
-};
-
-const mergeActivities = async (incoming) => {
-  const list = Array.isArray(incoming) ? incoming : [];
-  for (const item of list) {
-    if (!item?.id) continue;
-    await Activity.findOneAndUpdate({ id: item.id }, { $set: item }, { upsert: true, setDefaultsOnInsert: true });
-  }
-  const excess = await Activity.find({}).sort({ at: -1 }).skip(500).select("_id");
-  if (excess.length) await Activity.deleteMany({ _id: { $in: excess.map((row) => row._id) } });
-};
-
-export const mergeWrite = async (incoming, role) => {
-  if (role === "owner") {
-    await Promise.all([
-      replaceCollection(Ticket, incoming.tickets),
-      replaceCollection(Cargo, incoming.cargo),
-      replaceCollection(Visa, incoming.visas),
-      replaceCollection(Expense, incoming.expenses),
-      replaceCollection(Supplier, incoming.suppliers),
-      replaceCollection(Client, (incoming.clients || []).map((item) => ({ ...item, normalizedPhone: normalizePhone(item.phone || item.id, { office: item.homeOffice }) }))),
-      replaceCollection(DailyClose, incoming.closes),
-      replaceCollection(Rate, incoming.rates),
-      replaceCollection(StartingBalance, incoming.startingBalances),
-      replaceCollection(Activity, incoming.activities),
-    ]);
-    if (typeof incoming.agencyName === "string" && incoming.agencyName.trim()) {
-      await AgencySettings.findOneAndUpdate(
-        { key: "singleton" },
-        { $set: { agencyName: incoming.agencyName.trim() } },
-        { upsert: true }
-      );
-    }
-    return;
-  }
-
-  if (role === "consultant") {
-    throw new Error("Consultants have read-only access.");
-  }
-
-  const office = officeForRole(role);
-  if (!office) throw new Error("This account cannot update agency data.");
-
-  await Promise.all([
-    writeCostPreservingOfficeSlice(Ticket, incoming.tickets, office),
-    writeCostPreservingOfficeSlice(Visa, incoming.visas, office),
-    replaceOfficeSlice(Expense, incoming.expenses, office),
-    replaceOfficeSlice(DailyClose, incoming.closes, office),
-    mergeSharedCargo(incoming.cargo),
-    mergeClients(incoming.clients),
-    mergeActivities(incoming.activities),
-  ]);
 };
