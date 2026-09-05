@@ -2497,10 +2497,14 @@ button.danger:disabled,
    size them up and thicken the stroke a touch so they read clearly. */
 .row-actions button svg,
 .row-actions .small-icon svg,
-.branch-row-actions button svg {
-  width: 22px !important;
-  height: 22px !important;
-  stroke-width: 2;
+.row-actions a svg,
+.branch-row-actions button svg,
+.team-actions button svg {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px;
+  min-height: 24px;
+  stroke-width: 2.1 !important;
 }
 
 /* The same three purpose colours as standalone classes, so record actions
