@@ -1842,8 +1842,9 @@ h6,
   /* The buttons stretch to the full card width on a phone, so a 16px glyph
      is lost in a wide box. Scale the icon up to match the larger tap target. */
   .table-wrap .row-actions button svg {
-    width: 22px;
-    height: 22px;
+    width: 24px !important;
+    height: 24px !important;
+    stroke-width: 2;
   }
 
   /* The topbar scrolls sideways as one strip. Branch scope and the date
@@ -2491,13 +2492,15 @@ button.danger:disabled,
   filter: brightness(0.96);
 }
 /* Keep the edit/delete/view glyphs a readable size inside their button chips
-   across the whole system (bookings, cargo, visa, clients, payables), rather
-   than the small default 16px icon looking lost in the ~38px padded box. */
+   across the whole system (bookings, cargo, visa, clients, payables). The
+   icons are thin line glyphs, so they looked lost in the ~40px padded box --
+   size them up and thicken the stroke a touch so they read clearly. */
 .row-actions button svg,
 .row-actions .small-icon svg,
 .branch-row-actions button svg {
-  width: 20px;
-  height: 20px;
+  width: 22px !important;
+  height: 22px !important;
+  stroke-width: 2;
 }
 
 /* The same three purpose colours as standalone classes, so record actions
