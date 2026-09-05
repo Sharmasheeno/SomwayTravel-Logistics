@@ -8927,67 +8927,114 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
 
               <Panel
                 title="Business Day by Branch"
-                subtitle="Every branch and currency in the selected day"
+                subtitle="KPI cards for every branch and currency in the selected day"
               >
-                <TableShell className="metric-table">
-                  <thead>
-                    <tr>
-                      <th>Branch</th>
-                      <th>Currency</th>
-                      <th>Revenue</th>
-                      <th>Money Received</th>
-                      <th>Direct Cost</th>
-                      <th>Profit</th>
-                      <th>Expenses</th>
-                      <th>Customer Debt</th>
-                      <th>Payables</th>
-                      <th>Status</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={`${row.branchId}-${row.currency}`}>
-                        <td>
-                          <strong><BranchName data={data} branch={row.branch} /></strong>
-                        </td>
-                        <td>{row.currency}</td>
-                        <td>{money(row.revenue, row.currency)}</td>
-                        <td>{money(row.moneyReceived, row.currency)}</td>
-                        <td>{money(row.directCost, row.currency)}</td>
-                        <td
-                          className={row.profit < 0 ? "negative" : "positive"}
-                        >
-                          {money(row.profit, row.currency)}
-                        </td>
-                        <td>{money(row.expenses, row.currency)}</td>
-                        <td>{money(row.accountsReceivable, row.currency)}</td>
-                        <td>{money(row.accountsPayable, row.currency)}</td>
-                        <td>
-                          <Badge
-                            tone={row.state === "live" ? "success" : "blue"}
+                <div className="branch-report-group">
+                  {Object.values(
+                    rows.reduce<Record<string, { branch: string; rows: typeof rows }>>(
+                      (groups, row) => {
+                        const bucket = (groups[row.branchId] ??= {
+                          branch: row.branch,
+                          rows: [],
+                        });
+                        bucket.rows.push(row);
+                        return groups;
+                      },
+                      {},
+                    ),
+                  ).map((group) => (
+                    <div key={group.branch} className="branch-report">
+                      <h4 className="branch-report-title">
+                        <BranchName data={data} branch={group.branch} />
+                      </h4>
+                      <div className="service-kpi-grid">
+                        {group.rows.map((row) => (
+                          <article
+                            key={`${row.branchId}-${row.currency}`}
+                            className="metric-card card-hover service-kpi"
                           >
-                            {row.state === "closed"
-                              ? "Closed Automatically"
-                              : row.state}
-                          </Badge>
-                        </td>
-                        <td>
-                          {user.role === "owner" &&
-                            row.state === "closed" &&
-                            row.version && (
-                              <button
-                                className="text-button"
-                                onClick={() => void correct(row)}
-                              >
-                                Recalculate
-                              </button>
-                            )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </TableShell>
+                            <div
+                              className={`metric-icon tone-${
+                                row.profit < 0 ? "red" : "green"
+                              }`}
+                            >
+                              <Icon name="wallet" size={22} />
+                            </div>
+                            <div className="metric-main">
+                              <span className="eyebrow-soft">
+                                {row.currency} · Business Day
+                              </span>
+                              <strong>{money(row.revenue, row.currency)}</strong>
+                              <span className="service-kpi-caption">Revenue</span>
+                              <dl className="service-kpi-stats">
+                                <div>
+                                  <dt>Money Received</dt>
+                                  <dd className="is-profit">
+                                    {money(row.moneyReceived, row.currency)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt>Direct Cost</dt>
+                                  <dd>{money(row.directCost, row.currency)}</dd>
+                                </div>
+                                <div>
+                                  <dt>Profit</dt>
+                                  <dd
+                                    className={
+                                      row.profit < 0 ? "is-loss" : "is-profit"
+                                    }
+                                  >
+                                    {money(row.profit, row.currency)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt>Expenses</dt>
+                                  <dd>{money(row.expenses, row.currency)}</dd>
+                                </div>
+                                <div>
+                                  <dt>Customer Debt</dt>
+                                  <dd>
+                                    {money(
+                                      row.accountsReceivable,
+                                      row.currency,
+                                    )}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt>Payables</dt>
+                                  <dd>
+                                    {money(row.accountsPayable, row.currency)}
+                                  </dd>
+                                </div>
+                              </dl>
+                              <div className="service-kpi-footer">
+                                <Badge
+                                  tone={
+                                    row.state === "live" ? "success" : "blue"
+                                  }
+                                >
+                                  {row.state === "closed"
+                                    ? "Closed Automatically"
+                                    : row.state}
+                                </Badge>
+                                {user.role === "owner" &&
+                                  row.state === "closed" &&
+                                  row.version && (
+                                    <button
+                                      className="text-button"
+                                      onClick={() => void correct(row)}
+                                    >
+                                      Recalculate
+                                    </button>
+                                  )}
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </Panel>
 
               <div className="daily-summary-details">

@@ -3902,6 +3902,22 @@ h3 .branch-inline .branch-flag {
 .service-kpi-stats dd.is-profit {
   color: #16a34a;
 }
+.service-kpi-stats dd.is-loss {
+  color: #ef4444;
+}
+
+/* Business Day cards carry a status badge (and an owner-only Recalculate
+   action) below the figures. */
+.service-kpi-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
 
 @media (max-width: 767px) {
   .service-kpi-grid {
