@@ -44,12 +44,9 @@ services:
       - key: JSON_BODY_LIMIT
         value: 15mb
       # Allow the browser app (the frontend service) to call this API with
-      # credentials. Render injects the frontend's public URL here.
+      # credentials. Set to the frontend's public URL.
       - key: CORS_ALLOWED_ORIGINS
-        fromService:
-          name: somway-web
-          type: web
-          property: hostport
+        value: https://somway-web.onrender.com
       # ---- Default seed accounts (used by `npm run seed:users`) ----
       # These let the seed script create logins without hardcoding secrets in
       # the repo. Change them in the dashboard to whatever you want.
@@ -82,7 +79,4 @@ services:
       # Vinext listens on $PORT; Render sets this automatically.
       # Point the browser app at the API's public URL (baked in at build time).
       - key: VITE_API_BASE_URL
-        fromService:
-          name: somway-api
-          type: web
-          property: hostport
+        value: https://somway-api.onrender.com
