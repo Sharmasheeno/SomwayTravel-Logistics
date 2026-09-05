@@ -844,6 +844,189 @@ function downloadPdf(filename: string, title: string, lines: string[]) {
   downloadBlob(filename, new TextEncoder().encode(pdf), "application/pdf");
 }
 
+// One-click receipt. Rather than send the user to the Receipt Builder page to
+// re-type a reference, any register row can hand its already-known details
+// straight to this function, which opens a self-contained, print-ready A4
+// receipt in a new tab and triggers the browser's print/save dialog. The
+// markup is inlined (not the app's DOM) so the printout carries only the
+// receipt -- no sidebar, no chrome -- and looks the same on every device.
+type ReceiptData = {
+  agencyName: string;
+  ref: string;
+  date: string;
+  client: string;
+  description: string;
+  branch: string;
+  method: string;
+  paymentStatus: string;
+  serviceStatus: string;
+  amount: number;
+  cost?: number;
+  profit: number;
+  amountPaid: number;
+  balance: number;
+  currency: Currency;
+  served: string;
+  notes?: string;
+  kind: string;
+};
+function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
+  const esc = (value: string | number) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  const m = (value: number) => esc(money(value, receipt.currency));
+  const paidTone = /paid|refunded/i.test(receipt.paymentStatus)
+    ? "#0d8a4f"
+    : "#b7791f";
+  const rows: Array<[string, string]> = [
+    ["Date", esc(dateLabel(receipt.date))],
+    ["Client", esc(receipt.client)],
+    ["Description", esc(receipt.description)],
+    ["Branch", esc(receipt.branch)],
+    ["Paid via", esc(receipt.method)],
+    ["Payment status", esc(receipt.paymentStatus)],
+    ["Service status", esc(receipt.serviceStatus)],
+  ];
+  const finance: Array<[string, string, string?]> = [
+    ...(receipt.cost !== undefined
+      ? ([["Agency cost", m(receipt.cost)]] as Array<[string, string]>)
+      : []),
+    ["Profit", m(receipt.profit), receipt.profit < 0 ? "#d64545" : "#0d8a4f"],
+    ["Paid", m(receipt.amountPaid)],
+    ["Balance", m(receipt.balance)],
+  ];
+  const logo = logoUrl
+    ? `<img class="brand" src="${esc(logoUrl)}" alt="${esc(receipt.agencyName)}" />`
+    : `<div class="brand brand-fallback">SW</div>`;
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>receipt-${esc(receipt.ref)}</title>
+<style>
+  :root { --green:#0d47a1; --muted:#61708c; --line:#dce6f2; --cream:#fff9e9; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #eef2f7; color: #14243d;
+    font-family: "Poppins", "Inter", system-ui, -apple-system, sans-serif; }
+  .sheet { max-width: 640px; margin: 26px auto; background: #fff;
+    border: 1px solid var(--line); border-radius: 6px; padding: 40px 46px;
+    box-shadow: 0 18px 44px rgba(3,23,53,.10); }
+  header { display: grid; grid-template-columns: 46px 1fr auto; align-items: center;
+    gap: 14px; padding-bottom: 22px; border-bottom: 2px solid var(--green); }
+  .brand { width: 46px; height: 46px; border-radius: 12px; object-fit: contain; }
+  .brand-fallback { display: grid; place-items: center; background: var(--green);
+    color: #fff; font: 700 20px/1 Georgia, serif; }
+  h1 { font: 500 21px/1.15 Georgia, serif; color: var(--green); margin: 0; }
+  header p { font-size: 10px; color: var(--muted); margin: 4px 0 0; }
+  .tag { align-self: start; padding: 6px 12px; border-radius: 999px;
+    background: #e0f5e9; color: #0d8a4f; font-size: 11px; font-weight: 700; }
+  .ref { display: flex; justify-content: space-between; align-items: center;
+    background: var(--cream); padding: 14px 16px; margin: 24px 0; border-radius: 9px; }
+  .ref span { font-size: 10px; color: #846d3d; }
+  .ref strong { font-size: 15px; color: var(--green); letter-spacing: .02em; }
+  dl { margin: 0; }
+  dl > div { display: grid; grid-template-columns: 130px 1fr; padding: 12px 0;
+    border-bottom: 1px solid #edf1f0; }
+  dt { font-size: 11px; color: var(--muted); }
+  dd { font-size: 12px; font-weight: 700; margin: 0; }
+  .total { display: flex; justify-content: space-between; align-items: end; padding: 24px 0; }
+  .total span { font-size: 11px; color: var(--muted); }
+  .total strong { font: 500 30px/1 Georgia, serif; color: var(--green);
+    font-variant-numeric: tabular-nums; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px;
+    padding-bottom: 22px; }
+  .grid > div { display: flex; flex-direction: column; gap: 5px; padding: 11px 13px;
+    background: #f5f8fc; border-radius: 8px; }
+  .grid span { color: var(--muted); font-size: 10px; }
+  .grid strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+  .notes { padding: 12px 14px; margin: 0 0 18px; background: var(--cream);
+    border-radius: 8px; color: #765d2b; font-size: 11px; line-height: 1.5; }
+  footer { border-top: 1px solid var(--line); padding-top: 18px; }
+  footer p { font: 500 17px/1.2 Georgia, serif; color: var(--green); margin: 0 0 4px; }
+  footer span { font-size: 10px; color: var(--muted); }
+  .toolbar { max-width: 640px; margin: 18px auto 0; display: flex; gap: 10px;
+    justify-content: flex-end; }
+  .toolbar button { border: 0; border-radius: 10px; padding: 11px 18px; cursor: pointer;
+    font: 600 13px/1 inherit; }
+  .toolbar .print { background: var(--green); color: #fff; }
+  .toolbar .close { background: #e7edf5; color: #35425c; }
+  @media print { body { background: #fff; } .sheet { box-shadow: none; border: 0;
+    margin: 0; max-width: none; } .toolbar { display: none; } }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <header>
+      ${logo}
+      <div><h1>${esc(receipt.agencyName)}</h1><p>Nairobi &middot; Mogadishu</p></div>
+      <span class="tag">Receipt</span>
+    </header>
+    <div class="ref"><span>Receipt number</span><strong>${esc(receipt.ref)}</strong></div>
+    <dl>${rows
+      .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
+      .join("")}</dl>
+    <div class="total"><span>Sale price</span><strong>${m(receipt.amount)}</strong></div>
+    <div class="grid">${finance
+      .map(
+        ([k, v, color]) =>
+          `<div><span>${k}</span><strong${color ? ` style="color:${color}"` : ""}>${v}</strong></div>`,
+      )
+      .join("")}</div>
+    ${receipt.notes ? `<p class="notes">${esc(receipt.notes)}</p>` : ""}
+    <footer><p>Thank you for your business.</p><span>Served by ${esc(receipt.served)}</span></footer>
+  </div>
+  <div class="toolbar">
+    <button class="close" onclick="window.close()">Close</button>
+    <button class="print" onclick="window.print()">Print / Save PDF</button>
+  </div>
+  <script>
+    window.addEventListener('load', function(){ setTimeout(function(){ window.focus(); window.print(); }, 350); });
+  <\/script>
+</body>
+</html>`;
+  const win = window.open("", "_blank", "noopener,noreferrer,width=760,height=900");
+  if (!win) {
+    window.alert(
+      "Please allow pop-ups for this site to generate the receipt.",
+    );
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.document.title = `receipt-${receipt.ref}`;
+}
+// Turn a ticket register row into receipt data for the one-click generator.
+function ticketReceiptData(
+  ticket: Ticket,
+  agencyName: string,
+): ReceiptData {
+  const amountValue = ticket.amount || 0;
+  const paid = ticket.amountPaid || 0;
+  return {
+    agencyName,
+    ref: ticket.ref,
+    date: ticket.saleDate,
+    client: ticket.passenger,
+    description: `Flight ${ticket.route}${ticket.airlinePnr ? ` · ${ticket.airlinePnr}` : ""}`,
+    branch: ticket.office,
+    method: ticket.paymentMethod,
+    paymentStatus: ticket.paymentStatus || (ticket.paid ? "paid" : "unpaid"),
+    serviceStatus: ticket.status || "booked",
+    amount: amountValue,
+    cost: ticket.cost,
+    profit: amountValue - (ticket.cost || 0),
+    amountPaid: paid,
+    balance: ticket.balance ?? Math.max(0, amountValue - paid),
+    currency: ticket.currency,
+    served: ticket.servedBy || "Agency team",
+    notes: ticket.notes,
+    kind: "ticket",
+  };
+}
 function Icon({ name, size = 18 }: { name: string; size?: number }) {
   return <SomwayIcon name={name} size={size} />;
 
@@ -5475,8 +5658,29 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
               return (
                 <tr key={x.id}>
                   <td>
-                    <strong>{x.ref}</strong>
-                    <small>{dateLabel(x.saleDate)}</small>
+                    <div className="ref-cell">
+                      <div className="ref-cell-text">
+                        <strong>{x.ref}</strong>
+                        <small>{dateLabel(x.saleDate)}</small>
+                      </div>
+                      {x.type !== "Refund" && (
+                        <button
+                          type="button"
+                          className="receipt-chip"
+                          title={`Generate receipt for ${x.ref}`}
+                          aria-label={`Generate receipt for ${x.ref}`}
+                          onClick={() =>
+                            generateReceipt(
+                              ticketReceiptData(x, data.agencyName),
+                              "/somway-primary-logo-alpha.png",
+                            )
+                          }
+                        >
+                          <Icon name="receipt" size={14} />
+                          <span>Receipt</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td>
                     {x.passenger}
