@@ -299,14 +299,14 @@ export const buildDailySummaryRows = ({
             balance.currency === currency &&
             id(balance.paymentMethodId) === methodId,
         );
-        // Rule 1: today opens on yesterday close for this method. Every
-        // channel carries forward, not just the cash drawer - money sitting in
-        // EVC Plus or the bank is still held overnight. Only on a branch first
-        // day, with no prior summary, does the float configured in Advanced
-        // Settings supply the opening figure.
-        const opening = round(
-          previousMethods.get(methodId)?.closing ?? configured?.amount ?? 0,
-        );
+        // Rule 1: today opens on yesterday's close for this method, or on the
+        // float configured in Advanced Settings on a branch's first day. Only
+        // physical-cash channels carry a balance overnight, so a method that is
+        // not marked as physical cash always opens at zero regardless of any
+        // stored closing or configured float.
+        const opening = link.countsAsPhysicalCash
+          ? round(previousMethods.get(methodId)?.closing ?? configured?.amount ?? 0)
+          : 0;
         return {
           paymentMethodId: methodId,
           paymentMethod: method?.name || link.paymentMethod || "Payment method",
