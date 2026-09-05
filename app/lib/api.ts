@@ -5,7 +5,13 @@ import { ApiError, parseApiResponse } from "./api-core.js";
 // dev/preview server can proxy them to the Express API running alongside it --
 // the browser never needs to know a localhost port that isn't reachable from
 // outside the sandbox.
-const apiBase = ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
+//
+// Some hosts (e.g. Render's fromService wiring) supply the base as a bare
+// host without a scheme ("somway-api.onrender.com"). A bare host would be
+// treated as a relative path by fetch(), so normalise it to an absolute https
+// URL when a scheme is missing.
+const rawApiBase = ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || "").trim().replace(/\/$/, "");
+const apiBase = rawApiBase && !/^https?:\/\//i.test(rawApiBase) ? `https://${rawApiBase}` : rawApiBase;
 
 const requestId = () => globalThis.crypto?.randomUUID?.() || `web-${Date.now().toString(36)}`;
 

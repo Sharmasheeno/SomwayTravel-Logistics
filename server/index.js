@@ -31,14 +31,31 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
 
-const configuredOrigins = (
-  process.env.CORS_ALLOWED_ORIGINS ||
-  process.env.PUBLIC_APP_URL ||
-  "http://localhost:5173"
-)
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+// Reduce an origin (or a bare host) to just its lowercase hostname so the
+// allow-list matches whether the value arrived as "https://site.com",
+// "site.com" or "site.com:443". Some hosts (e.g. Render's fromService wiring)
+// inject the frontend URL without a scheme, which would otherwise never match
+// the browser's "https://..." Origin header.
+const originHost = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    return new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.toLowerCase();
+  } catch {
+    return raw.replace(/^.*:\/\//, "").split("/")[0].split(":")[0].toLowerCase();
+  }
+};
+
+const allowedOriginHosts = new Set(
+  (
+    process.env.CORS_ALLOWED_ORIGINS ||
+    process.env.PUBLIC_APP_URL ||
+    "http://localhost:5173"
+  )
+    .split(",")
+    .map(originHost)
+    .filter(Boolean),
+);
 app.set("trust proxy", process.env.TRUST_PROXY === "true" ? 1 : false);
 app.use((req, res, next) => {
   req.requestId = String(
@@ -58,7 +75,7 @@ app.use(
   cors({
     credentials: true,
     origin(origin, callback) {
-      if (!origin || configuredOrigins.includes(origin))
+      if (!origin || allowedOriginHosts.has(originHost(origin)))
         return callback(null, true);
       return callback(new Error("Origin is not allowed."));
     },
