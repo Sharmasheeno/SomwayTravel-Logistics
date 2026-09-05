@@ -2363,7 +2363,6 @@ export default function Home() {
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [setupRequired, setSetupRequired] = useState(false);
   const [portalPath, setPortalPath] = useState("/");
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState<Page>("overview");
@@ -2417,8 +2416,10 @@ export default function Home() {
         if (!statusResponse.ok)
           throw new Error(status.error || "Secure storage is unavailable.");
         if (!active) return;
-        setSetupRequired(Boolean(status.setupRequired));
-        if (status.setupRequired) return;
+        // The owner account is created directly (seed or database), so the
+        // in-app first-run setup screen is intentionally not shown; /admin
+        // always presents the email + password login form.
+        void status;
         // This tab never signed in -- a new tab, or a return visit after the
         // browser closed. Do not resume the cookie; show the login screen.
         if (!tabHasSession()) return;
@@ -2609,22 +2610,6 @@ export default function Home() {
   if (portalPath === "/") return <Landing />;
   if (loadError && !user)
     return <AuthMessage title="Access unavailable" detail={loadError} />;
-  if (setupRequired && portalPath === "/admin")
-    return (
-      <Bootstrap
-        onReady={async (owner) => {
-          await loadWorkspace(owner);
-          setSetupRequired(false);
-        }}
-      />
-    );
-  if (setupRequired)
-    return (
-      <AuthMessage
-        title="Workspace setup pending"
-        detail="The agency owner must complete the one-time setup before staff accounts can sign in."
-      />
-    );
   if (!user)
     return (
       <Login
@@ -3685,133 +3670,6 @@ function LegacyLanding() {
   );
 }
 
-function Bootstrap({ onReady }: { onReady: (owner: User) => Promise<void> }) {
-  const [form, setForm] = useState({ name: "", password: "", confirm: "" });
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (!form.name.trim() || form.password.length < 10)
-      return setError(
-        "Enter the owner name and use at least 10 characters for the password.",
-      );
-    if (form.password !== form.confirm)
-      return setError("Passwords do not match.");
-    setSubmitting(true);
-    try {
-      const response = await fetch("/api/auth/setup-owner", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name, password: form.password }),
-      });
-      const payload = await response.json();
-      if (!response.ok)
-        throw new Error(payload.error || "Owner setup could not be completed.");
-      await onReady(payload.user);
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Owner setup could not be completed.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-  return (
-    <main className="auth-screen">
-      <section className="auth-story">
-        <a className="auth-back" href="/">
-          ← Public website
-        </a>
-        <div className="brand light">
-          <BrandLogo className="auth-brand-logo" />
-        </div>
-        <div className="story-copy">
-          <p className="eyebrow">Owner-only setup</p>
-          <h1>Secure the agency workspace.</h1>
-          <p>
-            Create the first owner password once. The account, staff access and
-            agency records will then work across supported browsers.
-          </p>
-          <div className="story-stats">
-            <div>
-              <strong>2</strong>
-              <span>connected offices</span>
-            </div>
-            <div>
-              <strong>4</strong>
-              <span>permission roles</span>
-            </div>
-            <div>
-              <strong>1</strong>
-              <span>owner administrator</span>
-            </div>
-          </div>
-        </div>
-        <div className="route-line">
-          <span>NBO</span>
-          <i />
-          <b>Secure agency workspace</b>
-          <i />
-          <span>MGQ</span>
-        </div>
-      </section>
-      <section className="auth-panel">
-        <form onSubmit={submit}>
-          <p className="eyebrow">First-time setup</p>
-          <h2>Create the owner password</h2>
-          <p className="form-intro">
-            Only the owner can complete this one-time step.
-          </p>
-          <Field label="Owner login">
-            <input readOnly autoComplete="username" value={OWNER_LOGIN} />
-          </Field>
-          <Field label="Owner name">
-            <input
-              autoFocus
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Full name"
-            />
-          </Field>
-          <div className="form-grid">
-            <Field label="Password">
-              <PasswordInput
-                autoComplete="new-password"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-              />
-            </Field>
-            <Field label="Confirm">
-              <PasswordInput
-                autoComplete="new-password"
-                value={form.confirm}
-                onChange={(e) => setForm({ ...form, confirm: e.target.value })}
-              />
-            </Field>
-          </div>
-          {error && <p className="form-error">{error}</p>}
-          <button
-            disabled={submitting}
-            className="button primary full"
-            type="submit"
-          >
-            {submitting ? "Securing workspace…" : "Create secure workspace"}{" "}
-            <Icon name="arrow" />
-          </button>
-          <p className="storage-note">
-            <Icon name="lock" size={16} />
-            Encrypted password and agency data are stored securely for
-            cross-browser access.
-          </p>
-        </form>
-      </section>
-    </main>
-  );
-}
-
 function Login({
   linkToken,
   onLogin,
@@ -3897,13 +3755,14 @@ function Login({
             {staffName ? `Welcome, ${staffName.split(" ")[0]}` : "Sign in"}
           </h2>
           <p className="form-intro">
-            Enter your username and password to continue.
+            Enter your email and password to continue.
           </p>
-          <Field label="Username">
+          <Field label="Email">
             <input
+              type="email"
               readOnly={Boolean(linkToken)}
               autoFocus={!linkToken}
-              autoComplete="username"
+              autoComplete="email"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
