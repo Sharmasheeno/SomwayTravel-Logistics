@@ -2491,11 +2491,13 @@ button.danger:disabled,
   filter: brightness(0.96);
 }
 /* Keep the edit/delete/view glyphs a readable size inside their button chips
-   across the whole system, rather than the small default 16px icon looking
-   lost in the padded box. */
-.row-actions button svg {
-  width: 18px;
-  height: 18px;
+   across the whole system (bookings, cargo, visa, clients, payables), rather
+   than the small default 16px icon looking lost in the ~38px padded box. */
+.row-actions button svg,
+.row-actions .small-icon svg,
+.branch-row-actions button svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* The same three purpose colours as standalone classes, so record actions
