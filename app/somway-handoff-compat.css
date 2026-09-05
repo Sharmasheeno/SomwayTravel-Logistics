@@ -955,6 +955,26 @@ h6,
   grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.85fr) minmax(0, 1.1fr);
 }
 
+/* The third column holds two panels (Tasks & Alerts + Recent Clients). Stack
+   them vertically so each gets the full column width instead of being squeezed
+   side by side, which truncated their labels ("Custom...", "Cargo...", "M..."). */
+.dashboard-bottom-row .split-even {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Give the task/alert and client rows enough room to read: the label is the
+   important part, so let it use the available width and never get clipped by a
+   fixed tiny font. */
+.dashboard-bottom-row .timeline-row strong,
+.dashboard-bottom-row .recent-client-row strong {
+  font-size: 12px;
+  white-space: normal;
+}
+.dashboard-bottom-row .timeline-row small,
+.dashboard-bottom-row .recent-client-row .muted {
+  font-size: 10px;
+}
+
 .top-client-spend {
   font-size: 11px;
   font-weight: 700;
