@@ -3771,3 +3771,52 @@ h3 .branch-inline .branch-flag {
   place-items: initial;
   border-radius: 0;
 }
+
+/* Desktop table action buttons were clipping. Cargo status transitions
+   ("Dispatch", "Arrive", etc.) render as plain <button> with no class, so
+   they fell through to `.row-actions button { width: 38px; height: 38px }`
+   in somway.css -- a fixed square that cropped the label. The wide
+   "Receive Payment" button plus these transitions then overflowed the
+   actions column and overlapped the neighbouring cells. Give the text
+   buttons real width and keep the whole action group on a single line so
+   the table's own horizontal scroll absorbs any genuine overflow instead
+   of columns colliding. Icon-only buttons (aria-label) stay square.
+   Scoped to >=768px so the mobile full-width stacked action buttons are
+   untouched. */
+@media (min-width: 768px) {
+  .row-actions {
+    flex-wrap: nowrap;
+  }
+  .row-actions > button:not([aria-label]) {
+    width: auto;
+    min-width: 0;
+    height: auto;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid #cfe0f7;
+    border-radius: 9px;
+    background: #eaf2ff;
+    color: var(--ui-brand);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    flex: 0 0 auto;
+  }
+  .row-actions > button[aria-label] {
+    flex: 0 0 auto;
+  }
+  /* The actions column should hug its content and never wrap its buttons
+     onto a second line on desktop; the .table-shell wrapper scrolls if the
+     whole table gets wider than its container. */
+  .table-shell td:last-child,
+  .table-wrap td:last-child {
+    white-space: nowrap;
+    width: 1%;
+  }
+}
