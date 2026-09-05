@@ -8843,41 +8843,66 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
               <div className="daily-summary-details">
                 <Panel
                   title="Revenue by Service"
-                  subtitle="Per branch, currency and service"
+                  subtitle="A separate table per branch"
                 >
-                  <TableShell>
-                    <thead>
-                      <tr>
-                        <th>Branch / Currency / Service</th>
-                        <th>Transactions</th>
-                        <th>Revenue</th>
-                        <th>Direct Cost</th>
-                        <th>Profit</th>
-                        <th>Customer Debt</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.flatMap((row) =>
-                        row.revenueByService.map((service) => (
-                          <tr
-                            key={`${row.branchId}-${row.currency}-${service.service}`}
-                          >
-                            <td>
-                              <BranchName data={data} branch={row.branch} /> ·{" "}
-                              {row.currency} · {service.service}
-                            </td>
-                            <td>{service.transactions}</td>
-                            <td>{money(service.revenue, row.currency)}</td>
-                            <td>{money(service.directCost, row.currency)}</td>
-                            <td>{money(service.profit, row.currency)}</td>
-                            <td>
-                              {money(service.accountsReceivable, row.currency)}
-                            </td>
-                          </tr>
-                        )),
-                      )}
-                    </tbody>
-                  </TableShell>
+                  <div className="branch-report-group">
+                    {Object.values(
+                      rows.reduce<Record<string, { branch: string; rows: typeof rows }>>(
+                        (groups, row) => {
+                          const bucket = (groups[row.branchId] ??= {
+                            branch: row.branch,
+                            rows: [],
+                          });
+                          bucket.rows.push(row);
+                          return groups;
+                        },
+                        {},
+                      ),
+                    ).map((group) => (
+                      <div key={group.branch} className="branch-report">
+                        <h4 className="branch-report-title">
+                          <BranchName data={data} branch={group.branch} />
+                        </h4>
+                        <TableShell>
+                          <thead>
+                            <tr>
+                              <th>Currency / Service</th>
+                              <th>Transactions</th>
+                              <th>Revenue</th>
+                              <th>Direct Cost</th>
+                              <th>Profit</th>
+                              <th>Customer Debt</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.rows.flatMap((row) =>
+                              row.revenueByService.map((service) => (
+                                <tr
+                                  key={`${row.branchId}-${row.currency}-${service.service}`}
+                                >
+                                  <td>
+                                    {row.currency} · {service.service}
+                                  </td>
+                                  <td>{service.transactions}</td>
+                                  <td>{money(service.revenue, row.currency)}</td>
+                                  <td>
+                                    {money(service.directCost, row.currency)}
+                                  </td>
+                                  <td>{money(service.profit, row.currency)}</td>
+                                  <td>
+                                    {money(
+                                      service.accountsReceivable,
+                                      row.currency,
+                                    )}
+                                  </td>
+                                </tr>
+                              )),
+                            )}
+                          </tbody>
+                        </TableShell>
+                      </div>
+                    ))}
+                  </div>
                 </Panel>
                 <Panel
                   title="Payments by Method"

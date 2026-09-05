@@ -3820,3 +3820,25 @@ h3 .branch-inline .branch-flag {
     width: 1%;
   }
 }
+
+/* Revenue by Service used to be one long flat table where every row repeated
+   "Branch . Currency . Service". It now renders one small table per branch
+   with the branch name as a heading, so the branch is stated once and each
+   row only carries currency + service. */
+.branch-report-group {
+  display: grid;
+  gap: 18px;
+}
+.branch-report-title {
+  margin: 0 0 8px;
+  padding: 0 2px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ui-heading, #1f2a44);
+}
+.branch-report-title .branch-inline {
+  gap: 8px;
+}
+.branch-report + .branch-report {
+  padding-top: 4px;
+}
