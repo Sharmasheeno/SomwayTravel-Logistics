@@ -50,11 +50,21 @@ The included build helpers use Bash, `flock`, and GNU `timeout`. On macOS, insta
 
 7. Open `http://localhost:5173`. The public website is at `/`. The private owner setup and login page is at `/admin`.
 
-Default seeded users:
+Seeding the first users:
 
-- Owner 1: `abdikadirhassan2015@gmail.com` / `Owner@2026!`
-- Owner 2: `owner2@macruf.local` / `Owner@2026!`
-- Officer (Nairobi): `officer@macruf.local` / `Officer@2026!`
+`npm run seed:users` creates one owner, a second owner and a Nairobi
+operator. It takes their addresses and passwords from the environment and
+generates a strong random password for anything you do not supply, printing
+the result once when it finishes. Copy those passwords out of that output --
+they are not stored anywhere and cannot be recovered afterwards.
+
+```bash
+SEED_OWNER_EMAIL=you@example.com SEED_OWNER_PASSWORD=... npm run seed:users
+```
+
+Never commit a real password to this file or to the seed script. Running the
+seed also **resets** the password of any account it matches by address, so do
+not run it against production.
 
 The frontend's API base URL defaults to `http://localhost:5000`; override it with `VITE_API_BASE_URL` if the API runs elsewhere.
 

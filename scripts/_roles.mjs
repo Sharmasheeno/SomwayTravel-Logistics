@@ -56,5 +56,15 @@ const check = async (label, email, password, shot) => {
 };
 
 const shotDir = process.argv[2] || ".";
-await check("OWNER", "owner2@macruf.local", "Owner@2026!", `${shotDir}/role-owner.png`);
-await check("OPERATOR", "officer@macruf.local", "Officer@2026!", `${shotDir}/role-operator.png`);
+// Credentials come from the environment so this local check script never
+// carries a working login into the repository.
+const need = (key) => {
+  const value = process.env[key];
+  if (!value) {
+    console.error(`Set ${key} before running this check.`);
+    process.exit(1);
+  }
+  return value;
+};
+await check("OWNER", need("CHECK_OWNER_EMAIL"), need("CHECK_OWNER_PASSWORD"), `${shotDir}/role-owner.png`);
+await check("OPERATOR", need("CHECK_OPERATOR_EMAIL"), need("CHECK_OPERATOR_PASSWORD"), `${shotDir}/role-operator.png`);
