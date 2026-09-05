@@ -987,17 +987,30 @@ function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
   <\/script>
 </body>
 </html>`;
-  const win = window.open("", "_blank", "noopener,noreferrer,width=760,height=900");
-  if (!win) {
-    window.alert(
-      "Please allow pop-ups for this site to generate the receipt.",
-    );
+  const win = window.open("", "_blank", "width=760,height=900");
+  if (win && win.document) {
+    // Direct document write: works in the common case and keeps the tab under
+    // our control so the title (the PDF filename) can be set.
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    try {
+      win.document.title = `receipt-${receipt.ref}`;
+    } catch {
+      // Cross-origin title set can throw in rare cases; the <title> tag covers it.
+    }
     return;
   }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.document.title = `receipt-${receipt.ref}`;
+  // Some browsers hand back a window whose document cannot be written to
+  // (or block the direct write). Fall back to a Blob URL, which always
+  // renders the same self-contained page.
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  const opened = window.open(url, "_blank");
+  if (!opened) {
+    window.alert("Please allow pop-ups for this site to generate the receipt.");
+  }
+  // Revoke after the tab has had time to load the document.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 // Turn a ticket register row into receipt data for the one-click generator.
 function ticketReceiptData(
