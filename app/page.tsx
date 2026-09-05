@@ -573,6 +573,9 @@ type ModuleProps = {
   scopeBranchId?: string;
   /** Moves the workspace to another screen, for panel "View all" links. */
   go?: (page: Page) => void;
+  /** Reference of a record to reveal, set when a notification is opened.
+   *  The register seeds its search with it so the row is on screen. */
+  focusRef?: string;
 };
 
 /**
@@ -1242,6 +1245,124 @@ function BranchName({
   );
 }
 
+/**
+ * A branch picker that shows each country's flag. A native <select> cannot
+ * render an image inside <option>, so this is a listbox.
+ *
+ * `onChange` deliberately receives `{ target: { value } }` so it is a drop-in
+ * replacement for the <select> it supersedes: the surrounding forms derive
+ * currency, payment method and office name from the chosen branch in handlers
+ * that already read `event.target.value`, and none of that logic has to move.
+ */
+function BranchSelect({
+  options,
+  value,
+  onChange,
+  disabled = false,
+  placeholder = "Select a branch",
+  allLabel,
+  allValue = "",
+  required,
+}: {
+  options: Branch[];
+  value: string;
+  onChange: (event: { target: { value: string } }) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  /** Filters offer an "All Branches" entry ahead of the list. */
+  allLabel?: string;
+  allValue?: string;
+  /** Accepted so this drops into forms that marked the old <select>
+   *  required. The list always has a branch selected, so there is nothing
+   *  to enforce, but dropping the prop silently would be worse. */
+  required?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((branch) => branch.id === value);
+  const showingAll = Boolean(allLabel) && !selected;
+  return (
+    <div className="branch-select">
+      <button
+        type="button"
+        className="branch-select-button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {selected ? (
+          <>
+            <BranchFlag country={selected.country} />
+            <span>{selected.name}</span>
+          </>
+        ) : showingAll ? (
+          <>
+            <Icon name="building" size={16} />
+            <span>{allLabel}</span>
+          </>
+        ) : (
+          <span className="branch-select-placeholder">{placeholder}</span>
+        )}
+        <Icon name="chevron" size={14} />
+      </button>
+      {open && !disabled && (
+        <>
+          <button
+            type="button"
+            className="notif-scrim"
+            aria-label="Close branch list"
+            onClick={() => setOpen(false)}
+          />
+          <ul className="branch-select-list" role="listbox">
+            {allLabel && (
+              <li>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={showingAll}
+                  className={showingAll ? "is-selected" : ""}
+                  onClick={() => {
+                    onChange({ target: { value: allValue } });
+                    setOpen(false);
+                  }}
+                >
+                  <Icon name="building" size={16} />
+                  <span>
+                    <strong>{allLabel}</strong>
+                    <small>Every branch</small>
+                  </span>
+                </button>
+              </li>
+            )}
+            {options.map((branch) => (
+              <li key={branch.id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={branch.id === value}
+                  className={branch.id === value ? "is-selected" : ""}
+                  onClick={() => {
+                    onChange({ target: { value: branch.id } });
+                    setOpen(false);
+                  }}
+                >
+                  <BranchFlag country={branch.country} />
+                  <span>
+                    <strong>{branch.name}</strong>
+                    <small>
+                      {branch.city}, {branch.country}
+                    </small>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** The office chip used across registers, receipts and client records. */
 function BranchBadge({ data, office }: { data: AgencyData; office?: string }) {
   const branch = branchByOffice(data, office);
@@ -1647,9 +1768,6 @@ function Kpi({
           <span>{note}</span>
         </div>
       </div>
-      <svg className="sparkline" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
-        <polyline points="0,28 14,22 28,25 42,18 57,21 71,13 85,16 100,7" fill="none" stroke="currentColor" strokeWidth="2.2" />
-      </svg>
     </article>
   );
 }
@@ -1677,15 +1795,18 @@ function MetricCard({
         <span className="eyebrow-soft">{label}</span>
         <strong>{value}</strong>
         <div className="metric-foot">
-          <span className={delta?.startsWith("-") ? "negative" : "positive"}>
+          <span
+            className={
+              delta?.startsWith("↓") || delta?.startsWith("-")
+                ? "negative"
+                : "positive"
+            }
+          >
             {delta || ""}
           </span>
           <span>{foot || ""}</span>
         </div>
       </div>
-      <svg className="sparkline" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
-        <polyline points="0,28 14,22 28,25 42,18 57,21 71,13 85,16 100,7" fill="none" stroke="currentColor" strokeWidth="2.2" />
-      </svg>
     </div>
   );
 }
@@ -1774,6 +1895,61 @@ function DataTable({
     </div>
   );
 }
+/**
+ * One icon and colour per financial metric, so "Profit" looks the same on
+ * every page it appears on. Colour follows meaning: money in is green,
+ * money out is orange, what we are owed is blue, margin is violet.
+ */
+const METRIC_LOOK: Record<string, { icon: string; tone: string }> = {
+  customerCharges: { icon: "receipt", tone: "blue" },
+  paymentsReceived: { icon: "money", tone: "green" },
+  directCost: { icon: "expense", tone: "orange" },
+  profit: { icon: "trend", tone: "violet" },
+  grossProfit: { icon: "trend", tone: "violet" },
+  revenue: { icon: "chart", tone: "cyan" },
+  collections: { icon: "wallet", tone: "green" },
+  outstanding: { icon: "clock", tone: "red" },
+  refunds: { icon: "logout", tone: "pink" },
+  netReceived: { icon: "wallet", tone: "cyan" },
+};
+const metricLook = (metric: string) =>
+  METRIC_LOOK[metric] || { icon: "chart", tone: "blue" };
+
+/**
+ * Period-on-period movement for a dashboard figure. Returns "" when there is
+ * nothing to compare against -- a card shows no arrow rather than a made-up
+ * one. A rise from zero has no meaningful percentage, so it reads as "new".
+ */
+const trendDelta = (current: number, previous: number) => {
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return "";
+  if (previous === 0) return current > 0 ? "↑ new" : "";
+  if (current === previous) return "↔ 0.0%";
+  const change = ((current - previous) / Math.abs(previous)) * 100;
+  return `${change > 0 ? "↑" : "↓"} ${Math.abs(change).toFixed(1)}%`;
+};
+
+/** Records dated inside [from, to] on the given field. */
+const datedWithin = <T,>(rows: T[], field: keyof T, from: string, to: string) =>
+  rows.filter((row) => {
+    const value = String(row[field] ?? "").slice(0, 10);
+    return value >= from && value <= to;
+  });
+
+/** The equally long window immediately before [from, to]. */
+const previousWindow = (from: string, to: string) => {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start)
+    return { from, to };
+  const spanDays = Math.round((end - start) / 86400000) + 1;
+  const previousEnd = new Date(start - 86400000);
+  const previousStart = new Date(start - spanDays * 86400000);
+  return {
+    from: previousStart.toISOString().slice(0, 10),
+    to: previousEnd.toISOString().slice(0, 10),
+  };
+};
+
 const compactTick = (value: number) => {
   if (value >= 1_000_000) return `${Math.round(value / 100_000) / 10}M`;
   if (value >= 1000) return `${Math.round(value / 100) / 10}K`;
@@ -1949,10 +2125,18 @@ function Actions({
     </div>
   );
 }
-function TableShell({ children }: { children: ReactNode }) {
+function TableShell({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  /** `metric-table` keeps a dense financial table in two columns on a phone
+   *  instead of one field per row. */
+  className?: string;
+}) {
   const tableRef = useStackedTableLabels();
   return (
-    <div className="table-wrap" ref={tableRef}>
+    <div className={`table-wrap ${className}`.trim()} ref={tableRef}>
       <table>{children}</table>
     </div>
   );
@@ -2189,9 +2373,15 @@ export default function Home() {
   const [notifLoading, setNotifLoading] = useState(true);
   const [notifError, setNotifError] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
+  const [focusRef, setFocusRef] = useState("");
+  const [seenAlerts, setSeenAlerts] = useState<string[]>([]);
   const [accountOpen, setAccountOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  // Toasts carry a tone: a failed save used to render with the same green
+  // tick as a success, so an error read as confirmation. Errors also stay
+  // on screen longer and can be dismissed, because they need reading.
   const [toast, setToast] = useState("");
+  const [toastTone, setToastTone] = useState<"success" | "error">("success");
   const [overviewBranchId, setOverviewBranchId] = useState("");
   const [overviewFrom, setOverviewFrom] = useState(`${today().slice(0, 7)}-01`);
   const [overviewTo, setOverviewTo] = useState(today());
@@ -2293,9 +2483,12 @@ export default function Home() {
   }, []);
   useEffect(() => {
     if (!toast) return;
-    const id = setTimeout(() => setToast(""), 2800);
+    const id = setTimeout(
+      () => setToast(""),
+      toastTone === "error" ? 9000 : 2800,
+    );
     return () => clearTimeout(id);
-  }, [toast]);
+  }, [toast, toastTone]);
   // The server rejected a request because this account no longer has a valid
   // session -- it was deleted, suspended, or signed out elsewhere. Drop back
   // to the login screen immediately rather than leaving a dead workspace on
@@ -2339,6 +2532,11 @@ export default function Home() {
       cancelled = true;
     };
   }, [user, data]);
+  // Alerts that have not been opened yet. A refetch keeps an alert in the
+  // list, but it only counts towards the badge until it has been seen.
+  const unseenCount = notifications.filter(
+    (item) => !seenAlerts.includes(item.id),
+  ).length;
   const save = (
     updater: (current: AgencyData) => AgencyData,
     action?: { entity: string; detail: string },
@@ -2379,6 +2577,7 @@ export default function Home() {
           const payload = await response.json();
           if (response.ok && payload.data) applyData(payload.data);
         } catch {}
+        setToastTone("error");
         setToast(
           error instanceof Error
             ? error.message
@@ -2389,7 +2588,10 @@ export default function Home() {
     saveQueueRef.current = operation.then(() => undefined);
     return operation;
   };
-  const notify = (message: string) => setToast(message);
+  const notify = (message: string) => {
+    setToastTone("success");
+    setToast(message);
+  };
   if (!ready)
     return (
       <main className="loading-screen">
@@ -2491,6 +2693,7 @@ export default function Home() {
             notify={notify}
             replaceData={applyData}
             scopeBranchId={overviewBranchId}
+            focusRef={focusRef}
           />
         );
       case "cargo":
@@ -2502,6 +2705,7 @@ export default function Home() {
             notify={notify}
             replaceData={applyData}
             scopeBranchId={overviewBranchId}
+            focusRef={focusRef}
           />
         );
       case "visas":
@@ -2513,6 +2717,7 @@ export default function Home() {
             notify={notify}
             replaceData={applyData}
             scopeBranchId={overviewBranchId}
+            focusRef={focusRef}
           />
         );
       case "daily-close":
@@ -2583,6 +2788,7 @@ export default function Home() {
               key={item.page}
               className={page === item.page ? "active" : ""}
               onClick={() => {
+                setFocusRef("");
                 setPage(item.page);
                 setMobileNav(false);
               }}
@@ -2712,7 +2918,7 @@ export default function Home() {
             <div className="notif-anchor">
               <button
                 className="icon-btn"
-                aria-label={`Notifications${notifications.length ? `, ${notifications.length} needing attention` : ""}`}
+                aria-label={`Notifications${unseenCount ? `, ${unseenCount} needing attention` : ""}`}
                 aria-expanded={notifOpen}
                 onClick={() => {
                   setAccountOpen(false);
@@ -2720,9 +2926,9 @@ export default function Home() {
                 }}
               >
                 <Icon name="bell" />
-                {notifications.length > 0 && (
+                {unseenCount > 0 && (
                   <span className="notif-badge">
-                    {notifications.length > 9 ? "9+" : notifications.length}
+                    {unseenCount > 9 ? "9+" : unseenCount}
                   </span>
                 )}
               </button>
@@ -2766,6 +2972,14 @@ export default function Home() {
           error={notifError}
           onClose={() => setNotifOpen(false)}
           onOpen={(item) => {
+            // Opening an alert marks it seen: the badge drops by one while
+            // the row stays in the list until the underlying work is done.
+            setSeenAlerts((seen) =>
+              seen.includes(item.id) ? seen : [...seen, item.id],
+            );
+            // Land on the right screen with the record's reference already
+            // in the search box, so the row itself is what you see.
+            setFocusRef(item.reference);
             setPage(item.page);
             setNotifOpen(false);
             setMobileNav(false);
@@ -2825,9 +3039,17 @@ export default function Home() {
         />
       )}
       {toast && (
-        <div className="toast">
-          <span>✓</span>
-          {toast}
+        <div className={`toast toast-${toastTone}`} role="status">
+          <Icon name={toastTone === "error" ? "alert" : "check"} size={16} />
+          <span>{toast}</span>
+          <button
+            type="button"
+            className="toast-close"
+            aria-label="Dismiss"
+            onClick={() => setToast("")}
+          >
+            <Icon name="x" size={13} />
+          </button>
         </div>
       )}
     </div>
@@ -2964,14 +3186,27 @@ function Landing() {
       <section className="public-section" id="branches">
         <div className="section-title"><h2>Our Branches</h2><p>Visit or contact SomWay in Nairobi or Mogadishu.</p></div>
         <div className="public-branches">
+          {/* Each branch carries its own city artwork. Replacing the file in
+              /public with a photograph of the office keeps the same path. */}
           {[
-            ["Mogadishu Office", "Mogadishu, Somalia", "+252 61 563 3609"],
-            ["Nairobi Office", "Nairobi, Kenya", "+254 700 000 000"],
-          ].map(([city, address, phone]) => (
+            [
+              "Mogadishu Office",
+              "Mogadishu, Somalia",
+              "+252 61 563 3609",
+              "/branch-mogadishu.jpg",
+            ],
+            [
+              "Nairobi Office",
+              "Nairobi, Kenya",
+              "+254 700 000 000",
+              "/branch-nairobi.jpg",
+            ],
+          ].map(([city, address, phone, image]) => (
             <article className="branch-card" key={city}>
               <div><h3><BranchName country={address.split(", ")[1]} branch={city} /></h3><p>{address}</p><p>{phone}<br />support@somway.com</p>
                 <div className="subtabs"><a href={`tel:${phone.replace(/\s/g, "")}`}>Call</a><a href="#contact">WhatsApp</a><a href="mailto:support@somway.com">Email</a></div>
-              </div><div className="image" aria-hidden="true" />
+              </div>
+              <img className="image" src={image} alt={`${address} branch`} loading="lazy" />
             </article>
           ))}
         </div>
@@ -2990,7 +3225,19 @@ function Landing() {
         <div><h4>Quick Links</h4><a href="#home">Home</a><a href="#services">Services</a><a href="#tracking">Track Shipment</a><a href="#contact">Contact</a></div>
         <div><h4>Our Services</h4><a href="#services">Air Ticketing</a><a href="#services">Cargo Shipping</a><a href="#services">Visa Processing</a><a href="#services">Travel Assistance</a></div>
         <div><h4>Contact Us</h4><p>Mogadishu: +252 61 563 3609</p><p>Nairobi, Kenya</p><p>support@somway.com</p></div>
-        <div className="footer-bottom"><span>Copyright {new Date().getFullYear()} SomWay Travel &amp; Logistics.</span><span>Privacy Policy &nbsp; Terms &amp; Conditions</span></div>
+        {/* The Nairobi branch photo is CC BY 2.0, which requires the
+            photographer to be credited wherever it is published. The
+            Mogadishu photo is CC0 and needs no credit. */}
+        <div className="footer-bottom">
+          <span>
+            Copyright {new Date().getFullYear()} SomWay Travel &amp; Logistics.
+          </span>
+          <span className="footer-credit">
+            Nairobi photo by Ninara (CC BY 2.0) · Mogadishu photo by AMISOM
+            Public Information (CC0)
+          </span>
+          <span>Privacy Policy &nbsp; Terms &amp; Conditions</span>
+        </div>
       </footer>
     </main>
   );
@@ -4369,11 +4616,15 @@ function Overview({
   const financial = user.role === "owner" || user.role === "consultant";
   const branches = activeBranches(data);
   const [report, setReport] = useState<FinanceReport | null>(null);
+  // Totals for the window immediately before the selected one, so the money
+  // cards can show a real movement. Empty when that fetch fails.
+  const [priorTotals, setPriorTotals] = useState<FinanceReport["totals"]>([]);
   const [trendCurrency, setTrendCurrency] = useState<Currency>("USD");
 
   useEffect(() => {
     if (!financial) return;
     let active = true;
+    const before = previousWindow(from, to);
     void Promise.all([
       fetch(
         `/api/reports/finance?branchId=${encodeURIComponent(branchId)}&from=${from}&to=${to}`,
@@ -4383,13 +4634,22 @@ function Overview({
         `/api/receivables?branchId=${encodeURIComponent(branchId)}&status=outstanding&asOf=${to}`,
         { cache: "no-store" },
       ),
+      // The same report for the window immediately before this one. Its
+      // failure must not take the dashboard down, so it resolves to null.
+      fetch(
+        `/api/reports/finance?branchId=${encodeURIComponent(branchId)}&from=${before.from}&to=${before.to}`,
+        { cache: "no-store" },
+      )
+        .then((response) => (response.ok ? response.json() : null))
+        .catch(() => null),
     ])
-      .then(async ([financeResponse, receivableResponse]) => {
+      .then(async ([financeResponse, receivableResponse, priorPayload]) => {
         const financePayload = await financeResponse.json();
         const receivablePayload = await receivableResponse.json();
         if (!financeResponse.ok || !receivableResponse.ok)
           throw new Error("Overview data could not be loaded.");
-        if (active)
+        if (active) {
+          setPriorTotals(priorPayload?.totals || []);
           setReport({
             ...financePayload,
             accountsReceivable: {
@@ -4398,6 +4658,7 @@ function Overview({
               totals: receivablePayload.totals || [],
             },
           });
+        }
       })
       .catch(() => active && setReport({ rows: [], totals: [], trend: [] }));
     return () => {
@@ -4455,6 +4716,32 @@ function Overview({
       value: row.totalOutstanding,
     })),
   );
+  // Period-on-period movement. The counts are dated locally; the money
+  // figures come from the finance report, which is already range-scoped.
+  const prior = previousWindow(from, to);
+  const cargoNow = datedWithin(scopedCargo, "dateIn", from, to).length;
+  const cargoBefore = datedWithin(scopedCargo, "dateIn", prior.from, prior.to).length;
+  const ticketsNow = datedWithin(scopedTickets, "saleDate", from, to).length;
+  const ticketsBefore = datedWithin(scopedTickets, "saleDate", prior.from, prior.to).length;
+  const visasNow = datedWithin(scopedVisas, "appDate", from, to).length;
+  const visasBefore = datedWithin(scopedVisas, "appDate", prior.from, prior.to).length;
+
+  // Money movement is compared in the currency on screen, since totals are
+  // reported per currency and cannot be summed across them.
+  const sumFor = (
+    rows: { currency: Currency; paymentsReceived?: number; revenue?: number }[],
+  ) =>
+    rows
+      .filter((row) => row.currency === activeTrendCurrency)
+      .reduce((total, row) => total + (row.paymentsReceived ?? row.revenue ?? 0), 0);
+
+  const trends = {
+    payments: trendDelta(sumFor(totals), sumFor(priorTotals)),
+    cargo: trendDelta(cargoNow, cargoBefore),
+    tickets: trendDelta(ticketsNow, ticketsBefore),
+    visas: trendDelta(visasNow, visasBefore),
+  };
+
   const activeCargo = scopedCargo.filter(
     (cargo) => !["cancelled", "delivered"].includes(cargoStatusKey(cargo.status)),
   );
@@ -4579,29 +4866,41 @@ function Overview({
     }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
+  // Each alert carries its own count and colour. There is deliberately no
+  // timestamp: these are standing counts of open work, not events, and the
+  // row index was previously rendered as an age ("1h", "2h"), which read as
+  // real data and was not.
   const alerts = [
     {
       label: "Customer payments due",
-      detail: `${receivableRecords} outstanding record${receivableRecords === 1 ? "" : "s"}`,
+      count: receivableRecords,
+      detail: `outstanding record${receivableRecords === 1 ? "" : "s"}`,
       icon: "receipt",
+      tone: "red",
       page: "receivables" as Page,
     },
     {
       label: "Visa applications pending",
-      detail: `${pendingVisas.length} awaiting progress`,
+      count: pendingVisas.length,
+      detail: "awaiting progress",
       icon: "visa",
+      tone: "blue",
       page: "visas" as Page,
     },
     {
       label: "Cargo movements open",
-      detail: `${activeCargo.length} active shipment${activeCargo.length === 1 ? "" : "s"}`,
+      count: activeCargo.length,
+      detail: `active shipment${activeCargo.length === 1 ? "" : "s"}`,
       icon: "cargo",
+      tone: "cyan",
       page: "cargo" as Page,
     },
     {
       label: "Accounts payable",
-      detail: `${openPayables} open bill${openPayables === 1 ? "" : "s"}`,
+      count: openPayables,
+      detail: `open bill${openPayables === 1 ? "" : "s"}`,
       icon: "expense",
+      tone: "pink",
       page: "suppliers" as Page,
     },
   ];
@@ -4623,6 +4922,7 @@ function Overview({
     completedJobs={completedJobs}
     scopedClients={scopedClients}
     scopedVisas={scopedVisas}
+    trends={trends}
     scopedTickets={scopedTickets}
     receivableRecords={receivableRecords}
     branchRows={report?.rows || []}
@@ -4672,8 +4972,23 @@ type LiveOverviewDashboardProps = {
     status: string;
   }[];
   clientActivity: { client: Client; count: number }[];
-  alerts: { label: string; detail: string; icon: string; page: Page }[];
+  alerts: {
+    label: string;
+    count: number;
+    detail: string;
+    icon: string;
+    tone: string;
+    page: Page;
+  }[];
   onNavigate: (page: Page) => void;
+  /** Period-on-period movement for the count cards. Empty when there is no
+   *  comparable previous period. */
+  trends: {
+    payments: string;
+    cargo: string;
+    tickets: string;
+    visas: string;
+  };
 };
 
 function LiveOverviewDashboard({
@@ -4703,6 +5018,7 @@ function LiveOverviewDashboard({
   clientActivity,
   alerts,
   onNavigate,
+  trends,
 }: LiveOverviewDashboardProps) {
   const selectedBranch = branches.find((branch) => branch.id === branchId);
   const serviceTotal = serviceSummary.reduce((sum, item) => sum + item.revenue, 0);
@@ -4826,12 +5142,12 @@ function LiveOverviewDashboard({
       </div>
 
       <div className="metrics-grid six">
-        <MetricCard icon="money" label="Payments Received" value={financial ? revenueValue.split("\n")[0] : "Protected"} tone="cyan" foot="Selected period" />
-        <MetricCard icon="box" label="Cargo Shipments" value={scopedCargo.length} tone="blue" foot={`${activeCargo.length} currently active`} />
+        <MetricCard icon="money" label="Payments Received" value={financial ? revenueValue.split("\n")[0] : "Protected"} tone="cyan" delta={trends.payments} foot="Selected period" />
+        <MetricCard icon="box" label="Cargo Shipments" value={scopedCargo.length} tone="blue" delta={trends.cargo} foot={`${activeCargo.length} currently active`} />
         <MetricCard icon="wallet" label="Accounts Receivable" value={financial ? receivableValue.split("\n")[0] : "Protected"} tone="green" foot={`${receivableRecords} outstanding records`} />
         <MetricCard icon="users" label="Total Clients" value={scopedClients.filter((client) => client.isActive !== false).length} tone="violet" foot={selectedBranch?.name || "All active relationships"} />
-        <MetricCard icon="passport" label="Visa Applications" value={scopedVisas.length} tone="cyan" foot={`${pendingVisas.length} in progress`} />
-        <MetricCard icon="ticket" label="Tickets Issued" value={scopedTickets.filter((ticket) => ticket.status !== "cancelled").length} tone="blue" foot={`${scopedTickets.length} total records`} />
+        <MetricCard icon="passport" label="Visa Applications" value={scopedVisas.length} tone="cyan" delta={trends.visas} foot={`${pendingVisas.length} in progress`} />
+        <MetricCard icon="ticket" label="Tickets Issued" value={scopedTickets.filter((ticket) => ticket.status !== "cancelled").length} tone="blue" delta={trends.tickets} foot={`${scopedTickets.length} total records`} />
       </div>
 
       {financial && (
@@ -4904,8 +5220,9 @@ function LiveOverviewDashboard({
         {financial && (
           <Panel title="Top Clients" actions={<button type="button" className="linkish" onClick={() => onNavigate("clients")}>View all <Icon name="arrow" size={13} /></button>}>
             <div className="stack">
-              {topClients.length ? topClients.map((entry) => (
-                <div className="recent-client-row" key={entry.client.id}>
+              {topClients.length ? topClients.map((entry, index) => (
+                <div className="recent-client-row top-client-row" key={entry.client.id}>
+                  <span className="client-rank">{index + 1}</span>
                   <div className="avatar">{entry.client.name.slice(0, 2).toUpperCase()}</div>
                   <div>
                     <strong>{entry.client.name}</strong>
@@ -4919,12 +5236,27 @@ function LiveOverviewDashboard({
         )}
         <div className="split-even">
           <Panel title="Tasks & Alerts">
-            <div className="timeline">
-              {alerts.map((alert, index) => (
-                <button type="button" className="timeline-row" key={alert.label} onClick={() => onNavigate(alert.page)}>
-                  <i className="timeline-dot"><Icon name={alert.icon} size={13} /></i>
-                  <span><strong>{alert.label}</strong><small>{alert.detail}</small></span>
-                  <time>{index + 1}h</time>
+            <div className="alert-list">
+              {alerts.map((alert) => (
+                <button
+                  type="button"
+                  className={`alert-row${alert.count ? "" : " is-clear"}`}
+                  key={alert.label}
+                  onClick={() => onNavigate(alert.page)}
+                >
+                  <span
+                    className={`metric-icon tone-${alert.count ? alert.tone : "gray"}`}
+                  >
+                    <Icon name={alert.icon} size={17} />
+                  </span>
+                  <span className="alert-copy">
+                    <strong>{alert.label}</strong>
+                    <small>
+                      {alert.count} {alert.detail}
+                    </small>
+                  </span>
+                  <span className="alert-count">{alert.count}</span>
+                  <Icon name="chevron" size={14} />
                 </button>
               ))}
             </div>
@@ -4949,7 +5281,7 @@ function LiveOverviewDashboard({
   );
 }
 
-function Tickets({ data, user, save, notify, replaceData, scopeBranchId }: ModuleProps) {
+function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRef }: ModuleProps) {
   const userBranch = branchForUser(data, user);
   const roleOffice = officeForRole(user.role) || userBranch?.name || null;
   const branches = branchOptions(data, user);
@@ -4961,6 +5293,11 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId }: Modul
   // Deleting is owner-only; operators create and correct, never remove.
   const canDelete = user.role === "owner";
   const [query, setQuery] = useState("");
+  // Opening a notification lands here with the record reference, so
+  // the register searches for it and the row is on screen.
+  useEffect(() => {
+    if (focusRef) setQuery(focusRef);
+  }, [focusRef]);
   const [office, setOffice] = useState(roleOffice || "All");
   // Follow the global branch scope chosen in the top bar.
   useBranchScope(scopeBranchId, (id) =>
@@ -5277,7 +5614,9 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId }: Modul
               },
             );
             setEditing(undefined);
-            notify(`Ticket ${editing ? "updated" : "created"}`);
+            notify(
+              `Ticket ${record.ref} ${editing ? "updated" : "created"} for ${record.passenger || "passenger"}`,
+            );
           }}
         />
       )}
@@ -5426,9 +5765,10 @@ function TicketForm({
       <form className="modal-form" onSubmit={submit}>
         <div className="form-grid">
           <Field label="Branch">
-            <select
-              disabled={locked}
+            <BranchSelect
+              options={branches}
               value={f.branchId}
+              disabled={locked}
               onChange={(e) => {
                 const branch = branchById(data, e.target.value);
                 const currency =
@@ -5444,13 +5784,7 @@ function TicketForm({
                   paymentMethod,
                 });
               }}
-            >
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
+            />
           </Field>
           <Field label="Type">
             <select
@@ -5603,12 +5937,17 @@ const cargoNextActions = (cargo: Cargo, user: User) => {
             : cargo.destinationBranchId)),
   );
 };
-function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId }: ModuleProps) {
+function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focusRef }: ModuleProps) {
   const canWrite = user.role !== "consultant";
   const financial = user.role === "owner" || user.role === "consultant";
   // Deleting is owner-only; operators create and correct, never remove.
   const canDelete = user.role === "owner";
   const [query, setQuery] = useState("");
+  // Opening a notification lands here with the record reference, so
+  // the register searches for it and the row is on screen.
+  useEffect(() => {
+    if (focusRef) setQuery(focusRef);
+  }, [focusRef]);
   const [office, setOffice] = useState("All");
   // Follow the global branch scope chosen in the top bar.
   useBranchScope(scopeBranchId, (id) =>
@@ -5854,6 +6193,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId }: Mod
                         {canTakePayment && (x.balance ?? amount) > 0 && (
                           <button
                             type="button"
+                            className="payment-action"
                             title="Receive payment"
                             onClick={() => setPaying(x)}
                           >
@@ -5988,7 +6328,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId }: Mod
           onSaved={(next) => {
             replaceData?.(next);
             setPaying(null);
-            notify("Cargo payment recorded");
+            notify(`Payment recorded for cargo ${paying.tracking}`);
           }}
         />
       )}
@@ -6268,7 +6608,8 @@ function CargoForm({
       <form className="modal-form" onSubmit={submit}>
         <div className="form-grid">
           <Field label="Origin branch">
-            <select
+            <BranchSelect
+              options={originBranches}
               disabled={user.role === "operator"}
               value={f.originBranchId}
               onChange={(e) => {
@@ -6301,16 +6642,13 @@ function CargoForm({
                   ),
                 });
               }}
-            >
-              {originBranches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
+            />
           </Field>
           <Field label="Destination branch">
-            <select
+            <BranchSelect
+              options={destinationBranches.filter(
+                (branch) => branch.id !== f.originBranchId,
+              )}
               value={f.destinationBranchId}
               onChange={(e) =>
                 setF({
@@ -6325,15 +6663,7 @@ function CargoForm({
                   ),
                 })
               }
-            >
-              {destinationBranches
-                .filter((branch) => branch.id !== f.originBranchId)
-                .map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-            </select>
+            />
           </Field>
           <Field label="Date received">
             <input
@@ -7022,7 +7352,7 @@ function Receivables({
   );
 }
 
-function Visas({ data, user, save, notify, replaceData, scopeBranchId }: ModuleProps) {
+function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef }: ModuleProps) {
   const userBranch = branchForUser(data, user);
   const roleOffice = officeForRole(user.role) || userBranch?.name || null;
   const branches = branchOptions(data, user);
@@ -7034,6 +7364,11 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId }: ModuleP
   // Deleting is owner-only; operators create and correct, never remove.
   const canDelete = user.role === "owner";
   const [query, setQuery] = useState("");
+  // Opening a notification lands here with the record reference, so
+  // the register searches for it and the row is on screen.
+  useEffect(() => {
+    if (focusRef) setQuery(focusRef);
+  }, [focusRef]);
   const [office, setOffice] = useState(roleOffice || "All");
   // Follow the global branch scope chosen in the top bar.
   useBranchScope(scopeBranchId, (id) =>
@@ -7310,7 +7645,9 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId }: ModuleP
               },
             );
             setEditing(undefined);
-            notify(`Visa case ${editing ? "updated" : "created"}`);
+            notify(
+              `Visa ${r.ref} ${editing ? "updated" : "created"} for ${r.applicant || "applicant"}`,
+            );
           }}
         />
       )}
@@ -7441,7 +7778,8 @@ function VisaForm({
       >
         <div className="form-grid">
           <Field label="Branch">
-            <select
+            <BranchSelect
+              options={branches}
               disabled={locked}
               value={f.branchId}
               onChange={(e) => {
@@ -7460,13 +7798,7 @@ function VisaForm({
                   paymentMethod,
                 });
               }}
-            >
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
+            />
           </Field>
           <Field label="Type">
             <select
@@ -8132,13 +8464,16 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
     ]);
   };
 
+  // Same icon language as the Business Day by Branch rows: money coming in
+  // points up, money going out points down, and each metric keeps the colour
+  // it has everywhere else in the system.
   const kpiCards = [
     { field: "openingBalance", label: "Opening Balance", icon: "wallet", tone: "blue", foot: "Money held at day start" },
-    { field: "revenue", label: "Total Revenue", icon: "report", tone: "cyan", foot: "Charged today" },
+    { field: "revenue", label: "Total Revenue", icon: "trend", tone: "cyan", foot: "Charged today" },
     { field: "closedAmount", label: "Closed Amount", icon: "money", tone: "green", foot: "All money held at close" },
-    { field: "expenses", label: "Total Expenses", icon: "expense", tone: "orange", foot: "Paid out today" },
+    { field: "expenses", label: "Total Expenses", icon: "download", tone: "orange", foot: "Paid out today" },
     { field: "profit", label: "Total Profit", icon: "trend", tone: "violet", foot: "Revenue less cost" },
-    { field: "accountsReceivable", label: "Accounts Receivable", icon: "receipt", tone: "cyan", foot: "Owed by customers" },
+    { field: "accountsReceivable", label: "Accounts Receivable", icon: "clock", tone: "red", foot: "Owed by customers" },
     { field: "accountsPayable", label: "Accounts Payable", icon: "briefcase", tone: "pink", foot: "Owed to suppliers" },
     { field: "expectedClosing", label: "Expected Closing", icon: "database", tone: "blue", foot: "After debts settle" },
   ] as const;
@@ -8411,7 +8746,9 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
                         return (
                           <tr key={`${entry.branch}-${entry.currency}`}>
                             <td>
-                              <strong>{entry.branch}</strong>
+                              <strong>
+                                <BranchName data={data} branch={entry.branch} />
+                              </strong>
                               <small>{entry.currency}</small>
                             </td>
                             <td>{amount(entry.revenue)}</td>
@@ -8561,7 +8898,7 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
                 title="Business Day by Branch"
                 subtitle="Every branch and currency in the selected day"
               >
-                <TableShell>
+                <TableShell className="metric-table">
                   <thead>
                     <tr>
                       <th>Branch</th>
@@ -8645,7 +8982,8 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
                             key={`${row.branchId}-${row.currency}-${service.service}`}
                           >
                             <td>
-                              {row.branch} · {row.currency} · {service.service}
+                              <BranchName data={data} branch={row.branch} /> ·{" "}
+                              {row.currency} · {service.service}
                             </td>
                             <td>{service.transactions}</td>
                             <td>{money(service.revenue, row.currency)}</td>
@@ -8683,8 +9021,8 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
                             key={`${row.branchId}-${row.currency}-${method.paymentMethodId}`}
                           >
                             <td>
-                              {row.branch} · {row.currency} ·{" "}
-                              {method.paymentMethod}
+                              <BranchName data={data} branch={row.branch} /> ·{" "}
+                              {row.currency} · {method.paymentMethod}
                             </td>
                             <td>{money(method.opening, row.currency)}</td>
                             <td>{money(method.received, row.currency)}</td>
@@ -9139,7 +9477,8 @@ function CloseForm({
             />
           </Field>
           <Field label="Branch">
-            <select
+            <BranchSelect
+              options={branches}
               disabled={locked}
               value={f.branchId}
               onChange={(e) => {
@@ -9157,13 +9496,7 @@ function CloseForm({
                     ("Bank" as PaymentMethod),
                 });
               }}
-            >
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
+            />
           </Field>
           <Field label="Payment method">
             <select
@@ -9536,7 +9869,9 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
               },
             );
             setEditing(undefined);
-            notify("Expense saved");
+            notify(
+              `Expense ${editing ? "updated" : "created"}: ${r.description || "expense"}`,
+            );
           }}
         />
       )}
@@ -9622,7 +9957,8 @@ function ExpenseForm({
             />
           </Field>
           <Field label="Branch">
-            <select
+            <BranchSelect
+              options={branches}
               disabled={locked}
               value={f.branchId}
               onChange={(e) => {
@@ -9641,13 +9977,7 @@ function ExpenseForm({
                   paymentMethod,
                 });
               }}
-            >
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
+            />
           </Field>
           <Field label="Category">
             <select
@@ -9942,7 +10272,9 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
               },
             );
             setEditing(undefined);
-            notify("Supplier bill saved");
+            notify(
+              `${r.supplier} bill ${editing ? "updated" : "added"}`,
+            );
           }}
         />
       )}
@@ -10010,7 +10342,8 @@ function SupplierForm({
       >
         <div className="form-grid">
           <Field label="Branch">
-            <select
+            <BranchSelect
+              options={branches}
               required
               value={f.branchId}
               onChange={(event) => {
@@ -10023,13 +10356,7 @@ function SupplierForm({
                     branch?.defaultCurrency || branchCurrencies(branch)[0],
                 });
               }}
-            >
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
+            />
           </Field>
           <Field label="Date">
             <input
@@ -10520,7 +10847,7 @@ function Clients({ data, user, save, notify }: ModuleProps) {
               },
             );
             setEditing(undefined);
-            notify("Client saved");
+            notify(`Client ${r.name} ${editing ? "updated" : "added"}`);
           }}
         />
       )}
@@ -10570,7 +10897,9 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                       <td>Ticket</td>
                       <td>{x.ref}</td>
                       <td>{dateLabel(x.saleDate)}</td>
-                      <td>{x.office}</td>
+                      <td>
+                        <BranchBadge data={data} office={x.office} />
+                      </td>
                       <td>{x.type}</td>
                       {financial && (
                         <td>{money(x.balance || 0, x.currency)}</td>
@@ -10582,7 +10911,9 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                       <td>Visa</td>
                       <td>{x.ref}</td>
                       <td>{dateLabel(x.appDate)}</td>
-                      <td>{x.office}</td>
+                      <td>
+                        <BranchBadge data={data} office={x.office} />
+                      </td>
                       <td>{x.status}</td>
                       {financial && (
                         <td>{money(x.balance || 0, x.currency)}</td>
@@ -10715,7 +11046,8 @@ function ClientForm({
             />
           </Field>
           <Field label="Home branch">
-            <select
+            <BranchSelect
+              options={branches}
               value={f.homeBranchId}
               disabled={user.role === "operator"}
               onChange={(e) => {
@@ -10726,13 +11058,7 @@ function ClientForm({
                   homeOffice: branchName(data, homeBranchId, ""),
                 });
               }}
-            >
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
+            />
           </Field>
           <Field label="Preferred language">
             <select
@@ -11289,7 +11615,9 @@ function Tracking({
                   </div>
                   <div>
                     <span>Office</span>
-                    <strong>{visa.office}</strong>
+                    <strong>
+                      <BranchName data={data} branch={visa.office} />
+                    </strong>
                   </div>
                   <div>
                     <span>Email</span>
@@ -11545,7 +11873,10 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
             ["revenue", "collections", "grossProfit", "outstanding"] as const
           ).map((metric) => (
             <article className="report-summary-card" key={metric}>
-              <span>
+              <span className={`metric-icon tone-${metricLook(metric).tone}`}>
+                <Icon name={metricLook(metric).icon} size={18} />
+              </span>
+              <span className="report-summary-label">
                 {metric === "grossProfit"
                   ? "Gross Profit"
                   : metric === "outstanding"
@@ -11652,9 +11983,15 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
                 key={`${row.branchId}-${row.currency}-${row.service}`}
               >
                 <strong>
-                  {selectedBranch
-                    ? row.service[0].toUpperCase() + row.service.slice(1)
-                    : `${row.branch} · ${row.currency} · ${row.service[0].toUpperCase() + row.service.slice(1)}`}
+                  {selectedBranch ? (
+                    row.service[0].toUpperCase() + row.service.slice(1)
+                  ) : (
+                    <>
+                      <BranchName data={data} branch={row.branch} /> ·{" "}
+                      {row.currency} ·{" "}
+                      {row.service[0].toUpperCase() + row.service.slice(1)}
+                    </>
+                  )}
                 </strong>
                 <span>{money(row.revenue, row.currency)}</span>
               </div>
@@ -11682,9 +12019,14 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
                   key={`${row.branchId}-${row.currency}-${row.method}`}
                 >
                   <strong>
-                    {selectedBranch
-                      ? row.method
-                      : `${row.branch} · ${row.currency} · ${row.method}`}
+                    {selectedBranch ? (
+                      row.method
+                    ) : (
+                      <>
+                        <BranchName data={data} branch={row.branch} /> ·{" "}
+                        {row.currency} · {row.method}
+                      </>
+                    )}
                   </strong>
                   <span>{money(row.amount, row.currency)}</span>
                 </div>
@@ -12029,7 +12371,9 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
                   key={`${group.branchId}-${group.currency}`}
                 >
                   <div className="service-group-heading">
-                    <h3>{group.branch}</h3>
+                    <h3>
+                      <BranchName data={data} branch={group.branch} />
+                    </h3>
                     <Badge
                       tone={group.currency === "USD" ? "blue" : "success"}
                     >
@@ -12046,7 +12390,10 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
                       ] as const
                     ).map(([label, metric]) => (
                       <div key={metric}>
-                        <span>{label}</span>
+                        <span className={`metric-icon tone-${metricLook(metric).tone}`}>
+                          <Icon name={metricLook(metric).icon} size={17} />
+                        </span>
+                        <span className="service-metric-label">{label}</span>
                         <strong
                           className={
                             metric === "profit" && groupTotals[metric] < 0
@@ -12489,19 +12836,14 @@ function UserForm({
           </Field>
           {f.role === "operator" && (
             <Field label="Assigned branch">
-              <select
+              <BranchSelect
+                options={branches}
                 required
                 value={f.assignedBranchId}
                 onChange={(e) =>
                   setF({ ...f, assignedBranchId: e.target.value })
                 }
-              >
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
+              />
             </Field>
           )}
           <Field label="Username (optional)">
@@ -13058,7 +13400,7 @@ function BusinessHoursPanel({ notify }: { notify: (message: string) => void }) {
       </div>
       <div className="button-row">
         <button
-          className="button secondary"
+          className="button primary"
           disabled={busy}
           onClick={() => void saveHours()}
         >
@@ -13152,7 +13494,8 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
             </div>
           </div>
           <div className="settings-entry">
-            <select
+            <BranchSelect
+              options={settingsBranches}
               value={rateForm.originBranchId}
               onChange={(e) => {
                 const originBranchId = e.target.value;
@@ -13171,13 +13514,7 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
                     origin?.defaultCurrency || branchCurrencies(origin)[0],
                 });
               }}
-            >
-              {settingsBranches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
+            />
             <select
               value={rateForm.destinationBranchId}
               onChange={(e) =>
@@ -13219,7 +13556,7 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
               }
             />
             <button
-              className="button secondary"
+              className="button primary"
               disabled={
                 !rateForm.originBranchId ||
                 !rateForm.destinationBranchId ||
@@ -13291,7 +13628,8 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
             </div>
           </div>
           <div className="settings-entry">
-            <select
+            <BranchSelect
+              options={settingsBranches}
               value={balance.branchId}
               onChange={(e) => {
                 const branchId = e.target.value;
@@ -13307,13 +13645,7 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
                     ("Bank" as PaymentMethod),
                 });
               }}
-            >
-              {settingsBranches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
+            />
             <select
               value={balance.method}
               onChange={(e) =>
@@ -13393,7 +13725,7 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
             {data.startingBalances.map((x) => (
               <div key={x.id}>
                 <strong>
-                  {x.office} · {x.method}
+                  <BranchName data={data} branch={x.office} /> · {x.method}
                 </strong>
                 <span>{x.currency}</span>
                 <b>{money(x.amount, x.currency)}</b>

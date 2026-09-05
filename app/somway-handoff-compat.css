@@ -761,8 +761,10 @@ h6,
 }
 
 @media (max-width: 640px) {
+  /* Two-up on a phone, like every other metric grid. Was one per row,
+     which turned eight KPIs into eight full-width cards. */
   .daily-summary-kpis.metrics-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   }
 }
 
@@ -1723,10 +1725,14 @@ h6,
   .table-wrap tbody {
     display: block;
   }
+  /* Rows AND columns: a stacked row lays its fields out two-up, so a record
+     takes half the height and related figures sit side by side. Long-form
+     and identity fields span both columns (see the span list below). */
   .table-wrap tbody tr {
-    display: block;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-bottom: 12px;
-    padding: 2px 0;
+    overflow: hidden;
     border: 1px solid var(--line);
     border-radius: 14px;
     background: #fff;
@@ -1744,13 +1750,47 @@ h6,
      into a separate column item, dropping the second line under the label. */
   .table-wrap td {
     display: block;
+    min-width: 0;
+    overflow-wrap: anywhere;
     border-top: 0;
+    border-right: 1px solid #eef2f7;
     border-bottom: 1px solid #eef2f7;
-    padding: 9px 14px;
+    padding: 9px 13px;
     font-size: 12.5px;
+  }
+  .table-wrap td:nth-child(2n),
+  .table-wrap td.span-full {
+    border-right: 0;
   }
   .table-wrap tbody tr td:last-child {
     border-bottom: 0;
+  }
+
+  /* Identity, long text, status pills and the action row read across the
+     full width; short values pair up. Matched case-insensitively because
+     the column headings are not consistently cased. */
+  .table-wrap td:not([data-label]),
+  .table-wrap td[data-label="Reference" i],
+  .table-wrap td[data-label="Description" i],
+  .table-wrap td[data-label="Passenger" i],
+  .table-wrap td[data-label="Route" i],
+  .table-wrap td[data-label="Route / travel" i],
+  .table-wrap td[data-label="Sender → receiver" i],
+  .table-wrap td[data-label="Tracking" i],
+  .table-wrap td[data-label="Shipment" i],
+  .table-wrap td[data-label^="Branch" i],
+  .table-wrap td[data-label="Office" i],
+  .table-wrap td[data-label="Home office" i],
+  .table-wrap td[data-label="Payable to" i],
+  .table-wrap td[data-label="Customer responsible" i],
+  .table-wrap td[data-label="Service" i],
+  .table-wrap td[data-label="Payment" i],
+  .table-wrap td[data-label="Status" i],
+  .table-wrap td[data-label="Payment status" i],
+  .table-wrap td[data-label="Ticket status" i],
+  .table-wrap td[data-label="Progress" i],
+  .table-wrap td[data-label="Destination" i] {
+    grid-column: 1 / -1;
   }
   .table-wrap td::before {
     content: attr(data-label);
@@ -2433,6 +2473,7 @@ button.danger:disabled,
 button.edit-action,
 button.delete-action,
 button.payment-action {
+  white-space: nowrap;
   min-height: 36px;
   padding: 0 12px;
   border-radius: 9px;
@@ -2737,10 +2778,15 @@ h3 .branch-inline .branch-flag {
 
 /* Below this width the donut and legend stop competing for one row. */
 @media (max-width: 560px) {
+  /* Stacked, the donut is centred over its legend rather than pinned left
+     with dead space beside it. */
   .donut-wrap {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     gap: 14px;
+  }
+  .donut {
+    margin-inline: auto;
   }
   .legend {
     width: 100%;
@@ -2825,4 +2871,883 @@ h3 .branch-inline .branch-flag {
   .branch-flag {
     border: 1px solid #d7e2ee;
   }
+}
+
+/* ---------------------------------------------------------------------
+   Daily Summary filters.
+
+   `repeat(3, minmax(180px, 260px))` demands 560px plus gaps, and the
+   Daily Summary main column is narrower than the window because of the
+   closing rail beside it -- so Currency was cut off long before the
+   590px stacking rule ever applied. Auto-fit wraps instead: nothing is
+   clipped and no filter hides off-screen where it would be forgotten.
+   --------------------------------------------------------------------- */
+.daily-summary-filters {
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+}
+
+/* ---------------------------------------------------------------------
+   Toasts. A failure and a success must not look alike.
+   --------------------------------------------------------------------- */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(460px, calc(100vw - 28px));
+  padding: 12px 12px 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.toast > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.toast-success {
+  background: #10693f;
+  color: #fff;
+}
+.toast-error {
+  background: #b3261e;
+  color: #fff;
+}
+.toast-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.16);
+  color: inherit;
+}
+.toast-close:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* ---------------------------------------------------------------------
+   Branch picker with country flags.
+
+   A native <option> cannot contain an image, so the branch fields in the
+   ticket, cargo, visa, daily close and expense forms use a listbox that
+   matches the height and border of every other control.
+   --------------------------------------------------------------------- */
+.branch-select {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.branch-select-button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: var(--ui-control-h);
+  padding: 0 13px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+.branch-select-button > span:not(.branch-flag) {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.branch-select-button:disabled {
+  background: #f2f5f9;
+  color: #7a8aa1;
+  cursor: not-allowed;
+}
+.branch-select-button[aria-expanded="true"] {
+  border-color: var(--ui-brand);
+  box-shadow: 0 0 0 3px rgba(11, 102, 227, 0.13);
+}
+.branch-select-placeholder {
+  color: #93a3b8;
+}
+.branch-select-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 42;
+  max-height: 260px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  box-shadow: 0 18px 40px rgba(3, 23, 53, 0.18);
+}
+.branch-select-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ui-ink);
+  text-align: left;
+}
+.branch-select-list button:hover {
+  background: #f2f7fd;
+}
+.branch-select-list button.is-selected {
+  background: #e7f0ff;
+}
+.branch-select-list button > span {
+  display: grid;
+  min-width: 0;
+}
+.branch-select-list strong {
+  font-size: 12.5px;
+}
+.branch-select-list small {
+  color: var(--ui-muted);
+  font-size: 10.5px;
+}
+
+/* Picker refinements: a compact flag, a chevron that points down while the
+   list is closed, and no inherited band behind the toast text. */
+.branch-select-button .branch-flag,
+.branch-select-list .branch-flag {
+  width: 24px;
+  height: 17px;
+  border-radius: 3px;
+  font-size: 8px;
+}
+.branch-select-button > svg {
+  flex: 0 0 auto;
+  transform: rotate(90deg);
+  transition: transform 0.16s ease;
+  color: var(--ui-muted);
+}
+.branch-select-button[aria-expanded="true"] > svg {
+  transform: rotate(-90deg);
+}
+.toast > span {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  text-align: left;
+}
+
+/* Branch cards carry real city artwork instead of one shared CSS skyline.
+   The handoff sheet draws that skyline with `.branch-card .image:before`,
+   which has to go now that the element is an <img>. */
+.branch-card .image {
+  display: block;
+  width: 100%;
+  min-height: 130px;
+  height: 100%;
+  max-height: 190px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #d9ebfb, #9bbfe5);
+}
+.branch-card .image::before {
+  content: none;
+}
+
+/* Photo credit line required by the CC BY licence on the Nairobi image. */
+.footer-credit {
+  flex: 1 1 auto;
+  text-align: center;
+  color: #7b8ca5;
+  font-size: 8.5px;
+}
+@media (max-width: 767px) {
+  .footer-credit {
+    text-align: left;
+  }
+}
+
+/* =====================================================================
+   FINANCIAL REPORTS
+
+   The filter bar and the per-branch service panels were the two parts of
+   this page with no layout rules of their own: `.service-group-heading`
+   and `.service-group-summary` carried only a font-size, so the metric
+   block had no grid, no dividers and no alignment.
+   ===================================================================== */
+
+/* --- Filter bar ----------------------------------------------------- */
+.report-actions {
+  display: flex;
+  /* globals.css switches this to a column on narrow screens, which turns the
+     flex-basis below into a HEIGHT and stretched the controls to 150px and
+     280px tall. The row direction is restored explicitly and wrapping does
+     the stacking instead. */
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.report-actions > select {
+  flex: 1 1 150px;
+  min-width: 0;
+  min-height: var(--ui-control-h);
+  padding: 0 13px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  font-family: inherit;
+  font-size: 13px;
+}
+.report-actions > select:focus {
+  border-color: var(--ui-brand);
+  box-shadow: 0 0 0 3px rgba(11, 102, 227, 0.13);
+  outline: 0;
+}
+.report-actions .button {
+  flex: 1 1 170px;
+}
+
+/* The date range is one control, not two stacked boxes with a stray
+   "to" on its own line. */
+.report-actions .date-range,
+.date-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  flex: 2 1 280px;
+  min-height: var(--ui-control-h);
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+.date-range input {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink);
+  font-family: inherit;
+  font-size: 13px;
+}
+.date-range span {
+  color: var(--ui-muted);
+  font-size: 11px;
+}
+.date-range:focus-within {
+  border-color: var(--ui-brand);
+  box-shadow: 0 0 0 3px rgba(11, 102, 227, 0.13);
+}
+
+/* --- Per-branch service performance --------------------------------- */
+.service-performance-groups {
+  display: grid;
+  gap: 14px;
+}
+.service-performance-group {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  overflow: hidden;
+}
+.service-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.service-group-heading h3 {
+  min-width: 0;
+  margin: 0;
+}
+/* Even metric columns with dividers, so the four figures read as one set
+   rather than four loose labels. */
+.service-group-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+}
+.service-group-summary > div {
+  display: grid;
+  gap: 5px;
+  padding: 13px 16px;
+  border-right: 1px solid #eef2f7;
+  border-bottom: 1px solid #eef2f7;
+}
+.service-group-summary > div:last-child {
+  border-right: 0;
+}
+.service-group-summary span {
+  color: var(--ui-muted);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.service-group-summary strong {
+  color: #0d1b42;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.service-group-summary strong.negative {
+  color: var(--ui-danger);
+}
+.service-performance-header {
+  margin-bottom: 14px;
+}
+
+/* ---------------------------------------------------------------------
+   Metric cards carry an icon everywhere, not only on the dashboard.
+
+   The agency summary cards and the per-branch service metrics were the
+   two families rendering a bare label over a number. They now use the
+   same icon tile, tone and hierarchy as the dashboard and daily summary,
+   so a figure looks the same wherever it appears.
+   --------------------------------------------------------------------- */
+.report-summary-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-content: start;
+  gap: 3px 11px;
+  padding: 15px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+/* The tile spans the whole card so a second currency line does not leave a
+   hole beside it. */
+.report-summary-card .metric-icon {
+  grid-row: 1 / -1;
+  align-self: start;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+.report-summary-label {
+  align-self: center;
+  color: var(--ui-muted);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.report-summary-card strong {
+  grid-column: 2;
+  color: #0d1b42;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.service-group-summary > div {
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 10px;
+}
+.service-group-summary .metric-icon {
+  grid-row: span 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+.service-metric-label {
+  align-self: end;
+  color: var(--ui-muted);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.service-group-summary > div > strong {
+  align-self: start;
+}
+
+/* ---------------------------------------------------------------------
+   Dense financial tables on a phone.
+
+   "Business Day by Branch" carries eleven columns. The default stacked
+   card gives each field its own full-width row, which makes ten tall
+   rows per branch. This keeps it a grid -- rows AND columns -- and
+   colour-codes each figure with the same icon language as the cards.
+   The icons ride on the existing data-label, so the markup is untouched.
+   --------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------
+   Colour-coded field icons for every stacked table in the system.
+
+   The icon rides on the data-label the stacking already produces, so no
+   table markup changes and a column keeps its colour wherever it appears:
+   money in is green, money out orange, margin violet, what we are owed
+   red, identity blue, people and places slate.
+   --------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .table-wrap td::before {
+    padding-left: 21px;
+    background-repeat: no-repeat;
+    background-position: left center;
+    background-size: 15px 15px;
+    min-height: 15px;
+    line-height: 15px;
+  }
+
+  /* Money in -- green banknote */
+  .table-wrap td[data-label="Money Received" i]::before,
+  .table-wrap td[data-label="Payments Received" i]::before,
+  .table-wrap td[data-label="Received" i]::before,
+  .table-wrap td[data-label="Paid" i]::before,
+  .table-wrap td[data-label="Total Paid" i]::before,
+  .table-wrap td[data-label="Net received" i]::before,
+  .table-wrap td[data-label="Amount" i]::before,
+  .table-wrap td[data-label^="Sale" i]::before,
+  .table-wrap td[data-label="Closing" i]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2312924a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='6' width='20' height='12' rx='2'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+  }
+
+  /* Volume and collections -- cyan trend up */
+  .table-wrap td[data-label="Revenue" i]::before,
+  .table-wrap td[data-label="Collections" i]::before,
+  .table-wrap td[data-label="Opening" i]::before,
+  .table-wrap td[data-label="Transactions" i]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230898b1' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18l6-6 4 4 8-10'/%3E%3Cpath d='M15 6h6v6'/%3E%3C/svg%3E");
+  }
+
+  /* Money out -- orange down arrow */
+  .table-wrap td[data-label="Direct Cost" i]::before,
+  .table-wrap td[data-label="Direct cost" i]::before,
+  .table-wrap td[data-label="Expenses" i]::before,
+  .table-wrap td[data-label="Agency Cost" i]::before,
+  .table-wrap td[data-label="Refunds" i]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9820a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12'/%3E%3Cpath d='M7 10l5 5 5-5'/%3E%3Cpath d='M5 21h14'/%3E%3C/svg%3E");
+  }
+
+  /* Margin -- violet trend up */
+  .table-wrap td[data-label^="Profit" i]::before,
+  .table-wrap td[data-label="Gross profit" i]::before,
+  .table-wrap td[data-label="Profit / loss" i]::before,
+  .table-wrap td[data-label="P&L" i]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237141e0' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18l6-6 4 4 8-10'/%3E%3Cpath d='M15 6h6v6'/%3E%3C/svg%3E");
+  }
+
+  /* Owed to us -- red clock */
+  .table-wrap td[data-label="Customer Debt" i]::before,
+  .table-wrap td[data-label="Outstanding debt" i]::before,
+  .table-wrap td[data-label="Remaining Balance" i]::before,
+  .table-wrap td[data-label="Due" i]::before,
+  .table-wrap td[data-label="Balance" i]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9363e' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v6l4 2'/%3E%3C/svg%3E");
+  }
+
+  /* Owed by us -- pink briefcase */
+  .table-wrap td[data-label="Payables" i]::before,
+  .table-wrap td[data-label="Payables Paid" i]::before,
+  .table-wrap td[data-label="Payable to" i]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d93d86' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='7' width='18' height='13' rx='2'/%3E%3Cpath d='M9 7V4h6v3'/%3E%3C/svg%3E");
+  }
+
+  /* Identity -- blue reference tag */
+  .table-wrap td[data-label="Reference" i]::before,
+  .table-wrap td[data-label="Tracking" i]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230b66e3' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12v18l-3-2-3 2-3-2-3 2z'/%3E%3Cpath d='M9 8h6M9 12h6'/%3E%3C/svg%3E");
+  }
+
+  /* People -- slate person */
+  .table-wrap td[data-label="Client" i]::before,
+  .table-wrap td[data-label="Passenger" i]::before,
+  .table-wrap td[data-label="Customer responsible" i]::before,
+  .table-wrap td[data-label="Sender → receiver" i]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2356688a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21c0-5 3-8 8-8s8 3 8 8'/%3E%3C/svg%3E");
+  }
+
+  /* Time -- slate calendar */
+  .table-wrap td[data-label="Date" i]::before,
+  .table-wrap td[data-label="Last update" i]::before,
+  .table-wrap td[data-label="Last activity" i]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2356688a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M7 3v4M17 3v4M3 10h18'/%3E%3C/svg%3E");
+  }
+
+  /* Money instrument -- slate coin */
+  .table-wrap td[data-label="Currency" i]::before,
+  .table-wrap td[data-label="Method" i]::before,
+  .table-wrap td[data-label="Type" i]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2356688a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M15 9h-4a2 2 0 000 4h2a2 2 0 010 4H9'/%3E%3C/svg%3E");
+  }
+
+  /* Full-width identity cells keep their label plain. */
+  .table-wrap td:not([data-label])::before {
+    padding-left: 0;
+    background: none;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Dashboard: Tasks & Alerts, Top Clients and Recent Clients.
+
+   Alerts used a timeline layout with the row index rendered as an age
+   ("1h", "2h"). They are standing counts of open work, not events, so
+   they now read as a count with the metric colour it carries elsewhere.
+   --------------------------------------------------------------------- */
+.alert-list {
+  display: grid;
+  gap: 8px;
+}
+.alert-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto 14px;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  text-align: left;
+}
+.alert-row:hover {
+  border-color: #c9dcf5;
+  background: #f8fbff;
+}
+.alert-row .metric-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+.alert-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.alert-copy strong {
+  color: #0d1b42;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alert-copy small {
+  color: var(--ui-muted);
+  font-size: 10.5px;
+}
+.alert-count {
+  min-width: 26px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: #eef3f9;
+  color: #0d1b42;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+/* Nothing outstanding reads calm rather than shouting a zero. */
+.alert-row.is-clear .alert-copy strong,
+.alert-row.is-clear .alert-count {
+  color: #7d8ca5;
+}
+.alert-row.is-clear .alert-count {
+  background: #f4f6fa;
+}
+.alert-row > svg {
+  color: #9aabc2;
+}
+
+/* Client rows: rank, avatar, identity, value -- one aligned grid. */
+.recent-client-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 0;
+}
+.recent-client-row + .recent-client-row {
+  border-top: 1px solid #eef2f7;
+}
+.top-client-row {
+  grid-template-columns: 22px 42px minmax(0, 1fr) auto;
+}
+.client-rank {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #eef3f9;
+  color: #56688a;
+  font-size: 11px;
+  font-weight: 700;
+}
+.recent-client-row .avatar {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(145deg, #041a40, #0b3d7b);
+  color: #fff;
+  font-size: 13px;
+}
+.recent-client-row > div strong {
+  display: block;
+  color: #0d1b42;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-client-row > div .muted {
+  font-size: 10.5px;
+}
+.top-client-spend {
+  color: #0d1b42;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------
+   Dashboard metric cards sit two-up on a phone.
+
+   The 767px rule collapses every grid to a single column, so six KPIs
+   became six full-width cards and the page turned into a long scroll.
+   These figures are short, so they pair comfortably. The card stacks its
+   icon above the value to give the number the full card width.
+
+   The Daily Summary KPI cards are excluded: they carry two currencies,
+   a delta line and a drill-in chevron, and stay full width by design.
+   --------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .metrics-grid,
+  .metrics-grid.six,
+  .metrics-grid.five,
+  .daily-summary-kpis {
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    gap: 10px;
+  }
+  .metrics-grid > .metric-card {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+    gap: 8px;
+    padding: 13px;
+  }
+  .metrics-grid .metric-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+  .metrics-grid .eyebrow-soft {
+    font-size: 9px;
+    line-height: 1.35;
+  }
+  .metrics-grid .metric-main > strong {
+    font-size: 17px;
+    line-height: 1.2;
+  }
+  .metrics-grid .metric-foot {
+    margin-top: 5px;
+    font-size: 8.5px;
+  }
+  /* The trend line keeps its own row instead of being absolutely
+     positioned over the card, where at half width it struck through the
+     footer text. Selectors spelled out to outrank
+     `.metrics-grid.six > .metric-card .sparkline`, which pins it. */
+  .metrics-grid > .metric-card .sparkline,
+  .metrics-grid.six > .metric-card .sparkline,
+  .metrics-grid.five > .metric-card .sparkline,
+  .daily-summary-kpis > .metric-card .sparkline {
+    display: block;
+    position: static;
+    width: 100%;
+    height: 24px;
+    margin-top: 8px;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   ONE colour for every figure in the system.
+
+   `.metrics-grid.six > .metric-card .metric-main > strong` set #0d47a1
+   (blue) while every other grid had no colour rule and inherited dark
+   navy -- so on the same dashboard some values were blue and some black,
+   purely according to how many columns their grid happened to have.
+
+   Figures are ink, not links: #0d1b42 everywhere, matching the headings
+   and the reference design. Colour on a number is reserved for meaning
+   (.positive / .negative), never for decoration.
+   --------------------------------------------------------------------- */
+.metrics-grid > .metric-card .metric-main > strong,
+.metrics-grid.six > .metric-card .metric-main > strong,
+.metrics-grid.five > .metric-card .metric-main > strong,
+.metric-card .metric-main > strong,
+.metric-card .metric-values strong,
+.kpi.metric-card .metric-main > strong,
+.report-summary-card strong,
+.service-group-summary > div > strong,
+.donut strong {
+  color: #0d1b42;
+}
+
+/* A figure only takes colour when the colour means something. A loss must
+   stay red, so these have to outrank the canonical ink rule above -- which
+   is why the grid variants are spelled out here too. */
+.metrics-grid > .metric-card .metric-main > strong.negative,
+.metrics-grid.six > .metric-card .metric-main > strong.negative,
+.metrics-grid.five > .metric-card .metric-main > strong.negative,
+.metric-card .metric-main > strong.negative,
+.metric-card .metric-values strong.negative,
+.report-summary-card strong.negative,
+.service-group-summary > div > strong.negative {
+  color: var(--ui-danger);
+}
+
+/* ---------------------------------------------------------------------
+   Filter controls: one box, not two.
+
+   `.filter-field > div` and `.search-field` are the bordered control and
+   the element inside is bare -- but the browser still drew its default
+   focus outline on the inner select, so a focused filter showed a ring
+   inside a ring. The wrapper already indicates focus.
+   --------------------------------------------------------------------- */
+.filter-field select,
+.filter-field input,
+.search-field input,
+.topbar-control select,
+.topbar-control input {
+  border: 0;
+  background: transparent;
+  outline: none;
+  box-shadow: none;
+}
+.filter-field select:focus,
+.filter-field input:focus,
+.search-field input:focus,
+.topbar-control select:focus,
+.topbar-control input:focus {
+  outline: none;
+  box-shadow: none;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------------
+   Team & Roles: the three staff actions share a row and wrap evenly
+   rather than leaving one button stranded on its own line.
+   --------------------------------------------------------------------- */
+.team-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.team-actions > button {
+  flex: 1 1 auto;
+  min-width: 118px;
+  white-space: nowrap;
+}
+
+/* Every chart sits centred in its card on narrow screens: a donut, a bar
+   chart or a grouped bar chart pinned left leaves dead space beside it. */
+@media (max-width: 767px) {
+  .donut-wrap,
+  .bar-chart-wrap,
+  .chart-wrap {
+    justify-content: center;
+    margin-inline: auto;
+  }
+  .bar-chart-wrap {
+    width: 100%;
+  }
+  .bar-chart {
+    justify-content: center;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   The trend line is a background detail, not a headline.
+
+   At 76x33 pinned bottom-right it ran straight through the footer text
+   ("1 outstanding records"). It is now smaller, sits clear of the text,
+   and fades back so the figure and its arrow lead.
+   --------------------------------------------------------------------- */
+.metrics-grid > .metric-card .sparkline,
+.metrics-grid.six > .metric-card .sparkline,
+.metrics-grid.five > .metric-card .sparkline {
+  width: 52px;
+  height: 20px;
+  right: 12px;
+  bottom: 12px;
+  opacity: 0.55;
+}
+/* The footer keeps clear of it so the two never overlap. */
+.metrics-grid > .metric-card .metric-foot {
+  padding-right: 60px;
+}
+.metric-foot .positive,
+.metric-foot .negative {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------
+   Public footer on a phone.
+
+   `.public-footer > div` is a flex column, so each link became a
+   full-width row and four links ate four rows. The link groups lay out
+   two-up instead, which turns Quick Links and Our Services into a tidy
+   2x2 each. The brand block and the copyright bar keep their own layout.
+   --------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .public-footer > div:not(.footer-bottom):not(.public-footer-brand) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .public-footer > div:not(.footer-bottom):not(.public-footer-brand) > h4 {
+    grid-column: 1 / -1;
+    margin-bottom: 2px;
+    text-align: center;
+  }
+  .public-footer > div:not(.footer-bottom):not(.public-footer-brand) > a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 10px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 10.5px;
+    line-height: 1.3;
+    text-align: center;
+  }
+  .public-footer > div:not(.footer-bottom):not(.public-footer-brand) > a:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+  }
+  /* Contact Us holds sentences rather than links, so they run full width. */
+  .public-footer > div:not(.footer-bottom):not(.public-footer-brand) > p {
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+}
+
+/* The old toast markup was `<span>✓</span>`, so `.toast span` was sized as
+   the 28px icon chip. The message now lives in a span too, which forced the
+   text into that 28px box and spilled it outside the toast. */
+.toast > span {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  display: block;
+  place-items: initial;
+  border-radius: 0;
 }
