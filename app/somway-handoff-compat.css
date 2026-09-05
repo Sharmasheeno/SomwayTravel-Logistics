@@ -3822,15 +3822,16 @@ h3 .branch-inline .branch-flag {
 }
 
 /* Revenue by Service used to be one long flat table where every row repeated
-   "Branch . Currency . Service". It now renders one small table per branch
-   with the branch name as a heading, so the branch is stated once and each
-   row only carries currency + service. */
+   "Branch . Currency . Service". It now renders KPI cards grouped under a
+   branch heading -- the branch is stated once, and each currency+service is
+   its own card styled like the system metric-cards (icon chip + eyebrow +
+   big value) with the money figures below. */
 .branch-report-group {
   display: grid;
-  gap: 18px;
+  gap: 22px;
 }
 .branch-report-title {
-  margin: 0 0 8px;
+  margin: 0 0 12px;
   padding: 0 2px;
   font-size: 14px;
   font-weight: 700;
@@ -3839,6 +3840,71 @@ h3 .branch-inline .branch-flag {
 .branch-report-title .branch-inline {
   gap: 8px;
 }
-.branch-report + .branch-report {
-  padding-top: 4px;
+
+/* Card grid: same rhythm as the dashboard KPI grid, auto-fitting so a branch
+   with three services and one with six both look balanced. */
+.service-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+.service-kpi.metric-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+.service-kpi .metric-main {
+  flex: 1;
+  min-width: 0;
+}
+.service-kpi .metric-main > strong {
+  display: block;
+  margin: 6px 0 2px;
+  color: #083f73;
+  font: 700 22px/1.1 var(--display);
+}
+.service-kpi-caption {
+  display: block;
+  margin-bottom: 12px;
+  color: #7a8ba4;
+  font-size: 10px;
+  font-weight: 500;
+}
+.service-kpi-stats {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border);
+}
+.service-kpi-stats > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.service-kpi-stats dt {
+  color: #7a8ba4;
+  font-size: 11px;
+  font-weight: 500;
+}
+.service-kpi-stats dd {
+  margin: 0;
+  color: #29374f;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.service-kpi-stats dd.is-profit {
+  color: #16a34a;
+}
+
+@media (max-width: 767px) {
+  .service-kpi-grid {
+    grid-template-columns: 1fr;
+  }
 }

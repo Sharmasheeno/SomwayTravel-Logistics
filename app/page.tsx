@@ -1771,6 +1771,75 @@ function Kpi({
     </article>
   );
 }
+// One KPI card per branch/currency/service in the daily summary. It mirrors
+// the system metric-card look (icon chip + eyebrow label + big value) but the
+// body carries the four money figures for that service instead of a single
+// value, so the branch report reads as cards rather than a repeating table.
+const SERVICE_ICONS: Record<string, string> = {
+  tickets: "ticket",
+  ticket: "ticket",
+  visas: "passport",
+  visa: "passport",
+  cargo: "box",
+};
+const SERVICE_TONES: Record<string, string> = {
+  tickets: "blue",
+  ticket: "blue",
+  visas: "cyan",
+  visa: "cyan",
+  cargo: "violet",
+};
+function ServiceKpiCard({
+  currency,
+  service,
+  transactions,
+  revenue,
+  directCost,
+  profit,
+  customerDebt,
+}: {
+  currency: string;
+  service: string;
+  transactions: number;
+  revenue: string;
+  directCost: string;
+  profit: string;
+  customerDebt: string;
+}) {
+  const key = service.toLowerCase();
+  const icon = SERVICE_ICONS[key] || "receipt";
+  const tone = SERVICE_TONES[key] || "green";
+  return (
+    <article className="metric-card card-hover service-kpi">
+      <div className={`metric-icon tone-${tone}`}>
+        <Icon name={icon} size={22} />
+      </div>
+      <div className="metric-main">
+        <span className="eyebrow-soft">
+          {currency} · {service}
+        </span>
+        <strong>{revenue}</strong>
+        <span className="service-kpi-caption">
+          {transactions} transaction{transactions === 1 ? "" : "s"} · Revenue
+        </span>
+        <dl className="service-kpi-stats">
+          <div>
+            <dt>Direct Cost</dt>
+            <dd>{directCost}</dd>
+          </div>
+          <div>
+            <dt>Profit</dt>
+            <dd className="is-profit">{profit}</dd>
+          </div>
+          <div>
+            <dt>Customer Debt</dt>
+            <dd>{customerDebt}</dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+  );
+}
 function MetricCard({
   icon,
   label,
@@ -8843,7 +8912,7 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
               <div className="daily-summary-details">
                 <Panel
                   title="Revenue by Service"
-                  subtitle="A separate table per branch"
+                  subtitle="KPI cards per branch, currency and service"
                 >
                   <div className="branch-report-group">
                     {Object.values(
@@ -8863,43 +8932,28 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
                         <h4 className="branch-report-title">
                           <BranchName data={data} branch={group.branch} />
                         </h4>
-                        <TableShell>
-                          <thead>
-                            <tr>
-                              <th>Currency / Service</th>
-                              <th>Transactions</th>
-                              <th>Revenue</th>
-                              <th>Direct Cost</th>
-                              <th>Profit</th>
-                              <th>Customer Debt</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {group.rows.flatMap((row) =>
-                              row.revenueByService.map((service) => (
-                                <tr
-                                  key={`${row.branchId}-${row.currency}-${service.service}`}
-                                >
-                                  <td>
-                                    {row.currency} · {service.service}
-                                  </td>
-                                  <td>{service.transactions}</td>
-                                  <td>{money(service.revenue, row.currency)}</td>
-                                  <td>
-                                    {money(service.directCost, row.currency)}
-                                  </td>
-                                  <td>{money(service.profit, row.currency)}</td>
-                                  <td>
-                                    {money(
-                                      service.accountsReceivable,
-                                      row.currency,
-                                    )}
-                                  </td>
-                                </tr>
-                              )),
-                            )}
-                          </tbody>
-                        </TableShell>
+                        <div className="service-kpi-grid">
+                          {group.rows.flatMap((row) =>
+                            row.revenueByService.map((service) => (
+                              <ServiceKpiCard
+                                key={`${row.branchId}-${row.currency}-${service.service}`}
+                                currency={row.currency}
+                                service={service.service}
+                                transactions={service.transactions}
+                                revenue={money(service.revenue, row.currency)}
+                                directCost={money(
+                                  service.directCost,
+                                  row.currency,
+                                )}
+                                profit={money(service.profit, row.currency)}
+                                customerDebt={money(
+                                  service.accountsReceivable,
+                                  row.currency,
+                                )}
+                              />
+                            )),
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
