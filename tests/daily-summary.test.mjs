@@ -142,7 +142,13 @@ test("daily summary separates revenue, cash, debt, payable, expense and profit",
   assert.equal(row.profit, 120);
   assert.equal(row.expenses, 20);
   assert.equal(row.accountsPayable, 40);
-  assert.equal(row.expectedClosing, 200);
+  // Cash actually in the drawer at close: opening 100, plus the 120
+  // collected, less the 20 spent. The 80 still owed to us is not here yet
+  // and the 40 we owe has not left yet.
+  assert.equal(row.closedAmount, 200);
+  // What the branch is projected to hold once both sides settle: that 80
+  // comes in and that 40 goes out.
+  assert.equal(row.expectedClosing, 240);
 });
 
 test("previous physical closing becomes next business day opening", () => {

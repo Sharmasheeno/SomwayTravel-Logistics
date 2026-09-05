@@ -2507,11 +2507,18 @@ export default function Home() {
     return () => globalThis.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
   // Alerts are derived from the records, so they are refetched whenever the
-  // workspace data changes -- taking a payment clears its own alert.
+  // workspace data changes -- taking a payment clears its own alert. The
+  // spinner is raised here, while rendering, rather than inside the effect:
+  // it goes up in the same paint that shows the changed records, instead of
+  // one paint later, and the effect is left to report only what came back.
+  const [notifSource, setNotifSource] = useState<unknown>(null);
+  if (user && notifSource !== data) {
+    setNotifSource(data);
+    setNotifLoading(true);
+  }
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    setNotifLoading(true);
     apiRequest<{ items: Notification[] }>("/api/notifications")
       .then((result) => {
         if (cancelled) return;
@@ -5292,12 +5299,17 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
   const financial = user.role === "owner" || user.role === "consultant";
   // Deleting is owner-only; operators create and correct, never remove.
   const canDelete = user.role === "owner";
-  const [query, setQuery] = useState("");
-  // Opening a notification lands here with the record reference, so
-  // the register searches for it and the row is on screen.
-  useEffect(() => {
+  const [query, setQuery] = useState(focusRef || "");
+  // Opening a notification lands here with the record reference, so the
+  // register searches for it and the row is on screen. This is adjusted
+  // while rendering rather than in an effect so the list never paints once
+  // with the old query and again with the new one. Only a reference we have
+  // not seen before replaces the box, so anything typed since is kept.
+  const [seenFocus, setSeenFocus] = useState(focusRef);
+  if (focusRef !== seenFocus) {
+    setSeenFocus(focusRef);
     if (focusRef) setQuery(focusRef);
-  }, [focusRef]);
+  }
   const [office, setOffice] = useState(roleOffice || "All");
   // Follow the global branch scope chosen in the top bar.
   useBranchScope(scopeBranchId, (id) =>
@@ -5942,12 +5954,17 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
   const financial = user.role === "owner" || user.role === "consultant";
   // Deleting is owner-only; operators create and correct, never remove.
   const canDelete = user.role === "owner";
-  const [query, setQuery] = useState("");
-  // Opening a notification lands here with the record reference, so
-  // the register searches for it and the row is on screen.
-  useEffect(() => {
+  const [query, setQuery] = useState(focusRef || "");
+  // Opening a notification lands here with the record reference, so the
+  // register searches for it and the row is on screen. This is adjusted
+  // while rendering rather than in an effect so the list never paints once
+  // with the old query and again with the new one. Only a reference we have
+  // not seen before replaces the box, so anything typed since is kept.
+  const [seenFocus, setSeenFocus] = useState(focusRef);
+  if (focusRef !== seenFocus) {
+    setSeenFocus(focusRef);
     if (focusRef) setQuery(focusRef);
-  }, [focusRef]);
+  }
   const [office, setOffice] = useState("All");
   // Follow the global branch scope chosen in the top bar.
   useBranchScope(scopeBranchId, (id) =>
@@ -7363,12 +7380,17 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
   const financial = user.role === "owner" || user.role === "consultant";
   // Deleting is owner-only; operators create and correct, never remove.
   const canDelete = user.role === "owner";
-  const [query, setQuery] = useState("");
-  // Opening a notification lands here with the record reference, so
-  // the register searches for it and the row is on screen.
-  useEffect(() => {
+  const [query, setQuery] = useState(focusRef || "");
+  // Opening a notification lands here with the record reference, so the
+  // register searches for it and the row is on screen. This is adjusted
+  // while rendering rather than in an effect so the list never paints once
+  // with the old query and again with the new one. Only a reference we have
+  // not seen before replaces the box, so anything typed since is kept.
+  const [seenFocus, setSeenFocus] = useState(focusRef);
+  if (focusRef !== seenFocus) {
+    setSeenFocus(focusRef);
     if (focusRef) setQuery(focusRef);
-  }, [focusRef]);
+  }
   const [office, setOffice] = useState(roleOffice || "All");
   // Follow the global branch scope chosen in the top bar.
   useBranchScope(scopeBranchId, (id) =>
