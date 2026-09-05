@@ -1840,6 +1840,87 @@ function ServiceKpiCard({
     </article>
   );
 }
+// One KPI card per branch/currency/payment-method in the daily summary. Same
+// metric-card look as ServiceKpiCard, but the body carries the cash-drawer
+// figures: Closing is the headline, with Opening/Received/Refunds/Expenses/
+// Payables Paid beneath.
+const METHOD_ICONS: Record<string, string> = {
+  cash: "money",
+  "m-pesa": "phone",
+  mpesa: "phone",
+  "evc plus": "phone",
+  evc: "phone",
+  bank: "building",
+  card: "wallet",
+};
+const METHOD_TONES: Record<string, string> = {
+  cash: "green",
+  "m-pesa": "cyan",
+  mpesa: "cyan",
+  "evc plus": "cyan",
+  evc: "cyan",
+  bank: "blue",
+  card: "violet",
+};
+function MethodKpiCard({
+  currency,
+  method,
+  closing,
+  opening,
+  received,
+  refunds,
+  expenses,
+  payablesPaid,
+}: {
+  currency: string;
+  method: string;
+  closing: string;
+  opening: string;
+  received: string;
+  refunds: string;
+  expenses: string;
+  payablesPaid: string;
+}) {
+  const key = method.toLowerCase();
+  const icon = METHOD_ICONS[key] || "wallet";
+  const tone = METHOD_TONES[key] || "blue";
+  return (
+    <article className="metric-card card-hover service-kpi">
+      <div className={`metric-icon tone-${tone}`}>
+        <Icon name={icon} size={22} />
+      </div>
+      <div className="metric-main">
+        <span className="eyebrow-soft">
+          {currency} · {method}
+        </span>
+        <strong>{closing}</strong>
+        <span className="service-kpi-caption">Closing balance</span>
+        <dl className="service-kpi-stats">
+          <div>
+            <dt>Opening</dt>
+            <dd>{opening}</dd>
+          </div>
+          <div>
+            <dt>Received</dt>
+            <dd className="is-profit">{received}</dd>
+          </div>
+          <div>
+            <dt>Refunds</dt>
+            <dd>{refunds}</dd>
+          </div>
+          <div>
+            <dt>Expenses</dt>
+            <dd>{expenses}</dd>
+          </div>
+          <div>
+            <dt>Payables Paid</dt>
+            <dd>{payablesPaid}</dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+  );
+}
 function MetricCard({
   icon,
   label,
@@ -8960,41 +9041,49 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
                 </Panel>
                 <Panel
                   title="Payments by Method"
-                  subtitle="Opening float through to closing balance"
+                  subtitle="KPI cards from opening float to closing balance"
                 >
-                  <TableShell>
-                    <thead>
-                      <tr>
-                        <th>Branch / Currency / Method</th>
-                        <th>Opening</th>
-                        <th>Received</th>
-                        <th>Refunds</th>
-                        <th>Expenses</th>
-                        <th>Payables Paid</th>
-                        <th>Closing</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.flatMap((row) =>
-                        row.paymentsByMethod.map((method) => (
-                          <tr
-                            key={`${row.branchId}-${row.currency}-${method.paymentMethodId}`}
-                          >
-                            <td>
-                              <BranchName data={data} branch={row.branch} /> ·{" "}
-                              {row.currency} · {method.paymentMethod}
-                            </td>
-                            <td>{money(method.opening, row.currency)}</td>
-                            <td>{money(method.received, row.currency)}</td>
-                            <td>{money(method.refunds, row.currency)}</td>
-                            <td>{money(method.expenses, row.currency)}</td>
-                            <td>{money(method.supplierPaid, row.currency)}</td>
-                            <td>{money(method.closing, row.currency)}</td>
-                          </tr>
-                        )),
-                      )}
-                    </tbody>
-                  </TableShell>
+                  <div className="branch-report-group">
+                    {Object.values(
+                      rows.reduce<Record<string, { branch: string; rows: typeof rows }>>(
+                        (groups, row) => {
+                          const bucket = (groups[row.branchId] ??= {
+                            branch: row.branch,
+                            rows: [],
+                          });
+                          bucket.rows.push(row);
+                          return groups;
+                        },
+                        {},
+                      ),
+                    ).map((group) => (
+                      <div key={group.branch} className="branch-report">
+                        <h4 className="branch-report-title">
+                          <BranchName data={data} branch={group.branch} />
+                        </h4>
+                        <div className="service-kpi-grid">
+                          {group.rows.flatMap((row) =>
+                            row.paymentsByMethod.map((method) => (
+                              <MethodKpiCard
+                                key={`${row.branchId}-${row.currency}-${method.paymentMethodId}`}
+                                currency={row.currency}
+                                method={method.paymentMethod}
+                                closing={money(method.closing, row.currency)}
+                                opening={money(method.opening, row.currency)}
+                                received={money(method.received, row.currency)}
+                                refunds={money(method.refunds, row.currency)}
+                                expenses={money(method.expenses, row.currency)}
+                                payablesPaid={money(
+                                  method.supplierPaid,
+                                  row.currency,
+                                )}
+                              />
+                            )),
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </Panel>
               </div>
             </>
