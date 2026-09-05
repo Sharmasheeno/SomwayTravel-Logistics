@@ -1837,7 +1837,13 @@ h6,
   }
   .table-wrap .row-actions > * {
     flex: 1 1 0;
-    min-height: 42px;
+    min-height: 44px;
+  }
+  /* The buttons stretch to the full card width on a phone, so a 16px glyph
+     is lost in a wide box. Scale the icon up to match the larger tap target. */
+  .table-wrap .row-actions button svg {
+    width: 22px;
+    height: 22px;
   }
 
   /* The topbar scrolls sideways as one strip. Branch scope and the date
@@ -2483,6 +2489,13 @@ button.danger:disabled,
 }
 .row-actions button:hover {
   filter: brightness(0.96);
+}
+/* Keep the edit/delete/view glyphs a readable size inside their button chips
+   across the whole system, rather than the small default 16px icon looking
+   lost in the padded box. */
+.row-actions button svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* The same three purpose colours as standalone classes, so record actions
