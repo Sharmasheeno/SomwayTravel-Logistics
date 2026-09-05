@@ -1,6 +1,11 @@
 import { ApiError, parseApiResponse } from "./api-core.js";
 
-const apiBase = ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
+// When VITE_API_BASE_URL is set (e.g. a separate API origin in production) we
+// call it directly. Left empty, calls stay same-origin ("/api/...") so the Vite
+// dev/preview server can proxy them to the Express API running alongside it --
+// the browser never needs to know a localhost port that isn't reachable from
+// outside the sandbox.
+const apiBase = ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 const requestId = () => globalThis.crypto?.randomUUID?.() || `web-${Date.now().toString(36)}`;
 

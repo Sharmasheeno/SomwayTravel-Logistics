@@ -9,6 +9,18 @@ const secureFlag = () =>
     ? "; Secure"
     : "";
 
+// SameSite policy for the session cookie. Defaults to "Lax", which is correct
+// when the site and API share one origin. When the frontend and API are hosted
+// on different origins (e.g. two Render services), the browser will only store
+// and send the cookie on those cross-site requests if it is "None"; and a
+// SameSite=None cookie MUST also be Secure, so we force that flag on.
+const sameSiteAttributes = () => {
+  const value = String(process.env.COOKIE_SAMESITE || "Lax").trim().toLowerCase();
+  if (value === "none") return "; SameSite=None; Secure";
+  if (value === "strict") return `; SameSite=Strict${secureFlag()}`;
+  return `; SameSite=Lax${secureFlag()}`;
+};
+
 export const readCookie = (req, name) => {
   const header = req.headers.cookie || "";
   const part = header
@@ -23,10 +35,14 @@ export const readCookie = (req, name) => {
 export const setSessionCookie = (res, token) => {
   res.append(
     "Set-Cookie",
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly${secureFlag()}; SameSite=Lax`
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly${sameSiteAttributes()}`
   );
 };
 
 export const clearSessionCookie = (res) => {
-  res.append("Set-Cookie", `${SESSION_COOKIE}=; Path=/; HttpOnly${secureFlag()}; SameSite=Lax; Max-Age=0`);
+  res.append(
+    "Set-Cookie",
+    `${SESSION_COOKIE}=; Path=/; HttpOnly${sameSiteAttributes()}; Max-Age=0`
+  );
 };
+

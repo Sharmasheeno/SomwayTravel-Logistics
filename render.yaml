@@ -1,0 +1,88 @@
+# Render Blueprint for SomWay Travel & Logistics
+# ------------------------------------------------
+# This provisions TWO web services from one repository:
+#   1. somway-api  — the Express API (Node) that talks to MongoDB Atlas
+#   2. somway-web  — the Vinext frontend (the site people open in the browser)
+#
+# The frontend is told the API's public URL at build time (VITE_API_BASE_URL),
+# and the API is told the frontend's public URL so it can accept its requests
+# (CORS) and set a cross-site session cookie. Render fills both URLs in
+# automatically via `fromService`, so you do not have to copy/paste them.
+#
+# You only have to set ONE secret by hand after the first deploy: MONGODB_URI
+# (your MongoDB Atlas connection string). It is marked sync:false so it is never
+# stored in the repo.
+
+services:
+  # ---------------------------------------------------------------- API server
+  - type: web
+    name: somway-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci
+    startCommand: npm run server
+    healthCheckPath: /api/auth/status
+    envVars:
+      - key: NODE_VERSION
+        value: 22.13.0
+      - key: PORT
+        value: 5000
+      # Your MongoDB Atlas connection string. Set this in the Render dashboard
+      # after the first deploy (Environment tab). Example:
+      # mongodb+srv://USER:PASS@cluster0.xxxxx.mongodb.net/somway?retryWrites=true&w=majority
+      - key: MONGODB_URI
+        sync: false
+      # Cross-site session cookie: the site and API live on different origins,
+      # so the cookie must be SameSite=None and Secure (Render serves HTTPS).
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "true"
+      - key: JSON_BODY_LIMIT
+        value: 15mb
+      # Allow the browser app (the frontend service) to call this API with
+      # credentials. Render injects the frontend's public URL here.
+      - key: CORS_ALLOWED_ORIGINS
+        fromService:
+          name: somway-web
+          type: web
+          property: hostport
+      # ---- Default seed accounts (used by `npm run seed:users`) ----
+      # These let the seed script create logins without hardcoding secrets in
+      # the repo. Change them in the dashboard to whatever you want.
+      - key: SEED_OWNER_NAME
+        value: Primary Owner
+      - key: SEED_OWNER_EMAIL
+        value: owner@somway.local
+      - key: SEED_OWNER_PASSWORD
+        sync: false
+      - key: SEED_OWNER2_EMAIL
+        value: owner2@somway.local
+      - key: SEED_OWNER2_PASSWORD
+        sync: false
+      - key: SEED_OFFICER_EMAIL
+        value: officer@somway.local
+      - key: SEED_OFFICER_PASSWORD
+        sync: false
+
+  # ------------------------------------------------------------- Frontend site
+  - type: web
+    name: somway-web
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:web
+    envVars:
+      - key: NODE_VERSION
+        value: 22.13.0
+      # Vinext listens on $PORT; Render sets this automatically.
+      # Point the browser app at the API's public URL (baked in at build time).
+      - key: VITE_API_BASE_URL
+        fromService:
+          name: somway-api
+          type: web
+          property: hostport
