@@ -12007,10 +12007,17 @@ function Tracking({
         status: cargoStatusLabel(cargo.status),
         route: `${cargo.origin} → ${cargo.destination}`,
         stages: ["In Transit", "Arrived", "Delivered"],
-        currentStage: ["In Transit", "Arrived", "Delivered"].indexOf(
-          cargoStatusLabel(cargo.status),
+        currentStage:
+          cargoStatusKey(cargo.status) === "delivered"
+            ? 2
+            : ["arrived", "ready_for_collection"].includes(
+                  String(cargoStatusKey(cargo.status)),
+                )
+              ? 1
+              : 0,
+        failed: ["claim", "cancelled"].includes(
+          String(cargoStatusKey(cargo.status)),
         ),
-        failed: cargoStatusKey(cargo.status) === "claim",
         details: [
           ["Status", cargoStatusLabel(cargo.status)],
           ["Received", dateLabel(cargo.dateIn)],
@@ -12126,18 +12133,19 @@ function Tracking({
               </div>
               <Badge
                 tone={
-                  cargo?.status === "Delivered" ||
-                  visa?.status === "delivered" ||
-                  visa?.status === "approved"
-                    ? "success"
-                    : cargo?.status === "Claim" || visa?.status === "refused"
-                      ? "danger"
-                      : cargo?.status === "Arrived"
-                        ? "warning"
+                  cargo
+                    ? cargoStatusTone(cargo.status)
+                    : visa?.status === "delivered" ||
+                        visa?.status === "approved"
+                      ? "success"
+                      : visa?.status === "refused"
+                        ? "danger"
                         : "blue"
                 }
               >
-                {cargo?.status || serviceStatusLabel(visa?.status || "")}
+                {cargo
+                  ? cargoStatusLabel(cargo.status)
+                  : serviceStatusLabel(visa?.status || "")}
               </Badge>
             </header>
             {cargo && (
@@ -12150,13 +12158,19 @@ function Tracking({
                       { stage: "Delivered", icon: "check" },
                     ] as const
                   ).map(({ stage, icon }, index) => {
-                    const current = [
-                      "In Transit",
-                      "Arrived",
-                      "Delivered",
-                    ].indexOf(cargo.status);
-                    const active = cargo.status !== "Claim" && index <= current;
-                    const done = cargo.status !== "Claim" && index < current;
+                    const key = cargoStatusKey(cargo.status);
+                    const failed = key === "claim" || key === "cancelled";
+                    // Map every cargo status onto the 3-stage customer timeline:
+                    // received/in_transit -> 0, arrived/ready_for_collection -> 1,
+                    // delivered -> 2. Falls back to In Transit for anything else.
+                    const current =
+                      key === "delivered"
+                        ? 2
+                        : key === "arrived" || key === "ready_for_collection"
+                          ? 1
+                          : 0;
+                    const active = !failed && index <= current;
+                    const done = !failed && index < current;
                     return (
                       <div
                         key={stage}
@@ -12176,7 +12190,7 @@ function Tracking({
                     );
                   })}
                 </div>
-                {cargo.status === "Claim" && (
+                {cargoStatusKey(cargo.status) === "claim" && (
                   <div className="claim-alert">
                     <strong>Claim opened</strong>
                     <span>Please contact the agency office for an update.</span>
