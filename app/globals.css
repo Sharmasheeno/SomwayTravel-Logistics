@@ -6250,3 +6250,207 @@ th {
     width: 100%;
   }
 }
+
+/* ---------------------------------------------------------------------
+   Track Shipment — professional result card.
+   Scoped under .tracking-pro so the rest of the app is untouched. A large
+   tracking number, route with icons, a glowing status pill, an icon-based
+   progress timeline with a gradient connector, and detail cards that carry
+   an icon chip — matching the customer-facing tracking reference design.
+   --------------------------------------------------------------------- */
+.tracking-card:has(.tracking-pro) {
+  max-width: 960px;
+  border-radius: 26px;
+}
+.tracking-pro {
+  padding: 34px 36px 30px;
+  background:
+    radial-gradient(1200px 260px at 80% -40%, rgba(0, 172, 193, 0.10), transparent 60%),
+    #fff;
+}
+.tracking-pro-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.tracking-pro-head .eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin: 0 0 6px;
+}
+.tracking-pro-head h2 {
+  font-family: "Poppins", Georgia, serif;
+  font-weight: 800;
+  font-size: clamp(26px, 4vw, 40px);
+  letter-spacing: -0.01em;
+  color: #0d1b42;
+  margin: 0;
+  line-height: 1.05;
+}
+.tracking-pro-route {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.tracking-pro-route svg {
+  color: var(--teal);
+}
+.tracking-pro-route em {
+  font-style: normal;
+  color: #b9c4d6;
+  margin: 0 2px;
+}
+.tracking-pro-head .badge {
+  align-self: flex-start;
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  box-shadow: 0 8px 22px rgba(13, 71, 161, 0.18);
+}
+
+/* Progress timeline */
+.status-track-pro {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  position: relative;
+  margin: 46px 0 40px;
+}
+.status-track-pro:before {
+  content: "";
+  position: absolute;
+  left: 16.6%;
+  right: 16.6%;
+  top: 28px;
+  height: 4px;
+  border-radius: 4px;
+  background: #e6edf6;
+}
+.status-track-pro:after {
+  content: "";
+  position: absolute;
+  left: 16.6%;
+  top: 28px;
+  height: 4px;
+  border-radius: 4px;
+  width: 0;
+  background: linear-gradient(90deg, var(--teal), var(--green));
+  transition: width 0.4s ease;
+}
+.status-track-pro:has(> div:nth-child(2).active):after {
+  width: 33.3%;
+}
+.status-track-pro:has(> div:nth-child(3).active):after {
+  width: 66.6%;
+}
+.status-track-pro > div {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #9aa8bd;
+  font-size: 13px;
+  font-weight: 700;
+}
+.status-track-pro i {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #eef3f9;
+  color: #9aa8bd;
+  border: 4px solid #fff;
+  box-shadow: 0 0 0 1px #e0e8f2;
+  font-style: normal;
+  transition: transform 0.2s ease;
+}
+.status-track-pro .active {
+  color: var(--green);
+}
+.status-track-pro .active i {
+  background: linear-gradient(145deg, var(--teal), var(--green));
+  color: #fff;
+  box-shadow:
+    0 0 0 1px rgba(0, 172, 193, 0.4),
+    0 10px 24px rgba(0, 172, 193, 0.35);
+}
+.status-track-pro .active:not(.done) i {
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 6px rgba(0, 172, 193, 0.14),
+    0 12px 26px rgba(0, 172, 193, 0.4);
+}
+
+/* Detail cards with icon chips */
+.tracking-details-pro {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.tracking-details-pro > div {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  background: #f6f9fc;
+  border: 1px solid #eef2f8;
+  padding: 16px 18px;
+  border-radius: 16px;
+}
+.tracking-details-pro .td-chip {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, var(--teal), var(--green));
+  color: #fff;
+}
+.tracking-details-pro small {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a99b0;
+}
+.tracking-details-pro strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a2b4a;
+  word-break: break-word;
+}
+.tracking-pro .status-share-actions {
+  margin-top: 28px;
+}
+@media (max-width: 720px) {
+  .tracking-pro {
+    padding: 24px 18px;
+  }
+  .tracking-details-pro {
+    grid-template-columns: 1fr;
+  }
+  .status-track-pro i {
+    width: 46px;
+    height: 46px;
+  }
+  .status-track-pro:before,
+  .status-track-pro:after {
+    top: 23px;
+  }
+}

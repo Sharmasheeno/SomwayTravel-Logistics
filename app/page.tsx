@@ -1019,6 +1019,139 @@ function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
   // Revoke after the tab has had time to load the document.
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
+
+// A professional, print-ready shipment/visa status sheet. Mirrors the receipt
+// generator: opens a self-contained page (SomWay logo, big tracking number, a
+// progress timeline and detail cards) and triggers the browser print/save-PDF
+// dialog, so the downloaded document matches the polished on-screen tracking.
+type StatusSheet = {
+  kind: "cargo" | "visa";
+  title: string;
+  reference: string;
+  refLabel: string;
+  status: string;
+  route: string;
+  stages: string[];
+  currentStage: number;
+  failed: boolean;
+  details: Array<[string, string]>;
+  logoUrl?: string;
+};
+function generateStatusSheet(sheet: StatusSheet) {
+  const esc = (value: string | number) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  const logo = sheet.logoUrl
+    ? `<img class="brand" src="${esc(sheet.logoUrl)}" alt="SomWay Travel & Logistics" />`
+    : `<div class="brand brand-fallback">SW</div>`;
+  const steps = sheet.stages
+    .map((stage, index) => {
+      const active = !sheet.failed && index <= sheet.currentStage;
+      return `<div class="step ${active ? "active" : ""}"><i>${
+        active ? "&#10003;" : index + 1
+      }</i><span>${esc(stage)}</span></div>`;
+    })
+    .join("");
+  const progress = sheet.failed
+    ? 0
+    : (Math.max(0, sheet.currentStage) / (sheet.stages.length - 1)) * 100;
+  const cards = sheet.details
+    .map(
+      ([k, v]) =>
+        `<div class="card"><span>${esc(k)}</span><strong>${esc(v || "—")}</strong></div>`,
+    )
+    .join("");
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${esc(sheet.refLabel.toLowerCase().replace(/\s+/g, "-"))}-${esc(sheet.reference)}</title>
+<style>
+  :root { --green:#0d47a1; --teal:#00acc1; --muted:#61708c; --line:#dce6f2; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background:#eef2f7; color:#14243d;
+    font-family:"Poppins","Inter",system-ui,-apple-system,sans-serif; }
+  .sheet { max-width:720px; margin:24px auto; background:#fff; border:1px solid var(--line);
+    border-radius:16px; padding:36px 40px; box-shadow:0 18px 44px rgba(3,23,53,.10); }
+  header { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:18px;
+    padding-bottom:22px; border-bottom:2px solid var(--green); }
+  .brand { width:150px; max-width:40vw; height:auto; border-radius:10px; object-fit:contain;
+    background:#000; padding:8px 11px; display:block; }
+  .brand-fallback { width:64px; height:64px; display:grid; place-items:center; background:var(--green);
+    color:#fff; font:700 24px/1 Georgia,serif; padding:0; }
+  header p { font-size:11px; color:var(--muted); margin:4px 0 0; }
+  .tag { align-self:start; padding:7px 14px; border-radius:999px; background:#e0f5e9;
+    color:#0d8a4f; font-size:12px; font-weight:800; letter-spacing:.04em; }
+  .eyebrow { font-size:11px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--teal); margin:26px 0 6px; }
+  h1 { font:800 34px/1.05 "Poppins",Georgia,serif; color:#0d1b42; margin:0; letter-spacing:-.01em; }
+  .route { margin-top:10px; font-size:13px; font-weight:600; color:var(--muted); }
+  .track { position:relative; display:grid; grid-template-columns:repeat(${sheet.stages.length},1fr);
+    margin:44px 0 38px; }
+  .track:before { content:""; position:absolute; left:${100 / sheet.stages.length / 2}%;
+    right:${100 / sheet.stages.length / 2}%; top:26px; height:4px; border-radius:4px; background:#e6edf6; }
+  .track:after { content:""; position:absolute; left:${100 / sheet.stages.length / 2}%; top:26px;
+    height:4px; border-radius:4px; width:calc((100% - ${100 / sheet.stages.length}%) * ${progress / 100});
+    background:linear-gradient(90deg,var(--teal),var(--green)); }
+  .step { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center;
+    gap:10px; color:#9aa8bd; font-size:12px; font-weight:700; }
+  .step i { width:52px; height:52px; border-radius:50%; display:grid; place-items:center;
+    background:#eef3f9; color:#9aa8bd; border:4px solid #fff; box-shadow:0 0 0 1px #e0e8f2;
+    font-style:normal; font-size:18px; }
+  .step.active { color:var(--green); }
+  .step.active i { background:linear-gradient(145deg,var(--teal),var(--green)); color:#fff;
+    box-shadow:0 0 0 1px rgba(0,172,193,.4); }
+  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .card { background:#f6f9fc; border:1px solid #eef2f8; padding:15px 16px; border-radius:14px; }
+  .card span { display:block; font-size:10px; font-weight:800; letter-spacing:.08em;
+    text-transform:uppercase; color:#8a99b0; }
+  .card strong { display:block; margin-top:4px; font-size:15px; font-weight:700; color:#1a2b4a; }
+  footer { border-top:1px solid var(--line); margin-top:26px; padding-top:16px;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:11px; color:var(--muted); }
+  .toolbar { max-width:720px; margin:16px auto 0; display:flex; gap:10px; justify-content:flex-end; }
+  .toolbar button { border:0; border-radius:10px; padding:11px 18px; cursor:pointer; font:600 13px/1 inherit; }
+  .toolbar .print { background:var(--green); color:#fff; }
+  .toolbar .close { background:#e7edf5; color:#35425c; }
+  @media print { body { background:#fff; } .sheet { box-shadow:none; border:0; margin:0; max-width:none; }
+    .toolbar { display:none; } }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <header>${logo}<div><p>Nairobi &middot; Mogadishu</p></div><span class="tag">${esc(sheet.title)}</span></header>
+    <p class="eyebrow">${esc(sheet.refLabel)}</p>
+    <h1>${esc(sheet.reference)}</h1>
+    <p class="route">${esc(sheet.route)}</p>
+    <div class="track">${steps}</div>
+    <div class="cards">${cards}</div>
+    <footer><span>Generated ${esc(new Date().toLocaleString("en-GB"))}</span><span>WhatsApp +252 61 563 3609</span></footer>
+  </div>
+  <div class="toolbar">
+    <button class="close" onclick="window.close()">Close</button>
+    <button class="print" onclick="window.print()">Print / Save PDF</button>
+  </div>
+  <script>
+    window.addEventListener('load', function(){ setTimeout(function(){ window.focus(); window.print(); }, 350); });
+  <\/script>
+</body>
+</html>`;
+  const win = window.open("", "_blank", "width=820,height=980");
+  if (win && win.document) {
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  const opened = window.open(url, "_blank");
+  if (!opened) {
+    window.alert("Please allow pop-ups for this site to download the status.");
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
 // Turn a ticket register row into receipt data for the one-click generator.
 // Resolve the "Paid via" label from the actual recorded customer payments for a
 // transaction, rather than the record's own paymentMethod field (which is often
@@ -11866,41 +11999,52 @@ function Tracking({
   };
   const download = () => {
     if (cargo)
-      downloadPdf(`cargo-status-${cargo.tracking}.pdf`, BRAND_NAME, [
-        "CARGO STATUS UPDATE",
-        "",
-        `Tracking number: ${cargo.tracking}`,
-        `Current status: ${cargo.status}`,
-        `Route: ${cargo.origin} to ${cargo.destination}`,
-        `Date received: ${dateLabel(cargo.dateIn)}`,
-        `Sender: ${cargo.sender}`,
-        `Receiver: ${cargo.receiver}`,
-        `Contents: ${cargo.contents}`,
-        `Weight: ${cargo.weight} kg`,
-        cargo.dateDelivered
-          ? `Date delivered: ${dateLabel(cargo.dateDelivered)}`
-          : "",
-        "",
-        `Generated: ${new Date().toLocaleString("en-GB")}`,
-        "WhatsApp: +252 61 563 3609",
-        "Email: Macruuftravelcargo@gmail.com",
-      ]);
+      generateStatusSheet({
+        kind: "cargo",
+        title: "Shipment status",
+        refLabel: "Tracking number",
+        reference: cargo.tracking,
+        status: cargoStatusLabel(cargo.status),
+        route: `${cargo.origin} → ${cargo.destination}`,
+        stages: ["In Transit", "Arrived", "Delivered"],
+        currentStage: ["In Transit", "Arrived", "Delivered"].indexOf(
+          cargoStatusLabel(cargo.status),
+        ),
+        failed: cargoStatusKey(cargo.status) === "claim",
+        details: [
+          ["Status", cargoStatusLabel(cargo.status)],
+          ["Received", dateLabel(cargo.dateIn)],
+          ["Sender", cargo.sender],
+          ["Receiver", cargo.receiver],
+          ["Contents", cargo.contents],
+          ["Weight", `${cargo.weight} kg`],
+          ["Delivered", dateLabel(cargo.dateDelivered)],
+        ],
+        logoUrl: "/somway-primary-logo.png",
+      });
     if (visa)
-      downloadPdf(`visa-status-${visa.ref}.pdf`, BRAND_NAME, [
-        "VISA APPLICATION STATUS UPDATE",
-        "",
-        `Application reference: ${visa.ref}`,
-        `Current status: ${visa.status}`,
-        `Applicant: ${visa.applicant}`,
-        `Destination: ${visa.destination}`,
-        `Application type: ${visa.visaType || "Visa application"}`,
-        `Application date: ${dateLabel(visa.appDate)}`,
-        `Office: ${visa.office}`,
-        "",
-        `Generated: ${new Date().toLocaleString("en-GB")}`,
-        "WhatsApp: +252 61 563 3609",
-        "Email: Macruuftravelcargo@gmail.com",
-      ]);
+      generateStatusSheet({
+        kind: "visa",
+        title: "Visa status",
+        refLabel: "Application reference",
+        reference: visa.ref,
+        status: serviceStatusLabel(visa.status),
+        route: `${visa.destination} · ${visa.visaType || "Visa application"}`,
+        stages: ["Submitted", "Approved", "Delivered"],
+        currentStage: ["submitted", "approved", "delivered"].indexOf(
+          String(visa.status),
+        ),
+        failed: String(visa.status) === "refused",
+        details: [
+          ["Status", serviceStatusLabel(visa.status)],
+          ["Application date", dateLabel(visa.appDate)],
+          ["Applicant", visa.applicant],
+          ["Destination", visa.destination],
+          ["Application type", visa.visaType || "Visa application"],
+          ["Office", String(visa.office)],
+        ],
+        logoUrl: "/somway-primary-logo.png",
+      });
   };
   const email = async () => {
     if (!item) return;
@@ -11955,8 +12099,8 @@ function Tracking({
           />
         </div>
         {item ? (
-          <div className="tracking-result">
-            <header>
+          <div className="tracking-result tracking-pro">
+            <header className="tracking-pro-head">
               <div>
                 <p className="eyebrow">
                   {kind === "cargo"
@@ -11964,10 +12108,20 @@ function Tracking({
                     : "Application reference"}
                 </p>
                 <h2>{cargo?.tracking || visa?.ref}</h2>
-                <span>
-                  {cargo
-                    ? `${cargo.origin} → ${cargo.destination}`
-                    : `${visa?.destination} · ${visa?.visaType || "Visa application"}`}
+                <span className="tracking-pro-route">
+                  {cargo ? (
+                    <>
+                      <Icon name="plane" size={15} /> {cargo.origin}
+                      <em>→</em>
+                      <Icon name="building" size={15} /> {cargo.destination}
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="globe" size={15} /> {visa?.destination}
+                      <em>·</em>
+                      {visa?.visaType || "Visa application"}
+                    </>
+                  )}
                 </span>
               </div>
               <Badge
@@ -11988,23 +12142,39 @@ function Tracking({
             </header>
             {cargo && (
               <>
-                <div className="status-track">
-                  {["In Transit", "Arrived", "Delivered"].map(
-                    (stage, index) => {
-                      const active =
-                        cargo.status !== "Claim" &&
-                        index <=
-                          ["In Transit", "Arrived", "Delivered"].indexOf(
-                            cargo.status,
-                          );
-                      return (
-                        <div key={stage} className={active ? "active" : ""}>
-                          <i>{active ? "✓" : index + 1}</i>
-                          <span>{stage}</span>
-                        </div>
-                      );
-                    },
-                  )}
+                <div className="status-track status-track-pro">
+                  {(
+                    [
+                      { stage: "In Transit", icon: "plane" },
+                      { stage: "Arrived", icon: "building" },
+                      { stage: "Delivered", icon: "check" },
+                    ] as const
+                  ).map(({ stage, icon }, index) => {
+                    const current = [
+                      "In Transit",
+                      "Arrived",
+                      "Delivered",
+                    ].indexOf(cargo.status);
+                    const active = cargo.status !== "Claim" && index <= current;
+                    const done = cargo.status !== "Claim" && index < current;
+                    return (
+                      <div
+                        key={stage}
+                        className={`${active ? "active" : ""} ${
+                          done ? "done" : ""
+                        }`.trim()}
+                      >
+                        <i>
+                          {done ? (
+                            <Icon name="check" size={18} />
+                          ) : (
+                            <Icon name={icon} size={18} />
+                          )}
+                        </i>
+                        <span>{stage}</span>
+                      </div>
+                    );
+                  })}
                 </div>
                 {cargo.status === "Claim" && (
                   <div className="claim-alert">
@@ -12012,54 +12182,101 @@ function Tracking({
                     <span>Please contact the agency office for an update.</span>
                   </div>
                 )}
-                <div className="tracking-details">
+                <div className="tracking-details tracking-details-pro">
                   <div>
-                    <span>Received</span>
-                    <strong>{dateLabel(cargo.dateIn)}</strong>
+                    <span className="td-chip">
+                      <Icon name="calendar" size={18} />
+                    </span>
+                    <div>
+                      <small>Received</small>
+                      <strong>{dateLabel(cargo.dateIn)}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Sender</span>
-                    <strong>{cargo.sender}</strong>
+                    <span className="td-chip">
+                      <Icon name="user" size={18} />
+                    </span>
+                    <div>
+                      <small>Sender</small>
+                      <strong>{cargo.sender}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Receiver</span>
-                    <strong>{cargo.receiver}</strong>
+                    <span className="td-chip">
+                      <Icon name="users" size={18} />
+                    </span>
+                    <div>
+                      <small>Receiver</small>
+                      <strong>{cargo.receiver}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Contents</span>
-                    <strong>{cargo.contents}</strong>
+                    <span className="td-chip">
+                      <Icon name="box" size={18} />
+                    </span>
+                    <div>
+                      <small>Contents</small>
+                      <strong>{cargo.contents}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Weight</span>
-                    <strong>{cargo.weight} kg</strong>
+                    <span className="td-chip">
+                      <Icon name="briefcase" size={18} />
+                    </span>
+                    <div>
+                      <small>Weight</small>
+                      <strong>{cargo.weight} kg</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Delivered</span>
-                    <strong>{dateLabel(cargo.dateDelivered)}</strong>
+                    <span className="td-chip">
+                      <Icon name="check" size={18} />
+                    </span>
+                    <div>
+                      <small>Delivered</small>
+                      <strong>{dateLabel(cargo.dateDelivered)}</strong>
+                    </div>
                   </div>
                 </div>
               </>
             )}
             {visa && (
               <>
-                <div className="status-track visa-status-track">
-                  {(["submitted", "approved", "delivered"] as const).map(
-                    (stage, index) => {
-                      const active =
-                        visa.status !== "refused" &&
-                        index <=
-                          ["submitted", "approved", "delivered"].indexOf(
-                            visa.status as
-                              "submitted" | "approved" | "delivered",
-                          );
-                      return (
-                        <div key={stage} className={active ? "active" : ""}>
-                          <i>{active ? "✓" : index + 1}</i>
-                          <span>{serviceStatusLabel(stage)}</span>
-                        </div>
-                      );
-                    },
-                  )}
+                <div className="status-track status-track-pro visa-status-track">
+                  {(
+                    [
+                      { stage: "submitted", icon: "file" },
+                      { stage: "approved", icon: "check" },
+                      { stage: "delivered", icon: "passport" },
+                    ] as const
+                  ).map(({ stage, icon }, index) => {
+                    const current = [
+                      "submitted",
+                      "approved",
+                      "delivered",
+                    ].indexOf(
+                      visa.status as "submitted" | "approved" | "delivered",
+                    );
+                    const active = visa.status !== "refused" && index <= current;
+                    const done = visa.status !== "refused" && index < current;
+                    return (
+                      <div
+                        key={stage}
+                        className={`${active ? "active" : ""} ${
+                          done ? "done" : ""
+                        }`.trim()}
+                      >
+                        <i>
+                          {done ? (
+                            <Icon name="check" size={18} />
+                          ) : (
+                            <Icon name={icon} size={18} />
+                          )}
+                        </i>
+                        <span>{serviceStatusLabel(stage)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
                 {visa.status === "refused" && (
                   <div className="claim-alert">
@@ -12070,32 +12287,62 @@ function Tracking({
                     </span>
                   </div>
                 )}
-                <div className="tracking-details">
+                <div className="tracking-details tracking-details-pro">
                   <div>
-                    <span>Application date</span>
-                    <strong>{dateLabel(visa.appDate)}</strong>
+                    <span className="td-chip">
+                      <Icon name="calendar" size={18} />
+                    </span>
+                    <div>
+                      <small>Application date</small>
+                      <strong>{dateLabel(visa.appDate)}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Applicant</span>
-                    <strong>{visa.applicant}</strong>
+                    <span className="td-chip">
+                      <Icon name="user" size={18} />
+                    </span>
+                    <div>
+                      <small>Applicant</small>
+                      <strong>{visa.applicant}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Destination</span>
-                    <strong>{visa.destination}</strong>
+                    <span className="td-chip">
+                      <Icon name="globe" size={18} />
+                    </span>
+                    <div>
+                      <small>Destination</small>
+                      <strong>{visa.destination}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Application type</span>
-                    <strong>{visa.visaType || "Visa application"}</strong>
+                    <span className="td-chip">
+                      <Icon name="passport" size={18} />
+                    </span>
+                    <div>
+                      <small>Application type</small>
+                      <strong>{visa.visaType || "Visa application"}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Office</span>
-                    <strong>
-                      <BranchName data={data} branch={visa.office} />
-                    </strong>
+                    <span className="td-chip">
+                      <Icon name="building" size={18} />
+                    </span>
+                    <div>
+                      <small>Office</small>
+                      <strong>
+                        <BranchName data={data} branch={visa.office} />
+                      </strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Email</span>
-                    <strong>{visa.email || "Not recorded"}</strong>
+                    <span className="td-chip">
+                      <Icon name="mail" size={18} />
+                    </span>
+                    <div>
+                      <small>Email</small>
+                      <strong>{visa.email || "Not recorded"}</strong>
+                    </div>
                   </div>
                 </div>
               </>
