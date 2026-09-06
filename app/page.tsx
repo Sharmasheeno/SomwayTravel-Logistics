@@ -900,6 +900,12 @@ function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
   const logo = logoUrl
     ? `<img class="brand" src="${esc(logoUrl)}" alt="${esc(receipt.agencyName)}" />`
     : `<div class="brand brand-fallback">SW</div>`;
+  // The primary logo already contains the "SomWay Travel & Logistics" wordmark,
+  // so avoid repeating the name next to it; only show the branch subtitle. When
+  // no logo is supplied (fallback chip), keep the text name.
+  const heading = logoUrl
+    ? `<div><p>Nairobi &middot; Mogadishu</p></div>`
+    : `<div><h1>${esc(receipt.agencyName)}</h1><p>Nairobi &middot; Mogadishu</p></div>`;
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -914,12 +920,12 @@ function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
   .sheet { max-width: 640px; margin: 26px auto; background: #fff;
     border: 1px solid var(--line); border-radius: 6px; padding: 40px 46px;
     box-shadow: 0 18px 44px rgba(3,23,53,.10); }
-  header { display: grid; grid-template-columns: 72px 1fr auto; align-items: center;
-    gap: 16px; padding-bottom: 22px; border-bottom: 2px solid var(--green); }
-  .brand { width: 72px; height: 72px; border-radius: 14px; object-fit: contain;
-    background: #fff; padding: 4px; }
-  .brand-fallback { display: grid; place-items: center; background: var(--green);
-    color: #fff; font: 700 28px/1 Georgia, serif; padding: 0; }
+  header { display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+    gap: 18px; padding-bottom: 22px; border-bottom: 2px solid var(--green); }
+  .brand { width: 210px; max-width: 46vw; height: auto; border-radius: 12px;
+    object-fit: contain; background: #000; padding: 12px 16px; display: block; }
+  .brand-fallback { width: 72px; height: 72px; display: grid; place-items: center;
+    background: var(--green); color: #fff; font: 700 28px/1 Georgia, serif; padding: 0; }
   h1 { font: 500 21px/1.15 Georgia, serif; color: var(--green); margin: 0; }
   header p { font-size: 10px; color: var(--muted); margin: 4px 0 0; }
   .tag { align-self: start; padding: 6px 12px; border-radius: 999px;
@@ -962,7 +968,7 @@ function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
   <div class="sheet">
     <header>
       ${logo}
-      <div><h1>${esc(receipt.agencyName)}</h1><p>Nairobi &middot; Mogadishu</p></div>
+      ${heading}
       <span class="tag">Receipt</span>
     </header>
     <div class="ref"><span>Receipt number</span><strong>${esc(receipt.ref)}</strong></div>
@@ -5790,7 +5796,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                                   x.paymentMethod,
                                 ),
                               ),
-                              "/somway-mark.png",
+                              "/somway-primary-logo.png",
                             )
                           }
                         >
@@ -6487,7 +6493,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                                 "Agency team",
                               paidViaLabel(data, "cargo", x.id, x.paymentMethod),
                             ),
-                            "/somway-mark.png",
+                            "/somway-primary-logo.png",
                           )
                         }
                       >
@@ -7889,7 +7895,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                                 data.agencyName,
                                 paidViaLabel(data, "visa", x.id, x.paymentMethod),
                               ),
-                              "/somway-mark.png",
+                              "/somway-primary-logo.png",
                             )
                           }
                         >
