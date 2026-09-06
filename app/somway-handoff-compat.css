@@ -1839,6 +1839,23 @@ h6,
     flex: 1 1 0;
     min-height: 44px;
   }
+  /* Text action buttons ("Receive Payment", cargo status transitions like
+     "Dispatch") carry white-space: nowrap. With flex: 1 1 0 every button was
+     forced to an equal ~25% share, so a long label could not shrink and spilled
+     out past its own background pill. Let the row wrap and give the labelled
+     text buttons their own full-width row so the label always sits inside the
+     pill; the compact icon buttons (aria-label) keep sharing a row. */
+  .table-wrap .row-actions {
+    flex-wrap: wrap;
+  }
+  .table-wrap .row-actions > button:not([aria-label]) {
+    flex: 1 1 100%;
+    min-width: 0;
+    padding: 0 12px;
+  }
+  .table-wrap .row-actions > button[aria-label] {
+    flex: 1 1 0;
+  }
   /* The buttons stretch to the full card width on a phone, so a 16px glyph
      is lost in a wide box. Scale the icon up to match the larger tap target. */
   .table-wrap .row-actions button svg {
