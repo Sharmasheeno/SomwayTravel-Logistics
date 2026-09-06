@@ -60,7 +60,7 @@ export const toPlain = (doc) => {
 const moneyRound = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
 export const defaultAgencyData = {
-  agencyName: "Macruf Travel and Cargo Agency",
+  agencyName: "SomWay Travel & Logistics",
   users: [],
   tickets: [],
   cargo: [],

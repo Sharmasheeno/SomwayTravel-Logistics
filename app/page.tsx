@@ -5790,7 +5790,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                                   x.paymentMethod,
                                 ),
                               ),
-                              "/macruf-mark.svg",
+                              "/somway-mark.png",
                             )
                           }
                         >
@@ -6487,7 +6487,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                                 "Agency team",
                               paidViaLabel(data, "cargo", x.id, x.paymentMethod),
                             ),
-                            "/macruf-mark.svg",
+                            "/somway-mark.png",
                           )
                         }
                       >
@@ -7889,7 +7889,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                                 data.agencyName,
                                 paidViaLabel(data, "visa", x.id, x.paymentMethod),
                               ),
-                              "/macruf-mark.svg",
+                              "/somway-mark.png",
                             )
                           }
                         >

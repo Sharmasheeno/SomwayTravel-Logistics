@@ -85,7 +85,7 @@ export const createBusinessBackup = async () => {
       schemaVersion: BACKUP_SCHEMA_VERSION,
       createdAt: new Date().toISOString(),
       agency: {
-        name: settings?.agencyName || "Macruf Travel and Cargo Agency",
+        name: settings?.agencyName || "SomWay Travel & Logistics",
       },
       collections,
       excludes: ["users", "sessions", "passwords", "tokens", "secrets"],

@@ -46,7 +46,7 @@ router.get("/settings", requireOwner, async (_req, res) => {
   const settings = await AgencySettings.findOne({ key: "singleton" }).lean();
   return res.json({
     settings: {
-      agencyName: settings?.agencyName || "Macruf Travel and Cargo Agency",
+      agencyName: settings?.agencyName || "SomWay Travel & Logistics",
       timezone: settings?.timezone || "Africa/Mogadishu",
       businessDayStart: settings?.businessDayStart || "07:00",
       businessDayEnd: settings?.businessDayEnd || "18:00",
@@ -59,7 +59,7 @@ router.patch("/settings", requireOwner, async (req, res) => {
   const agencyName = String(
     req.body?.agencyName ||
       current?.agencyName ||
-      "Macruf Travel and Cargo Agency",
+      "SomWay Travel & Logistics",
   ).trim();
   if (agencyName.length < 3 || agencyName.length > 120) {
     return res.status(400).json({
