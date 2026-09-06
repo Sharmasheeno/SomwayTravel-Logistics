@@ -914,11 +914,12 @@ function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
   .sheet { max-width: 640px; margin: 26px auto; background: #fff;
     border: 1px solid var(--line); border-radius: 6px; padding: 40px 46px;
     box-shadow: 0 18px 44px rgba(3,23,53,.10); }
-  header { display: grid; grid-template-columns: 46px 1fr auto; align-items: center;
-    gap: 14px; padding-bottom: 22px; border-bottom: 2px solid var(--green); }
-  .brand { width: 46px; height: 46px; border-radius: 12px; object-fit: contain; }
+  header { display: grid; grid-template-columns: 72px 1fr auto; align-items: center;
+    gap: 16px; padding-bottom: 22px; border-bottom: 2px solid var(--green); }
+  .brand { width: 72px; height: 72px; border-radius: 14px; object-fit: contain;
+    background: #fff; padding: 4px; }
   .brand-fallback { display: grid; place-items: center; background: var(--green);
-    color: #fff; font: 700 20px/1 Georgia, serif; }
+    color: #fff; font: 700 28px/1 Georgia, serif; padding: 0; }
   h1 { font: 500 21px/1.15 Georgia, serif; color: var(--green); margin: 0; }
   header p { font-size: 10px; color: var(--muted); margin: 4px 0 0; }
   .tag { align-self: start; padding: 6px 12px; border-radius: 999px;
@@ -1013,9 +1014,41 @@ function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 // Turn a ticket register row into receipt data for the one-click generator.
+// Resolve the "Paid via" label from the actual recorded customer payments for a
+// transaction, rather than the record's own paymentMethod field (which is often
+// blank on cargo). Falls back to the record field, then to an em dash.
+function paidViaLabel(
+  data: AgencyData,
+  type: "ticket" | "visa" | "cargo",
+  id: string,
+  fallback?: string,
+): string {
+  const active = data.payments.filter(
+    (p) =>
+      p.transactionType === type &&
+      p.transactionId === id &&
+      p.status !== "void",
+  );
+  const names = Array.from(
+    new Set(
+      active
+        .map((p) => {
+          const cfg = p.paymentMethodId
+            ? data.paymentMethods.find((m) => m.id === p.paymentMethodId)
+            : undefined;
+          return (cfg?.name || String(p.paymentMethod || "")).trim();
+        })
+        .filter(Boolean),
+    ),
+  );
+  if (names.length) return names.join(", ");
+  const clean = String(fallback || "").trim();
+  return clean && clean !== "—" ? clean : "—";
+}
 function ticketReceiptData(
   ticket: Ticket,
   agencyName: string,
+  method?: string,
 ): ReceiptData {
   const amountValue = ticket.amount || 0;
   const paid = ticket.amountPaid || 0;
@@ -1026,7 +1059,7 @@ function ticketReceiptData(
     client: ticket.passenger,
     description: `Flight ${ticket.route}${ticket.airlinePnr ? ` · ${ticket.airlinePnr}` : ""}`,
     branch: ticket.office,
-    method: ticket.paymentMethod,
+    method: method ?? ticket.paymentMethod,
     paymentStatus: ticket.paymentStatus || (ticket.paid ? "paid" : "unpaid"),
     serviceStatus: ticket.status || "booked",
     amount: amountValue,
@@ -1041,7 +1074,11 @@ function ticketReceiptData(
   };
 }
 // Turn a visa register row into receipt data for the one-click generator.
-function visaReceiptData(visa: Visa, agencyName: string): ReceiptData {
+function visaReceiptData(
+  visa: Visa,
+  agencyName: string,
+  method?: string,
+): ReceiptData {
   const amountValue = visa.amount || 0;
   const paid = visa.amountPaid || 0;
   return {
@@ -1051,7 +1088,7 @@ function visaReceiptData(visa: Visa, agencyName: string): ReceiptData {
     client: visa.applicant,
     description: `${visa.visaType} visa · ${visa.destination}`,
     branch: visa.office,
-    method: visa.paymentMethod,
+    method: method ?? visa.paymentMethod,
     paymentStatus: visa.paymentStatus || (visa.paid ? "paid" : "unpaid"),
     serviceStatus: visa.status || "submitted",
     amount: amountValue,
@@ -1070,6 +1107,7 @@ function cargoReceiptData(
   cargo: Cargo,
   agencyName: string,
   servedBy: string,
+  method?: string,
 ): ReceiptData {
   const amountValue =
     cargo.customerCharge ?? (cargo.weight || 0) * (cargo.rate || 0);
@@ -1084,7 +1122,7 @@ function cargoReceiptData(
         : cargo.sender,
     description: `Cargo ${cargo.origin} → ${cargo.destination} · ${cargo.weight} kg @ ${money(cargo.rate || 0, cargo.currency)} / kg`,
     branch: cargo.paidByOffice || cargo.origin,
-    method: cargo.paymentMethod || "—",
+    method: method ?? cargo.paymentMethod ?? "—",
     paymentStatus: cargo.paymentStatus || (cargo.paid ? "paid" : "unpaid"),
     serviceStatus: cargoStatusLabel(cargo.status),
     amount: amountValue,
@@ -5742,8 +5780,17 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                           aria-label={`Generate receipt for ${x.ref}`}
                           onClick={() =>
                             generateReceipt(
-                              ticketReceiptData(x, data.agencyName),
-                              "/somway-primary-logo-alpha.png",
+                              ticketReceiptData(
+                                x,
+                                data.agencyName,
+                                paidViaLabel(
+                                  data,
+                                  "ticket",
+                                  x.id,
+                                  x.paymentMethod,
+                                ),
+                              ),
+                              "/macruf-mark.svg",
                             )
                           }
                         >
@@ -6438,8 +6485,9 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                               data.agencyName,
                               data.users.find((u) => u.id === x.createdBy)?.name ||
                                 "Agency team",
+                              paidViaLabel(data, "cargo", x.id, x.paymentMethod),
                             ),
-                            "/somway-primary-logo-alpha.png",
+                            "/macruf-mark.svg",
                           )
                         }
                       >
@@ -7836,8 +7884,12 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                           aria-label={`Generate receipt for ${x.ref}`}
                           onClick={() =>
                             generateReceipt(
-                              visaReceiptData(x, data.agencyName),
-                              "/somway-primary-logo-alpha.png",
+                              visaReceiptData(
+                                x,
+                                data.agencyName,
+                                paidViaLabel(data, "visa", x.id, x.paymentMethod),
+                              ),
+                              "/macruf-mark.svg",
                             )
                           }
                         >
