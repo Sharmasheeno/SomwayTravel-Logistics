@@ -1040,6 +1040,64 @@ function ticketReceiptData(
     kind: "ticket",
   };
 }
+// Turn a visa register row into receipt data for the one-click generator.
+function visaReceiptData(visa: Visa, agencyName: string): ReceiptData {
+  const amountValue = visa.amount || 0;
+  const paid = visa.amountPaid || 0;
+  return {
+    agencyName,
+    ref: visa.ref,
+    date: visa.appDate,
+    client: visa.applicant,
+    description: `${visa.visaType} visa · ${visa.destination}`,
+    branch: visa.office,
+    method: visa.paymentMethod,
+    paymentStatus: visa.paymentStatus || (visa.paid ? "paid" : "unpaid"),
+    serviceStatus: visa.status || "submitted",
+    amount: amountValue,
+    cost: visa.cost,
+    profit: amountValue - (visa.cost || 0),
+    amountPaid: paid,
+    balance: visa.balance ?? Math.max(0, amountValue - paid),
+    currency: visa.currency,
+    served: visa.servedBy || "Agency team",
+    notes: visa.notes,
+    kind: "visa",
+  };
+}
+// Turn a cargo register row into receipt data for the one-click generator.
+function cargoReceiptData(
+  cargo: Cargo,
+  agencyName: string,
+  servedBy: string,
+): ReceiptData {
+  const amountValue =
+    cargo.customerCharge ?? (cargo.weight || 0) * (cargo.rate || 0);
+  const paid = cargo.amountPaid || 0;
+  return {
+    agencyName,
+    ref: cargo.tracking,
+    date: cargo.dateIn,
+    client:
+      cargo.paymentResponsibility === "receiver"
+        ? cargo.receiver
+        : cargo.sender,
+    description: `Cargo ${cargo.origin} → ${cargo.destination} · ${cargo.weight} kg @ ${money(cargo.rate || 0, cargo.currency)} / kg`,
+    branch: cargo.paidByOffice || cargo.origin,
+    method: cargo.paymentMethod || "—",
+    paymentStatus: cargo.paymentStatus || (cargo.paid ? "paid" : "unpaid"),
+    serviceStatus: cargoStatusLabel(cargo.status),
+    amount: amountValue,
+    cost: cargo.cost,
+    profit: amountValue - (cargo.cost || 0),
+    amountPaid: paid,
+    balance: cargo.balance ?? Math.max(0, amountValue - paid),
+    currency: cargo.currency,
+    served: servedBy || "Agency team",
+    notes: cargo.notes,
+    kind: "cargo",
+  };
+}
 function Icon({ name, size = 18 }: { name: string; size?: number }) {
   return <SomwayIcon name={name} size={size} />;
 
@@ -6361,10 +6419,34 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
               return (
                 <tr key={x.id}>
                   <td>
-                    <button type="button" className="text-button" onClick={() => setDetails(x)}>
-                      <strong>{x.tracking}</strong>
-                    </button>
-                    <small>{dateLabel(x.dateIn)}</small>
+                    <div className="ref-cell">
+                      <div className="ref-cell-text">
+                        <button type="button" className="text-button" onClick={() => setDetails(x)}>
+                          <strong>{x.tracking}</strong>
+                        </button>
+                        <small>{dateLabel(x.dateIn)}</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="receipt-chip"
+                        title={`Generate receipt for ${x.tracking}`}
+                        aria-label={`Generate receipt for ${x.tracking}`}
+                        onClick={() =>
+                          generateReceipt(
+                            cargoReceiptData(
+                              x,
+                              data.agencyName,
+                              data.users.find((u) => u.id === x.createdBy)?.name ||
+                                "Agency team",
+                            ),
+                            "/somway-primary-logo-alpha.png",
+                          )
+                        }
+                      >
+                        <Icon name="receipt" size={14} />
+                        <span>Receipt</span>
+                      </button>
+                    </div>
                   </td>
                   <td>
                     <span className="route-inline">
@@ -7741,8 +7823,29 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
               return (
                 <tr key={x.id}>
                   <td>
-                    <strong>{x.ref}</strong>
-                    <small>{dateLabel(x.appDate)}</small>
+                    <div className="ref-cell">
+                      <div className="ref-cell-text">
+                        <strong>{x.ref}</strong>
+                        <small>{dateLabel(x.appDate)}</small>
+                      </div>
+                      {x.type !== "Refund" && (
+                        <button
+                          type="button"
+                          className="receipt-chip"
+                          title={`Generate receipt for ${x.ref}`}
+                          aria-label={`Generate receipt for ${x.ref}`}
+                          onClick={() =>
+                            generateReceipt(
+                              visaReceiptData(x, data.agencyName),
+                              "/somway-primary-logo-alpha.png",
+                            )
+                          }
+                        >
+                          <Icon name="receipt" size={14} />
+                          <span>Receipt</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td>
                     {x.applicant}
