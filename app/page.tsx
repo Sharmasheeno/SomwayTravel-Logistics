@@ -922,8 +922,8 @@ function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
     box-shadow: 0 18px 44px rgba(3,23,53,.10); }
   header { display: grid; grid-template-columns: auto 1fr auto; align-items: center;
     gap: 18px; padding-bottom: 22px; border-bottom: 2px solid var(--green); }
-  .brand { width: 210px; max-width: 46vw; height: auto; border-radius: 12px;
-    object-fit: contain; background: #000; padding: 12px 16px; display: block; }
+  .brand { width: 150px; max-width: 40vw; height: auto; border-radius: 10px;
+    object-fit: contain; background: #000; padding: 8px 11px; display: block; }
   .brand-fallback { width: 72px; height: 72px; display: grid; place-items: center;
     background: var(--green); color: #fff; font: 700 28px/1 Georgia, serif; padding: 0; }
   h1 { font: 500 21px/1.15 Georgia, serif; color: var(--green); margin: 0; }
