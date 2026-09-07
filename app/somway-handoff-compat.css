@@ -3712,13 +3712,37 @@ h3 .branch-inline .branch-flag {
   white-space: nowrap;
 }
 
-/* On phones the 118px min-width plus the card's padding pushed the Suspend /
-   Reset password / Copy link row wider than the card, so the buttons spilled
-   past its right edge (and Copy link stranded on its own line). Lay the action
-   group out as a deterministic 2-column grid that spans the whole card:
-   Suspend + Reset password share row 1, Copy link takes a full-width row 2.
-   !important guards these against the several other .team-actions rules. */
+/* The real overflow on phones was the CARD (article) itself, not just the
+   buttons: its grid kept fixed-width columns (130px / minmax(250px,auto)) plus
+   a 1fr column that expanded to fit the long email address, forcing the whole
+   card wider than the viewport — so the action row that spans it spilled off
+   the right edge too. Collapse the card to a safe stacked layout that stays
+   inside the screen, let long text wrap, and lay the actions out as a
+   deterministic 2-column grid. !important guards against the other rules. */
 @media (max-width: 767px) {
+  .team-list article {
+    grid-template-columns: 42px minmax(0, 1fr) !important;
+    grid-auto-rows: min-content;
+    row-gap: 8px !important;
+  }
+  /* Name / email block: never let the email force the card wider. */
+  .team-list article > div:nth-child(2) {
+    min-width: 0;
+  }
+  .team-list article > div:nth-child(2) > span {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  /* Status badge sits next to the name block (column 3 of the source order). */
+  .team-list article > .badge,
+  .team-list article > span:not(.role-name) {
+    justify-self: start;
+  }
+  /* Role line spans the full width under the avatar/name. */
+  .team-list .role-name {
+    grid-column: 1 / -1 !important;
+  }
+  /* Action buttons: full-width 2-col grid inside the card. */
   .team-list article > .team-actions {
     grid-column: 1 / -1 !important;
     width: 100% !important;
@@ -3726,6 +3750,7 @@ h3 .branch-inline .branch-flag {
     grid-template-columns: 1fr 1fr !important;
     align-items: stretch;
     gap: 8px !important;
+    margin-top: 2px;
   }
   .team-list article > .team-actions > button {
     min-width: 0 !important;
