@@ -6630,6 +6630,7 @@ th {
   justify-content: center;
   gap: 6px;
   min-height: 34px;
+  height: 34px;
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -6645,10 +6646,15 @@ th {
 .record-actions .small-icon:hover {
   filter: brightness(0.96);
 }
-/* Match the receipt chip's height to the other action chips so nothing looks
-   taller or shorter than its neighbours in the row. */
+/* Match the receipt chip to the other action chips inside a record card so it
+   is not an oversized rounded pill around small text. Same rectangular shape,
+   height, padding and centred content as the "Full details" chip. */
 .record-actions .receipt-chip {
   min-height: 34px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  justify-content: center;
 }
 /* The trailing icon/text buttons (Receive Payment, status transitions, edit,
    cancel, delete) share one wrapping group; let it flow to a new line and take
