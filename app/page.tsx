@@ -13349,8 +13349,40 @@ function Team({ data, user, notify }: ModuleProps) {
       });
   };
   const copy = async (value: string, label: string) => {
-    await navigator.clipboard.writeText(value);
-    notify(`${label} copied`);
+    // navigator.clipboard only exists in a secure context (HTTPS or localhost).
+    // The app is also served over plain HTTP (e.g. http://169.58.173.197:8080),
+    // where navigator.clipboard is undefined and copying silently failed. Try
+    // the async Clipboard API first, then fall back to a hidden textarea +
+    // document.execCommand("copy"), which works over HTTP too.
+    let ok = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+        ok = true;
+      }
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      try {
+        const area = document.createElement("textarea");
+        area.value = value;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.top = "0";
+        area.style.left = "0";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        area.setSelectionRange(0, value.length);
+        ok = document.execCommand("copy");
+        document.body.removeChild(area);
+      } catch {
+        ok = false;
+      }
+    }
+    notify(ok ? `${label} copied` : `Could not copy ${label} — copy it manually`);
   };
   return (
     <>
