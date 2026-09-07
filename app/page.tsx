@@ -1464,14 +1464,14 @@ function BrandMark({ className = "" }: { className?: string }) {
   return (
     <img
       className={`brand-mark ${className}`.trim()}
-      src="/somway-primary-logo-alpha.png"
+      src="/Som-way.png"
       alt="SomWay Travel & Logistics"
     />
   );
 }
 function BrandLogo({
   className = "",
-  src = "/somway-primary-logo-alpha.png",
+  src = "/Som-way.png",
 }: {
   className?: string;
   src?: string;
@@ -3316,7 +3316,7 @@ export default function Home() {
   if (!ready)
     return (
       <main className="loading-screen">
-        <BrandLogo className="loading-brand-logo" src="/somway-primary-logo-white.png" />
+        <BrandLogo className="loading-brand-logo" src="/Som-way.png" />
         <p>Preparing your agency workspace…</p>
       </main>
     );
@@ -3485,7 +3485,7 @@ export default function Home() {
     <div className={`app-shell ${navCollapsed ? "nav-collapsed" : ""}`}>
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
         <div className="brand-lockup sidebar-brand">
-          <BrandLogo className="sidebar-logo" src="/somway-primary-logo-white.png" />
+          <BrandLogo className="sidebar-logo" src="/Som-way.png" />
         </div>
         <nav>
           {nav.map((item) => (
@@ -4446,7 +4446,7 @@ function Login({
           ← Public website
         </a>
         <div className="brand light">
-          <BrandLogo className="auth-brand-logo" src="/somway-primary-logo-white.png" />
+          <BrandLogo className="auth-brand-logo" src="/Som-way.png" />
         </div>
         <div className="story-copy">
           <p className="eyebrow">Welcome back</p>
@@ -4514,7 +4514,7 @@ function AuthMessage({ title, detail }: { title: string; detail: string }) {
           ← Public website
         </a>
         <div className="brand light">
-          <BrandLogo className="auth-brand-logo" src="/somway-primary-logo-white.png" />
+          <BrandLogo className="auth-brand-logo" src="/Som-way.png" />
         </div>
         <div className="story-copy">
           <p className="eyebrow">Protected workspace</p>
@@ -6151,7 +6151,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                               data.agencyName,
                               paidViaLabel(data, "ticket", x.id, x.paymentMethod),
                             ),
-                            "/somway-primary-logo.png",
+                            "/Som-way.png",
                           )
                         }
                       >
@@ -6840,7 +6840,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                               "Agency team",
                             paidViaLabel(data, "cargo", x.id, x.paymentMethod),
                           ),
-                          "/somway-primary-logo.png",
+                          "/Som-way.png",
                         )
                       }
                     >
@@ -8337,7 +8337,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                               data.agencyName,
                               paidViaLabel(data, "visa", x.id, x.paymentMethod),
                             ),
-                            "/somway-primary-logo.png",
+                            "/Som-way.png",
                           )
                         }
                       >
@@ -12296,7 +12296,7 @@ function Tracking({
           ["Weight", `${cargo.weight} kg`],
           ["Delivered", dateLabel(cargo.dateDelivered)],
         ],
-        logoUrl: "/somway-primary-logo.png",
+        logoUrl: "/Som-way.png",
       });
     if (visa)
       generateStatusSheet({
@@ -12319,7 +12319,7 @@ function Tracking({
           ["Application type", visa.visaType || "Visa application"],
           ["Office", String(visa.office)],
         ],
-        logoUrl: "/somway-primary-logo.png",
+        logoUrl: "/Som-way.png",
       });
   };
   const email = async () => {

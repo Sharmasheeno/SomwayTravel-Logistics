@@ -585,6 +585,9 @@ h6,
   object-fit: contain;
   object-position: left center;
   filter: none;
+  /* Redesigned logo carries its own dark navy ground; round the corners so it
+     reads as a tidy badge on the light header/footer. */
+  border-radius: 12px;
 }
 
 .public-footer .public-logo-lockup .public-footer-logo {
@@ -627,11 +630,11 @@ h6,
   width: auto;
   height: clamp(72px, 22vw, 104px);
   max-width: 40vw;
-  padding: 2px 0;
+  padding: 0;
   background: transparent;
   object-fit: contain;
   object-position: left center;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 @media (max-width: 590px) {
