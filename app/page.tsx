@@ -1483,16 +1483,52 @@ function Field({
   label,
   children,
   wide = false,
+  icon,
 }: {
   label: string;
   children: ReactNode;
   wide?: boolean;
+  /** Optional leading glyph shown inside the control, matching the design. */
+  icon?: string;
 }) {
   return (
     <label className={`field ${wide ? "wide" : ""}`}>
       <span>{label}</span>
-      <div className="field-control">{children}</div>
+      <div className={`field-control${icon ? " has-icon" : ""}`}>
+        {icon && (
+          <span className="field-icon" aria-hidden="true">
+            <Icon name={icon} size={15} />
+          </span>
+        )}
+        {children}
+      </div>
     </label>
+  );
+}
+// A titled group of form fields with a small icon header, matching the
+// "SHIPMENT DETAILS / CONTACT DETAILS / PRICING" card sections in the design.
+// Purely presentational: it wraps the existing fields, changing no logic.
+function FormSection({
+  icon,
+  title,
+  children,
+  className = "",
+}: {
+  icon: string;
+  title: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`form-section ${className}`.trim()}>
+      <header className="form-section-head">
+        <span className="form-section-icon" aria-hidden="true">
+          <Icon name={icon} size={15} />
+        </span>
+        <h4>{title}</h4>
+      </header>
+      <div className="form-grid">{children}</div>
+    </section>
   );
 }
 function PasswordInput({
@@ -6287,30 +6323,38 @@ function TicketForm({
       subtitle="Required fields are marked by their labels."
       onClose={onClose}
       side={
-        <div>
-          <h3>Profit Summary</h3>
-          <div className="summary-eq">
-            <span className="muted">Sale Amount</span>
-            <div className="big">{money(Number(f.amount) || 0, f.currency as Currency)}</div>
-            <div className="muted">minus</div>
-            <span className="muted">Agency Cost</span>
-            <div className="big">{money(Number(f.cost) || 0, f.currency as Currency)}</div>
-            <hr />
-            <span className="muted">Gross Profit</span>
-            <div className="big green">
+        <div className="form-summary-card">
+          <p className="summary-eyebrow">Profit Summary</p>
+          <div className="form-summary-row">
+            <span>Sale Amount</span>
+            <strong>{money(Number(f.amount) || 0, f.currency as Currency)}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-row">
+            <span>Agency Cost</span>
+            <strong>{money(Number(f.cost) || 0, f.currency as Currency)}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-total green">
+            <span>Gross Profit</span>
+            <strong>
               {money(
                 f.type === "Refund"
                   ? -(Number(f.amount) || 0)
                   : (Number(f.amount) || 0) - (Number(f.cost) || 0),
                 f.currency as Currency,
               )}
-            </div>
+            </strong>
           </div>
+          <p className="form-summary-note">
+            Gross Profit = Sale Amount − Agency Cost. Values update
+            automatically.
+          </p>
         </div>
       }
     >
       <form className="modal-form" onSubmit={submit}>
-        <div className="form-grid">
+        <FormSection icon="ticket" title="Booking Details">
           <Field label="Branch">
             <BranchSelect
               options={branches}
@@ -6345,7 +6389,7 @@ function TicketForm({
               <option>Refund</option>
             </select>
           </Field>
-          <Field label="Sale date">
+          <Field label="Sale date" icon="calendar">
             <input
               required
               type="date"
@@ -6353,28 +6397,32 @@ function TicketForm({
               onChange={(e) => setF({ ...f, saleDate: e.target.value })}
             />
           </Field>
-          <Field label="Travel date">
+          <Field label="Travel date" icon="calendar">
             <input
               type="date"
               value={f.travelDate}
               onChange={(e) => setF({ ...f, travelDate: e.target.value })}
             />
           </Field>
-          <Field label="Passenger name">
+        </FormSection>
+        <FormSection icon="user" title="Passenger & Route">
+          <Field label="Passenger name" icon="user">
             <input
               required
+              placeholder="Enter passenger name"
               value={f.passenger}
               onChange={(e) => setF({ ...f, passenger: e.target.value })}
             />
           </Field>
-          <Field label="Phone">
+          <Field label="Phone" icon="phone">
             <input
               required
+              placeholder="Enter phone number"
               value={f.phone}
               onChange={(e) => setF({ ...f, phone: e.target.value })}
             />
           </Field>
-          <Field label="From">
+          <Field label="From" icon="plane">
             <input
               required
               placeholder="NBO–DXB"
@@ -6382,13 +6430,16 @@ function TicketForm({
               onChange={(e) => setF({ ...f, route: e.target.value })}
             />
           </Field>
-          <Field label="To">
+          <Field label="To" icon="plane">
             <input
+              placeholder="Enter destination"
               value={f.airlinePnr}
               onChange={(e) => setF({ ...f, airlinePnr: e.target.value })}
             />
           </Field>
-          <Field label="Currency">
+        </FormSection>
+        <FormSection icon="money" title="Pricing & Payment">
+          <Field label="Currency" icon="money">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -6404,26 +6455,28 @@ function TicketForm({
               ))}
             </select>
           </Field>
-          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"}>
+          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"} icon="money">
             <input
               required
               min="0"
               type="number"
+              placeholder="Enter sale amount"
               value={f.amount}
               onChange={(e) => setF({ ...f, amount: e.target.value })}
             />
           </Field>
           {user.role === "owner" && f.type !== "Refund" && (
-            <Field label="Agency cost">
+            <Field label="Agency cost" icon="wallet">
               <input
                 min="0"
                 type="number"
+                placeholder="Enter agency cost"
                 value={f.cost}
                 onChange={(e) => setF({ ...f, cost: e.target.value })}
               />
             </Field>
           )}
-          <Field label="Payment method">
+          <Field label="Payment method" icon="wallet">
             <select
               required
               value={f.paymentMethod}
@@ -6436,13 +6489,14 @@ function TicketForm({
               ))}
             </select>
           </Field>
-          <Field label="Notes" wide>
+          <Field label="Notes" wide icon="edit">
             <textarea
+              placeholder="Add any notes (optional)"
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
-        </div>
+        </FormSection>
         <div className="modal-actions">
           <button type="button" className="button ghost" onClick={onClose}>
             Cancel
@@ -7196,9 +7250,31 @@ function CargoForm({
       title={current ? `Update ${current.tracking}` : "Create Cargo"}
       subtitle="Record the shipment, customer charge and customer responsible for payment."
       onClose={onClose}
+      side={
+        <div className="form-summary-card">
+          <p className="summary-eyebrow">Cargo Summary</p>
+          <div className="form-summary-row">
+            <span>Weight</span>
+            <strong>{f.weight ? `${f.weight} kg` : "— kg"}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-row">
+            <span>Rate per kg</span>
+            <strong>{f.rate ? money(Number(f.rate), f.currency as Currency) : "—"}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-total">
+            <span>Cargo Charge</span>
+            <strong>{money(shipmentValue, f.currency as Currency)}</strong>
+          </div>
+          <p className="form-summary-note">
+            Cargo Charge = Weight × Rate per kg. Values update automatically.
+          </p>
+        </div>
+      }
     >
       <form className="modal-form" onSubmit={submit}>
-        <div className="form-grid">
+        <FormSection icon="box" title="Shipment Details">
           <Field label="Origin branch">
             <BranchSelect
               options={originBranches}
@@ -7257,7 +7333,7 @@ function CargoForm({
               }
             />
           </Field>
-          <Field label="Date received">
+          <Field label="Date received" icon="calendar">
             <input
               required
               type="date"
@@ -7265,21 +7341,33 @@ function CargoForm({
               onChange={(e) => setF({ ...f, dateIn: e.target.value })}
             />
           </Field>
-          <Field label="Sender">
+          <Field label="Contents" icon="box">
             <input
               required
+              placeholder="e.g. Documents, Electronics, Apparel"
+              value={f.contents}
+              onChange={(e) => setF({ ...f, contents: e.target.value })}
+            />
+          </Field>
+        </FormSection>
+        <FormSection icon="user" title="Contact Details">
+          <Field label="Sender" icon="user">
+            <input
+              required
+              placeholder="Enter sender name"
               value={f.sender}
               onChange={(e) => setF({ ...f, sender: e.target.value })}
             />
           </Field>
-          <Field label="Sender phone">
+          <Field label="Sender phone" icon="phone">
             <input
               required
+              placeholder="Enter phone number"
               value={f.senderPhone}
               onChange={(e) => setF({ ...f, senderPhone: e.target.value })}
             />
           </Field>
-          <Field label="Sender email (optional, for status updates)">
+          <Field label="Sender email (optional, for status updates)" icon="mail">
             <input
               type="email"
               value={f.senderEmail}
@@ -7287,21 +7375,23 @@ function CargoForm({
               placeholder="client@example.com"
             />
           </Field>
-          <Field label="Receiver">
+          <Field label="Receiver" icon="user">
             <input
               required
+              placeholder="Enter receiver name"
               value={f.receiver}
               onChange={(e) => setF({ ...f, receiver: e.target.value })}
             />
           </Field>
-          <Field label="Receiver phone">
+          <Field label="Receiver phone" icon="phone">
             <input
               required={f.paymentResponsibility === "receiver"}
+              placeholder="Enter phone number"
               value={f.receiverPhone}
               onChange={(e) => setF({ ...f, receiverPhone: e.target.value })}
             />
           </Field>
-          <Field label="Customer responsible for payment">
+          <Field label="Customer responsible for payment" icon="user">
             <select
               required
               value={f.paymentResponsibility}
@@ -7317,24 +7407,20 @@ function CargoForm({
               <option value="receiver">Receiver</option>
             </select>
           </Field>
-          <Field label="Contents" wide>
-            <input
-              required
-              value={f.contents}
-              onChange={(e) => setF({ ...f, contents: e.target.value })}
-            />
-          </Field>
-          <Field label="Weight (kg)">
+        </FormSection>
+        <FormSection icon="money" title="Pricing">
+          <Field label="Weight (kg)" icon="box">
             <input
               required
               min="0"
               step="0.1"
               type="number"
+              placeholder="0.00"
               value={f.weight}
               onChange={(e) => setF({ ...f, weight: e.target.value })}
             />
           </Field>
-          <Field label="Currency">
+          <Field label="Currency" icon="money">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -7361,7 +7447,7 @@ function CargoForm({
               ))}
             </select>
           </Field>
-          <section className="cargo-rate-card">
+          <section className="cargo-rate-card wide">
             <div className="cargo-rate-head">
               <div>
                 <span>Customer rate for this shipment</span>
@@ -7440,12 +7526,10 @@ function CargoForm({
               </strong>
             </div>
           </section>
-          <section className="cargo-payment-section">
-            <div className="section-heading">
-              <span className="eyebrow">Customer payment</span>
-            </div>
+        </FormSection>
+        <FormSection icon="wallet" title="Customer Payment">
           {!current && (
-            <Field label="Payment choice">
+            <Field label="Payment choice" icon="wallet">
               <select
                 value={f.paymentOption}
                 onChange={(e) =>
@@ -7548,7 +7632,7 @@ function CargoForm({
           </Field>
           )}
           {!current && f.paymentOption !== "later" && (
-            <Field label="Payment reference">
+            <Field label="Payment reference" icon="receipt">
               <input
                 value={f.paymentReference}
                 onChange={(e) =>
@@ -7558,14 +7642,13 @@ function CargoForm({
               />
             </Field>
           )}
-          </section>
           {current && (
             <Field label="Cargo status">
               <div className="readonly-value">{cargoStatusLabel(f.status)}</div>
             </Field>
           )}
           {cargoStatusKey(f.status) === "delivered" && (
-            <Field label="Date delivered">
+            <Field label="Date delivered" icon="calendar">
               <input
                 type="date"
                 value={f.dateDelivered}
@@ -7573,13 +7656,14 @@ function CargoForm({
               />
             </Field>
           )}
-          <Field label="Notes" wide>
+          <Field label="Notes" wide icon="edit">
             <textarea
+              placeholder="Add any additional notes here…"
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
-        </div>
+        </FormSection>
         <div className="modal-actions">
           <button type="button" className="button ghost" onClick={onClose}>
             Cancel
@@ -8366,7 +8450,41 @@ function VisaForm({
     notes: current?.notes || "",
   });
   return (
-    <Modal title={current ? "Edit Visa" : "Create Visa"} onClose={onClose}>
+    <Modal
+      title={current ? "Edit Visa" : "Create Visa"}
+      subtitle="Record the application, payment and margin details."
+      onClose={onClose}
+      side={
+        <div className="form-summary-card">
+          <p className="summary-eyebrow">Profit Summary</p>
+          <div className="form-summary-row">
+            <span>{f.type === "Refund" ? "Refund Amount" : "Sale Amount"}</span>
+            <strong>{money(Number(f.amount) || 0, f.currency as Currency)}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-row">
+            <span>Agency Cost</span>
+            <strong>{money(Number(f.cost) || 0, f.currency as Currency)}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-total green">
+            <span>Gross Profit</span>
+            <strong>
+              {money(
+                f.type === "Refund"
+                  ? -(Number(f.amount) || 0)
+                  : (Number(f.amount) || 0) - (Number(f.cost) || 0),
+                f.currency as Currency,
+              )}
+            </strong>
+          </div>
+          <p className="form-summary-note">
+            Gross Profit = Sale Amount − Agency Cost. Values update
+            automatically.
+          </p>
+        </div>
+      }
+    >
       <form
         className="modal-form"
         onSubmit={(e) => {
@@ -8397,7 +8515,7 @@ function VisaForm({
           });
         }}
       >
-        <div className="form-grid">
+        <FormSection icon="passport" title="Application Details">
           <Field label="Branch">
             <BranchSelect
               options={branches}
@@ -8433,28 +8551,47 @@ function VisaForm({
               <option>Refund</option>
             </select>
           </Field>
-          <Field label="Application date">
+          <Field label="Application date" icon="calendar">
             <input
               type="date"
               value={f.appDate}
               onChange={(e) => setF({ ...f, appDate: e.target.value })}
             />
           </Field>
-          <Field label="Applicant">
+          <Field label="Destination" icon="globe">
             <input
               required
+              placeholder="Enter destination"
+              value={f.destination}
+              onChange={(e) => setF({ ...f, destination: e.target.value })}
+            />
+          </Field>
+          <Field label="Visa type" icon="file">
+            <input
+              placeholder="e.g. Tourist, Work, Student"
+              value={f.visaType}
+              onChange={(e) => setF({ ...f, visaType: e.target.value })}
+            />
+          </Field>
+        </FormSection>
+        <FormSection icon="user" title="Applicant Details">
+          <Field label="Applicant" icon="user">
+            <input
+              required
+              placeholder="Enter applicant name"
               value={f.applicant}
               onChange={(e) => setF({ ...f, applicant: e.target.value })}
             />
           </Field>
-          <Field label="Phone">
+          <Field label="Phone" icon="phone">
             <input
               required
+              placeholder="Enter phone number"
               value={f.phone}
               onChange={(e) => setF({ ...f, phone: e.target.value })}
             />
           </Field>
-          <Field label="Email (for status updates)">
+          <Field label="Email (for status updates)" icon="mail" wide>
             <input
               type="email"
               value={f.email}
@@ -8462,20 +8599,9 @@ function VisaForm({
               placeholder="client@example.com"
             />
           </Field>
-          <Field label="Destination">
-            <input
-              required
-              value={f.destination}
-              onChange={(e) => setF({ ...f, destination: e.target.value })}
-            />
-          </Field>
-          <Field label="Visa type">
-            <input
-              value={f.visaType}
-              onChange={(e) => setF({ ...f, visaType: e.target.value })}
-            />
-          </Field>
-          <Field label="Currency">
+        </FormSection>
+        <FormSection icon="money" title="Pricing & Payment">
+          <Field label="Currency" icon="money">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -8491,26 +8617,28 @@ function VisaForm({
               ))}
             </select>
           </Field>
-          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"}>
+          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"} icon="money">
             <input
               required
               type="number"
               min="0"
+              placeholder="Enter sale amount"
               value={f.amount}
               onChange={(e) => setF({ ...f, amount: e.target.value })}
             />
           </Field>
           {user.role === "owner" && f.type !== "Refund" && (
-            <Field label="Agency cost">
+            <Field label="Agency cost" icon="wallet">
               <input
                 type="number"
                 min="0"
+                placeholder="Enter agency cost"
                 value={f.cost}
                 onChange={(e) => setF({ ...f, cost: e.target.value })}
               />
             </Field>
           )}
-          <Field label="Payment method">
+          <Field label="Payment method" icon="wallet">
             <select
               required
               value={f.paymentMethod}
@@ -8523,13 +8651,14 @@ function VisaForm({
               ))}
             </select>
           </Field>
-          <Field label="Notes" wide>
+          <Field label="Notes" wide icon="edit">
             <textarea
+              placeholder="Add any notes (optional)"
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
-        </div>
+        </FormSection>
         <div className="modal-actions">
           <button type="button" className="button ghost" onClick={onClose}>
             Cancel

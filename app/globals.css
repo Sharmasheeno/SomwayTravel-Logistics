@@ -6694,3 +6694,151 @@ th {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Redesigned create/edit forms: grouped sections with an icon header, */
+/* in-field leading icons, and a live summary side card. Presentation   */
+/* only — the form fields and their handlers are unchanged.             */
+/* ------------------------------------------------------------------ */
+.form-section {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  padding: 16px 16px 2px;
+  margin-bottom: 16px;
+}
+.form-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.form-section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--mint);
+  color: var(--green);
+}
+.form-section-head h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--green);
+}
+
+/* In-field leading icon. The control is positioned so the glyph overlays the
+   input's left padding without affecting the label/error stacking. */
+.field-control.has-icon {
+  position: relative;
+}
+.field-control.has-icon > .field-icon {
+  position: absolute;
+  left: 12px;
+  top: 22px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: var(--muted);
+  pointer-events: none;
+  z-index: 1;
+}
+.field-control.has-icon > input,
+.field-control.has-icon > select,
+.field-control.has-icon > textarea {
+  padding-left: 36px;
+}
+.field-control.has-icon > textarea ~ .field-icon,
+.field-control.has-icon > .field-icon {
+  top: 22px;
+}
+
+/* Summary side card (cargo summary / profit summary) styled to match the
+   design's soft blue panel. */
+.form-summary-card {
+  background: linear-gradient(160deg, #eef5ff, #f7fbff);
+  border: 1px solid rgba(13, 71, 161, 0.12);
+  border-radius: 14px;
+  padding: 18px 16px;
+}
+.form-summary-card .summary-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--green-2);
+  margin: 0 0 14px;
+}
+.form-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+}
+.form-summary-row > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.form-summary-row > strong {
+  font-size: 13px;
+  color: var(--green);
+  font-weight: 700;
+}
+.form-summary-card hr {
+  border: 0;
+  border-top: 1px dashed rgba(13, 71, 161, 0.2);
+  margin: 8px 0;
+}
+.form-summary-total {
+  margin-top: 6px;
+}
+.form-summary-total > span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.form-summary-total > strong {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--green);
+}
+.form-summary-total.green > strong {
+  color: #16a34a;
+}
+.form-summary-note {
+  margin-top: 12px;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Two-column modal layout: form on the left, live summary card on the right.
+   Only a mobile single-column override existed before, so on wider screens the
+   summary now sits beside the form as in the design. */
+.modal-grid.with-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+}
+.modal-grid.with-side > div {
+  min-width: 0;
+}
+.modal-side {
+  position: sticky;
+  top: 0;
+}
+@media (max-width: 900px) {
+  .modal-grid.with-side {
+    grid-template-columns: 1fr;
+  }
+  .modal-side {
+    position: static;
+  }
+}
