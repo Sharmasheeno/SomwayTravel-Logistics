@@ -945,7 +945,8 @@ function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
   header { display: grid; grid-template-columns: auto 1fr auto; align-items: center;
     gap: 18px; padding-bottom: 22px; border-bottom: 2px solid var(--green); }
   .brand { width: auto; height: 52px; max-width: 62vw; border-radius: 10px;
-    object-fit: contain; object-position: left center; background: #0a2f4a; padding: 8px 14px; display: block; }
+    object-fit: contain; object-position: left center; background: #000; padding: 8px 14px; display: block;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .brand-fallback { width: 72px; height: 72px; display: grid; place-items: center;
     background: var(--green); color: #fff; font: 700 28px/1 Georgia, serif; padding: 0; }
   h1 { font: 500 21px/1.15 Georgia, serif; color: var(--green); margin: 0; }
@@ -1101,7 +1102,8 @@ function generateStatusSheet(sheet: StatusSheet) {
   header { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:18px;
     padding-bottom:22px; border-bottom:2px solid var(--green); }
   .brand { width:auto; height:52px; max-width:62vw; border-radius:10px; object-fit:contain;
-    object-position:left center; background:#0a2f4a; padding:8px 14px; display:block; }
+    object-position:left center; background:#000; padding:8px 14px; display:block;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .brand-fallback { width:64px; height:64px; display:grid; place-items:center; background:var(--green);
     color:#fff; font:700 24px/1 Georgia,serif; padding:0; }
   header p { font-size:11px; color:var(--muted); margin:4px 0 0; }
@@ -11690,7 +11692,7 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                       className="small-icon"
                       onClick={() => void openClient(x)}
                     >
-                      <Icon name="eye" size={16} /> Activity
+                      <Icon name="clock" size={16} /> Activity
                     </button>
                     {canWrite && (
                       <>

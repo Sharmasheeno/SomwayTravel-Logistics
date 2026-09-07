@@ -632,11 +632,14 @@ h6,
   height: clamp(40px, 13vw, 58px);
   max-width: 60vw;
   padding: 8px 14px;
-  /* White wordmark on a white receipt would vanish; seat it on a navy panel. */
-  background: #0a2f4a;
+  /* White wordmark on a white receipt would vanish; seat it on a black panel so
+     the full logo prints complete. */
+  background: #000;
   object-fit: contain;
   object-position: left center;
   border-radius: 10px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 @media (max-width: 590px) {
