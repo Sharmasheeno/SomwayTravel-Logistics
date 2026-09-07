@@ -14243,7 +14243,15 @@ function BranchManager({
               {branch.isActive && (
                 <button
                   className="delete-action"
-                  onClick={() => void deactivate(branch)}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Deactivate ${branch.name}? It will be hidden from new tickets, cargo, visas and reports until reactivated.`,
+                      )
+                    )
+                      return;
+                    void deactivate(branch);
+                  }}
                 >
                   Deactivate
                 </button>
@@ -14734,12 +14742,27 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
                 <span>{x.currency}</span>
                 <b>{money(x.rate, x.currency)} / kg</b>
                 <button
-                  onClick={() =>
-                    save((d) => ({
-                      ...d,
-                      rates: d.rates.filter((y) => y.id !== x.id),
-                    }))
-                  }
+                  aria-label="Remove cargo rate"
+                  title="Remove cargo rate"
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Remove the ${x.origin} → ${x.destination} ${x.currency} cargo rate of ${money(x.rate, x.currency)}/kg? This cannot be undone.`,
+                      )
+                    )
+                      return;
+                    save(
+                      (d) => ({
+                        ...d,
+                        rates: d.rates.filter((y) => y.id !== x.id),
+                      }),
+                      {
+                        entity: "Settings",
+                        detail: `Removed ${x.origin} to ${x.destination} ${x.currency} cargo rate`,
+                      },
+                    );
+                    notify("Cargo rate removed");
+                  }}
                 >
                   ×
                 </button>
@@ -14857,14 +14880,29 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
                 <span>{x.currency}</span>
                 <b>{money(x.amount, x.currency)}</b>
                 <button
-                  onClick={() =>
-                    save((d) => ({
-                      ...d,
-                      startingBalances: d.startingBalances.filter(
-                        (y) => y.id !== x.id,
-                      ),
-                    }))
-                  }
+                  aria-label="Remove starting balance"
+                  title="Remove starting balance"
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Remove the ${x.office} ${x.method} ${x.currency} starting balance of ${money(x.amount, x.currency)}? This cannot be undone.`,
+                      )
+                    )
+                      return;
+                    save(
+                      (d) => ({
+                        ...d,
+                        startingBalances: d.startingBalances.filter(
+                          (y) => y.id !== x.id,
+                        ),
+                      }),
+                      {
+                        entity: "Settings",
+                        detail: `Removed ${x.office} ${x.method} ${x.currency} starting balance`,
+                      },
+                    );
+                    notify("Starting balance removed");
+                  }}
                 >
                   ×
                 </button>
