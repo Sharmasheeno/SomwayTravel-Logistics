@@ -1484,19 +1484,22 @@ function Field({
   children,
   wide = false,
   icon,
+  iconTone = "blue",
 }: {
   label: string;
   children: ReactNode;
   wide?: boolean;
   /** Optional leading glyph shown inside the control, matching the design. */
   icon?: string;
+  /** Colour tone for the leading glyph (blue, green, violet, orange, cyan…). */
+  iconTone?: string;
 }) {
   return (
     <label className={`field ${wide ? "wide" : ""}`}>
       <span>{label}</span>
       <div className={`field-control${icon ? " has-icon" : ""}`}>
         {icon && (
-          <span className="field-icon" aria-hidden="true">
+          <span className={`field-icon tone-${iconTone}`} aria-hidden="true">
             <Icon name={icon} size={15} />
           </span>
         )}
@@ -1512,17 +1515,20 @@ function FormSection({
   icon,
   title,
   children,
+  tone = "blue",
   className = "",
 }: {
   icon: string;
   title: string;
   children: ReactNode;
+  /** Colour tone for the section's header icon. */
+  tone?: string;
   className?: string;
 }) {
   return (
     <section className={`form-section ${className}`.trim()}>
       <header className="form-section-head">
-        <span className="form-section-icon" aria-hidden="true">
+        <span className={`form-section-icon tone-${tone}`} aria-hidden="true">
           <Icon name={icon} size={15} />
         </span>
         <h4>{title}</h4>
@@ -6354,7 +6360,7 @@ function TicketForm({
       }
     >
       <form className="modal-form" onSubmit={submit}>
-        <FormSection icon="ticket" title="Booking Details">
+        <FormSection icon="ticket" title="Booking Details" tone="blue">
           <Field label="Branch">
             <BranchSelect
               options={branches}
@@ -6389,7 +6395,7 @@ function TicketForm({
               <option>Refund</option>
             </select>
           </Field>
-          <Field label="Sale date" icon="calendar">
+          <Field label="Sale date" icon="calendar" iconTone="violet">
             <input
               required
               type="date"
@@ -6397,7 +6403,7 @@ function TicketForm({
               onChange={(e) => setF({ ...f, saleDate: e.target.value })}
             />
           </Field>
-          <Field label="Travel date" icon="calendar">
+          <Field label="Travel date" icon="calendar" iconTone="violet">
             <input
               type="date"
               value={f.travelDate}
@@ -6405,8 +6411,8 @@ function TicketForm({
             />
           </Field>
         </FormSection>
-        <FormSection icon="user" title="Passenger & Route">
-          <Field label="Passenger name" icon="user">
+        <FormSection icon="user" title="Passenger & Route" tone="violet">
+          <Field label="Passenger name" icon="user" iconTone="blue">
             <input
               required
               placeholder="Enter passenger name"
@@ -6414,7 +6420,7 @@ function TicketForm({
               onChange={(e) => setF({ ...f, passenger: e.target.value })}
             />
           </Field>
-          <Field label="Phone" icon="phone">
+          <Field label="Phone" icon="phone" iconTone="green">
             <input
               required
               placeholder="Enter phone number"
@@ -6422,7 +6428,7 @@ function TicketForm({
               onChange={(e) => setF({ ...f, phone: e.target.value })}
             />
           </Field>
-          <Field label="From" icon="plane">
+          <Field label="From" icon="plane" iconTone="blue">
             <input
               required
               placeholder="NBO–DXB"
@@ -6430,7 +6436,7 @@ function TicketForm({
               onChange={(e) => setF({ ...f, route: e.target.value })}
             />
           </Field>
-          <Field label="To" icon="plane">
+          <Field label="To" icon="plane" iconTone="blue">
             <input
               placeholder="Enter destination"
               value={f.airlinePnr}
@@ -6438,8 +6444,8 @@ function TicketForm({
             />
           </Field>
         </FormSection>
-        <FormSection icon="money" title="Pricing & Payment">
-          <Field label="Currency" icon="money">
+        <FormSection icon="money" title="Pricing & Payment" tone="green">
+          <Field label="Currency" icon="money" iconTone="green">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -6455,7 +6461,7 @@ function TicketForm({
               ))}
             </select>
           </Field>
-          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"} icon="money">
+          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"} icon="money" iconTone="green">
             <input
               required
               min="0"
@@ -6466,7 +6472,7 @@ function TicketForm({
             />
           </Field>
           {user.role === "owner" && f.type !== "Refund" && (
-            <Field label="Agency cost" icon="wallet">
+            <Field label="Agency cost" icon="wallet" iconTone="orange">
               <input
                 min="0"
                 type="number"
@@ -6476,7 +6482,7 @@ function TicketForm({
               />
             </Field>
           )}
-          <Field label="Payment method" icon="wallet">
+          <Field label="Payment method" icon="wallet" iconTone="orange">
             <select
               required
               value={f.paymentMethod}
@@ -6489,7 +6495,7 @@ function TicketForm({
               ))}
             </select>
           </Field>
-          <Field label="Notes" wide icon="edit">
+          <Field label="Notes" wide icon="edit" iconTone="gray">
             <textarea
               placeholder="Add any notes (optional)"
               value={f.notes}
@@ -7274,7 +7280,7 @@ function CargoForm({
       }
     >
       <form className="modal-form" onSubmit={submit}>
-        <FormSection icon="box" title="Shipment Details">
+        <FormSection icon="box" title="Shipment Details" tone="cyan">
           <Field label="Origin branch">
             <BranchSelect
               options={originBranches}
@@ -7333,7 +7339,7 @@ function CargoForm({
               }
             />
           </Field>
-          <Field label="Date received" icon="calendar">
+          <Field label="Date received" icon="calendar" iconTone="violet">
             <input
               required
               type="date"
@@ -7341,7 +7347,7 @@ function CargoForm({
               onChange={(e) => setF({ ...f, dateIn: e.target.value })}
             />
           </Field>
-          <Field label="Contents" icon="box">
+          <Field label="Contents" icon="box" iconTone="cyan">
             <input
               required
               placeholder="e.g. Documents, Electronics, Apparel"
@@ -7350,8 +7356,8 @@ function CargoForm({
             />
           </Field>
         </FormSection>
-        <FormSection icon="user" title="Contact Details">
-          <Field label="Sender" icon="user">
+        <FormSection icon="user" title="Contact Details" tone="violet">
+          <Field label="Sender" icon="user" iconTone="blue">
             <input
               required
               placeholder="Enter sender name"
@@ -7359,7 +7365,7 @@ function CargoForm({
               onChange={(e) => setF({ ...f, sender: e.target.value })}
             />
           </Field>
-          <Field label="Sender phone" icon="phone">
+          <Field label="Sender phone" icon="phone" iconTone="green">
             <input
               required
               placeholder="Enter phone number"
@@ -7367,7 +7373,7 @@ function CargoForm({
               onChange={(e) => setF({ ...f, senderPhone: e.target.value })}
             />
           </Field>
-          <Field label="Sender email (optional, for status updates)" icon="mail">
+          <Field label="Sender email (optional, for status updates)" icon="mail" iconTone="cyan">
             <input
               type="email"
               value={f.senderEmail}
@@ -7375,7 +7381,7 @@ function CargoForm({
               placeholder="client@example.com"
             />
           </Field>
-          <Field label="Receiver" icon="user">
+          <Field label="Receiver" icon="user" iconTone="blue">
             <input
               required
               placeholder="Enter receiver name"
@@ -7383,7 +7389,7 @@ function CargoForm({
               onChange={(e) => setF({ ...f, receiver: e.target.value })}
             />
           </Field>
-          <Field label="Receiver phone" icon="phone">
+          <Field label="Receiver phone" icon="phone" iconTone="green">
             <input
               required={f.paymentResponsibility === "receiver"}
               placeholder="Enter phone number"
@@ -7391,7 +7397,7 @@ function CargoForm({
               onChange={(e) => setF({ ...f, receiverPhone: e.target.value })}
             />
           </Field>
-          <Field label="Customer responsible for payment" icon="user">
+          <Field label="Customer responsible for payment" icon="user" iconTone="blue">
             <select
               required
               value={f.paymentResponsibility}
@@ -7408,8 +7414,8 @@ function CargoForm({
             </select>
           </Field>
         </FormSection>
-        <FormSection icon="money" title="Pricing">
-          <Field label="Weight (kg)" icon="box">
+        <FormSection icon="money" title="Pricing" tone="green">
+          <Field label="Weight (kg)" icon="box" iconTone="cyan">
             <input
               required
               min="0"
@@ -7420,7 +7426,7 @@ function CargoForm({
               onChange={(e) => setF({ ...f, weight: e.target.value })}
             />
           </Field>
-          <Field label="Currency" icon="money">
+          <Field label="Currency" icon="money" iconTone="green">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -7527,9 +7533,9 @@ function CargoForm({
             </div>
           </section>
         </FormSection>
-        <FormSection icon="wallet" title="Customer Payment">
+        <FormSection icon="wallet" title="Customer Payment" tone="orange">
           {!current && (
-            <Field label="Payment choice" icon="wallet">
+            <Field label="Payment choice" icon="wallet" iconTone="orange">
               <select
                 value={f.paymentOption}
                 onChange={(e) =>
@@ -7632,7 +7638,7 @@ function CargoForm({
           </Field>
           )}
           {!current && f.paymentOption !== "later" && (
-            <Field label="Payment reference" icon="receipt">
+            <Field label="Payment reference" icon="receipt" iconTone="orange">
               <input
                 value={f.paymentReference}
                 onChange={(e) =>
@@ -7648,7 +7654,7 @@ function CargoForm({
             </Field>
           )}
           {cargoStatusKey(f.status) === "delivered" && (
-            <Field label="Date delivered" icon="calendar">
+            <Field label="Date delivered" icon="calendar" iconTone="violet">
               <input
                 type="date"
                 value={f.dateDelivered}
@@ -7656,7 +7662,7 @@ function CargoForm({
               />
             </Field>
           )}
-          <Field label="Notes" wide icon="edit">
+          <Field label="Notes" wide icon="edit" iconTone="gray">
             <textarea
               placeholder="Add any additional notes here…"
               value={f.notes}
@@ -8515,7 +8521,7 @@ function VisaForm({
           });
         }}
       >
-        <FormSection icon="passport" title="Application Details">
+        <FormSection icon="passport" title="Application Details" tone="violet">
           <Field label="Branch">
             <BranchSelect
               options={branches}
@@ -8551,14 +8557,14 @@ function VisaForm({
               <option>Refund</option>
             </select>
           </Field>
-          <Field label="Application date" icon="calendar">
+          <Field label="Application date" icon="calendar" iconTone="violet">
             <input
               type="date"
               value={f.appDate}
               onChange={(e) => setF({ ...f, appDate: e.target.value })}
             />
           </Field>
-          <Field label="Destination" icon="globe">
+          <Field label="Destination" icon="globe" iconTone="cyan">
             <input
               required
               placeholder="Enter destination"
@@ -8566,7 +8572,7 @@ function VisaForm({
               onChange={(e) => setF({ ...f, destination: e.target.value })}
             />
           </Field>
-          <Field label="Visa type" icon="file">
+          <Field label="Visa type" icon="file" iconTone="violet">
             <input
               placeholder="e.g. Tourist, Work, Student"
               value={f.visaType}
@@ -8574,8 +8580,8 @@ function VisaForm({
             />
           </Field>
         </FormSection>
-        <FormSection icon="user" title="Applicant Details">
-          <Field label="Applicant" icon="user">
+        <FormSection icon="user" title="Applicant Details" tone="blue">
+          <Field label="Applicant" icon="user" iconTone="blue">
             <input
               required
               placeholder="Enter applicant name"
@@ -8583,7 +8589,7 @@ function VisaForm({
               onChange={(e) => setF({ ...f, applicant: e.target.value })}
             />
           </Field>
-          <Field label="Phone" icon="phone">
+          <Field label="Phone" icon="phone" iconTone="green">
             <input
               required
               placeholder="Enter phone number"
@@ -8591,7 +8597,7 @@ function VisaForm({
               onChange={(e) => setF({ ...f, phone: e.target.value })}
             />
           </Field>
-          <Field label="Email (for status updates)" icon="mail" wide>
+          <Field label="Email (for status updates)" icon="mail" iconTone="cyan" wide>
             <input
               type="email"
               value={f.email}
@@ -8600,8 +8606,8 @@ function VisaForm({
             />
           </Field>
         </FormSection>
-        <FormSection icon="money" title="Pricing & Payment">
-          <Field label="Currency" icon="money">
+        <FormSection icon="money" title="Pricing & Payment" tone="green">
+          <Field label="Currency" icon="money" iconTone="green">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -8617,7 +8623,7 @@ function VisaForm({
               ))}
             </select>
           </Field>
-          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"} icon="money">
+          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"} icon="money" iconTone="green">
             <input
               required
               type="number"
@@ -8628,7 +8634,7 @@ function VisaForm({
             />
           </Field>
           {user.role === "owner" && f.type !== "Refund" && (
-            <Field label="Agency cost" icon="wallet">
+            <Field label="Agency cost" icon="wallet" iconTone="orange">
               <input
                 type="number"
                 min="0"
@@ -8638,7 +8644,7 @@ function VisaForm({
               />
             </Field>
           )}
-          <Field label="Payment method" icon="wallet">
+          <Field label="Payment method" icon="wallet" iconTone="orange">
             <select
               required
               value={f.paymentMethod}
@@ -8651,7 +8657,7 @@ function VisaForm({
               ))}
             </select>
           </Field>
-          <Field label="Notes" wide icon="edit">
+          <Field label="Notes" wide icon="edit" iconTone="gray">
             <textarea
               placeholder="Add any notes (optional)"
               value={f.notes}

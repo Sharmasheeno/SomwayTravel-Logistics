@@ -6720,6 +6720,7 @@ th {
   width: 26px;
   height: 26px;
   border-radius: 8px;
+  /* Colour comes from the .tone-* classes (tinted ground + saturated glyph). */
   background: var(--mint);
   color: var(--green);
 }
@@ -6743,9 +6744,20 @@ th {
   top: 22px;
   transform: translateY(-50%);
   display: inline-flex;
-  color: var(--muted);
   pointer-events: none;
   z-index: 1;
+}
+/* In-field glyphs take only the saturated colour from their tone class, not the
+   tinted background box (which would look heavy sitting over the input). */
+.field-control.has-icon > .field-icon.tone-blue,
+.field-control.has-icon > .field-icon.tone-green,
+.field-control.has-icon > .field-icon.tone-violet,
+.field-control.has-icon > .field-icon.tone-orange,
+.field-control.has-icon > .field-icon.tone-cyan,
+.field-control.has-icon > .field-icon.tone-pink,
+.field-control.has-icon > .field-icon.tone-red,
+.field-control.has-icon > .field-icon.tone-gray {
+  background: transparent;
 }
 .field-control.has-icon > input,
 .field-control.has-icon > select,
