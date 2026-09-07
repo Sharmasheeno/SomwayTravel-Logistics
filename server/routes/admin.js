@@ -27,7 +27,16 @@ const slug = (value) =>
 const temporaryPassword = () => generateStrongPassword();
 
 const withLoginUrl = (req, user) => {
-  const origin = `${req.protocol}://${req.get("host")}`;
+  // Prefer an explicitly configured public URL so the link always carries the
+  // correct scheme/host/port (e.g. http://169.58.173.197:8080). Behind a proxy
+  // that terminates on port 80, req.get("host") drops the real port, producing
+  // a broken login link — the env var avoids that. Fall back to the request.
+  const configured = String(
+    process.env.PUBLIC_APP_URL || process.env.PUBLIC_BASE_URL || "",
+  ).trim();
+  const origin = (
+    configured || `${req.protocol}://${req.get("host")}`
+  ).replace(/\/+$/, "");
   return {
     ...user.toSafeObject(true),
     loginUrl:
