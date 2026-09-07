@@ -1469,11 +1469,17 @@ function BrandMark({ className = "" }: { className?: string }) {
     />
   );
 }
-function BrandLogo({ className = "" }: { className?: string }) {
+function BrandLogo({
+  className = "",
+  src = "/somway-primary-logo-alpha.png",
+}: {
+  className?: string;
+  src?: string;
+}) {
   return (
     <img
       className={`brand-master-logo ${className}`.trim()}
-      src="/somway-primary-logo-alpha.png"
+      src={src}
       alt="SomWay Travel & Logistics"
     />
   );
@@ -3310,7 +3316,7 @@ export default function Home() {
   if (!ready)
     return (
       <main className="loading-screen">
-        <BrandLogo className="loading-brand-logo" />
+        <BrandLogo className="loading-brand-logo" src="/somway-primary-logo-white.png" />
         <p>Preparing your agency workspace…</p>
       </main>
     );
@@ -3479,7 +3485,7 @@ export default function Home() {
     <div className={`app-shell ${navCollapsed ? "nav-collapsed" : ""}`}>
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
         <div className="brand-lockup sidebar-brand">
-          <BrandLogo className="sidebar-logo" />
+          <BrandLogo className="sidebar-logo" src="/somway-primary-logo-white.png" />
         </div>
         <nav>
           {nav.map((item) => (
@@ -4440,7 +4446,7 @@ function Login({
           ← Public website
         </a>
         <div className="brand light">
-          <BrandLogo className="auth-brand-logo" />
+          <BrandLogo className="auth-brand-logo" src="/somway-primary-logo-white.png" />
         </div>
         <div className="story-copy">
           <p className="eyebrow">Welcome back</p>
@@ -4508,7 +4514,7 @@ function AuthMessage({ title, detail }: { title: string; detail: string }) {
           ← Public website
         </a>
         <div className="brand light">
-          <BrandLogo className="auth-brand-logo" />
+          <BrandLogo className="auth-brand-logo" src="/somway-primary-logo-white.png" />
         </div>
         <div className="story-copy">
           <p className="eyebrow">Protected workspace</p>
