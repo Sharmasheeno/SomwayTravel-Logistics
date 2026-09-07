@@ -1515,6 +1515,7 @@ function Field({
   wide = false,
   icon,
   iconTone = "blue",
+  hint,
 }: {
   label: string;
   children: ReactNode;
@@ -1523,6 +1524,8 @@ function Field({
   icon?: string;
   /** Colour tone for the leading glyph (blue, green, violet, orange, cyan…). */
   iconTone?: string;
+  /** Optional helper text shown beneath the control. */
+  hint?: string;
 }) {
   return (
     <label className={`field ${wide ? "wide" : ""}`}>
@@ -1535,6 +1538,7 @@ function Field({
         )}
         {children}
       </div>
+      {hint && <small className="field-hint">{hint}</small>}
     </label>
   );
 }
@@ -14003,7 +14007,7 @@ function UserForm({
   return (
     <Modal
       title="Create User"
-      subtitle="Create an Owner or Operator account. Leave the password blank to generate one automatically."
+      subtitle="Create an Owner or Operator account. Set a password of at least 10 characters with letters, numbers and a symbol."
       onClose={onClose}
     >
       <form
@@ -14052,11 +14056,13 @@ function UserForm({
               placeholder="name@somway.com"
             />
           </Field>
-          <Field label="Password (optional)">
+          <Field label="Password" hint="At least 10 characters with letters, numbers and a symbol.">
             <PasswordInput
               value={f.password}
               onChange={(e) => setF({ ...f, password: e.target.value })}
-              placeholder="Secure password generated"
+              required
+              minLength={10}
+              placeholder="Set a secure password"
             />
           </Field>
         </div>
@@ -14068,6 +14074,7 @@ function UserForm({
             disabled={
               !f.name.trim() ||
               !f.username.trim() ||
+              f.password.trim().length < 10 ||
               (f.role === "operator" && !f.assignedBranchId)
             }
             className="button primary"

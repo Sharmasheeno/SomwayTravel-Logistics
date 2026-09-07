@@ -122,14 +122,10 @@ router.post("/users", requireOwner, async (req, res) => {
   const duplicate = await User.findOne({ email });
   if (duplicate) email = `${slug(trimmedName)}.${randomToken(2)}`;
 
-  // An owner may supply a password, but it has to meet the policy; an empty
-  // one falls back to a generated password that meets it by construction.
-  let finalPassword = temporaryPassword();
-  if (password !== undefined && String(password) !== "") {
-    const problem = passwordProblem(password);
-    if (problem) return res.status(400).json({ error: problem });
-    finalPassword = String(password);
-  }
+  // A password is required and must meet the policy.
+  const finalPassword = String(password ?? "");
+  const problem = passwordProblem(finalPassword);
+  if (problem) return res.status(400).json({ error: problem });
 
   const user = await User.create({
     name: trimmedName,

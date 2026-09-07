@@ -4093,3 +4093,12 @@ h3 .branch-inline .branch-flag {
     gap: 10px;
   }
 }
+
+/* Small helper text beneath a form Field (e.g. the password policy hint). */
+.field .field-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #6b7a90;
+}
