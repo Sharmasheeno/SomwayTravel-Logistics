@@ -565,12 +565,12 @@ h6,
 
 .sidebar-brand .sidebar-logo {
   width: auto;
-  height: 96px;
+  height: 52px;
   max-width: 100%;
   max-height: none;
-  /* Official logo, transparent background — shown directly with no plaque. */
+  /* Horizontal SomWay lockup, transparent background — shown directly, no plaque. */
   object-fit: contain;
-  object-position: center;
+  object-position: left center;
   filter: none;
   background: transparent;
   padding: 0;
@@ -580,27 +580,29 @@ h6,
 .public-logo-lockup .public-header-logo,
 .public-logo-lockup .public-footer-logo {
   width: auto;
-  height: 76px;
+  height: 44px;
   max-width: 100%;
   object-fit: contain;
   object-position: left center;
   filter: none;
-  /* Redesigned logo carries its own dark navy ground; round the corners so it
-     reads as a tidy badge on the light header/footer. */
+  /* The logo's "Som"/tagline are white, but the public header/footer are light,
+     so seat it on a dark navy pill to keep the whole lockup legible. */
+  background: #0a2f4a;
+  padding: 8px 16px;
   border-radius: 12px;
 }
 
 .public-footer .public-logo-lockup .public-footer-logo {
   width: auto;
-  height: 84px;
+  height: 48px;
 }
 
 .auth-brand-logo {
   width: auto;
-  height: 160px;
+  height: 64px;
   max-width: 100%;
   object-fit: contain;
-  object-position: center;
+  object-position: left center;
   filter: none;
   background: transparent;
   padding: 0;
@@ -609,8 +611,8 @@ h6,
 
 .loading-brand-logo {
   width: auto;
-  height: 210px;
-  max-width: min(78vw, 260px);
+  height: 84px;
+  max-width: min(82vw, 320px);
   object-fit: contain;
   background: transparent;
   padding: 0;
@@ -623,15 +625,15 @@ h6,
   color: #dce8f9;
 }
 
-/* Official SomWay lockup is a square vertical mark; scale it to fit and shrink
-   with the card on a phone. The receipt sheet is white so the logo's white
-   ground is invisible. */
+/* Horizontal SomWay lockup (~3:1); scale to fit by height and shrink with the
+   card on a phone. Transparent background sits on the white receipt sheet. */
 .receipt-brand-logo {
   width: auto;
-  height: clamp(72px, 22vw, 104px);
-  max-width: 40vw;
-  padding: 0;
-  background: transparent;
+  height: clamp(40px, 13vw, 58px);
+  max-width: 60vw;
+  padding: 8px 14px;
+  /* White wordmark on a white receipt would vanish; seat it on a navy panel. */
+  background: #0a2f4a;
   object-fit: contain;
   object-position: left center;
   border-radius: 10px;
@@ -639,15 +641,15 @@ h6,
 
 @media (max-width: 590px) {
   .public-logo-lockup .public-header-logo {
-    height: 60px;
+    height: 40px;
   }
 
   .public-footer .public-logo-lockup .public-footer-logo {
-    height: 72px;
+    height: 44px;
   }
 
   .auth-brand-logo {
-    height: 120px;
+    height: 54px;
   }
 }
 

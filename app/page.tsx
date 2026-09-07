@@ -922,8 +922,8 @@ function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
     box-shadow: 0 18px 44px rgba(3,23,53,.10); }
   header { display: grid; grid-template-columns: auto 1fr auto; align-items: center;
     gap: 18px; padding-bottom: 22px; border-bottom: 2px solid var(--green); }
-  .brand { width: auto; height: 108px; max-width: 40vw; border-radius: 10px;
-    object-fit: contain; object-position: left center; background: transparent; padding: 0; display: block; }
+  .brand { width: auto; height: 52px; max-width: 62vw; border-radius: 10px;
+    object-fit: contain; object-position: left center; background: #0a2f4a; padding: 8px 14px; display: block; }
   .brand-fallback { width: 72px; height: 72px; display: grid; place-items: center;
     background: var(--green); color: #fff; font: 700 28px/1 Georgia, serif; padding: 0; }
   h1 { font: 500 21px/1.15 Georgia, serif; color: var(--green); margin: 0; }
@@ -1078,8 +1078,8 @@ function generateStatusSheet(sheet: StatusSheet) {
     border-radius:16px; padding:36px 40px; box-shadow:0 18px 44px rgba(3,23,53,.10); }
   header { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:18px;
     padding-bottom:22px; border-bottom:2px solid var(--green); }
-  .brand { width:auto; height:108px; max-width:40vw; border-radius:10px; object-fit:contain;
-    object-position:left center; background:transparent; padding:0; display:block; }
+  .brand { width:auto; height:52px; max-width:62vw; border-radius:10px; object-fit:contain;
+    object-position:left center; background:#0a2f4a; padding:8px 14px; display:block; }
   .brand-fallback { width:64px; height:64px; display:grid; place-items:center; background:var(--green);
     color:#fff; font:700 24px/1 Georgia,serif; padding:0; }
   header p { font-size:11px; color:var(--muted); margin:4px 0 0; }
@@ -1464,14 +1464,14 @@ function BrandMark({ className = "" }: { className?: string }) {
   return (
     <img
       className={`brand-mark ${className}`.trim()}
-      src="/Som-way.png"
+      src="/Som-way2.png"
       alt="SomWay Travel & Logistics"
     />
   );
 }
 function BrandLogo({
   className = "",
-  src = "/Som-way.png",
+  src = "/Som-way2.png",
 }: {
   className?: string;
   src?: string;
@@ -3316,7 +3316,7 @@ export default function Home() {
   if (!ready)
     return (
       <main className="loading-screen">
-        <BrandLogo className="loading-brand-logo" src="/Som-way.png" />
+        <BrandLogo className="loading-brand-logo" src="/Som-way2.png" />
         <p>Preparing your agency workspace…</p>
       </main>
     );
@@ -3485,7 +3485,7 @@ export default function Home() {
     <div className={`app-shell ${navCollapsed ? "nav-collapsed" : ""}`}>
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
         <div className="brand-lockup sidebar-brand">
-          <BrandLogo className="sidebar-logo" src="/Som-way.png" />
+          <BrandLogo className="sidebar-logo" src="/Som-way2.png" />
         </div>
         <nav>
           {nav.map((item) => (
@@ -4446,7 +4446,7 @@ function Login({
           ← Public website
         </a>
         <div className="brand light">
-          <BrandLogo className="auth-brand-logo" src="/Som-way.png" />
+          <BrandLogo className="auth-brand-logo" src="/Som-way2.png" />
         </div>
         <div className="story-copy">
           <p className="eyebrow">Welcome back</p>
@@ -4514,7 +4514,7 @@ function AuthMessage({ title, detail }: { title: string; detail: string }) {
           ← Public website
         </a>
         <div className="brand light">
-          <BrandLogo className="auth-brand-logo" src="/Som-way.png" />
+          <BrandLogo className="auth-brand-logo" src="/Som-way2.png" />
         </div>
         <div className="story-copy">
           <p className="eyebrow">Protected workspace</p>
@@ -6151,7 +6151,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                               data.agencyName,
                               paidViaLabel(data, "ticket", x.id, x.paymentMethod),
                             ),
-                            "/Som-way.png",
+                            "/Som-way2.png",
                           )
                         }
                       >
@@ -6840,7 +6840,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                               "Agency team",
                             paidViaLabel(data, "cargo", x.id, x.paymentMethod),
                           ),
-                          "/Som-way.png",
+                          "/Som-way2.png",
                         )
                       }
                     >
@@ -8337,7 +8337,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                               data.agencyName,
                               paidViaLabel(data, "visa", x.id, x.paymentMethod),
                             ),
-                            "/Som-way.png",
+                            "/Som-way2.png",
                           )
                         }
                       >
@@ -12296,7 +12296,7 @@ function Tracking({
           ["Weight", `${cargo.weight} kg`],
           ["Delivered", dateLabel(cargo.dateDelivered)],
         ],
-        logoUrl: "/Som-way.png",
+        logoUrl: "/Som-way2.png",
       });
     if (visa)
       generateStatusSheet({
@@ -12319,7 +12319,7 @@ function Tracking({
           ["Application type", visa.visaType || "Visa application"],
           ["Office", String(visa.office)],
         ],
-        logoUrl: "/Som-way.png",
+        logoUrl: "/Som-way2.png",
       });
   };
   const email = async () => {

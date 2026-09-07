@@ -36,8 +36,8 @@ export const metadata: Metadata = {
     images: ["/og.png"],
   },
   icons: {
-    icon: "/Som-way.png",
-    shortcut: "/Som-way.png",
+    icon: "/Som-way2.png",
+    shortcut: "/Som-way2.png",
   },
 };
 
