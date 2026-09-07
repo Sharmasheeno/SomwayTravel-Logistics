@@ -5731,15 +5731,15 @@ function LiveOverviewDashboard({
           )}
           <div>
             <span className="status-icon blue"><Icon name="cargo" /></span>
-            <div><strong>{activeCases}</strong><small>Active Cases</small></div>
+            <div><strong>{activeCases}</strong><small>Open Jobs</small></div>
           </div>
           <div>
             <span className="status-icon amber"><Icon name="expense" /></span>
-            <div><strong>{pendingApprovals}</strong><small>Pending Approvals</small></div>
+            <div><strong>{pendingApprovals}</strong><small>Reviews Pending</small></div>
           </div>
           <div>
             <span className="status-icon green"><Icon name="close" /></span>
-            <div><strong>{completedJobs}</strong><small>Completed Jobs</small></div>
+            <div><strong>{completedJobs}</strong><small>Jobs Completed</small></div>
           </div>
         </section>
       </div>
