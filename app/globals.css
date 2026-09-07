@@ -6454,3 +6454,235 @@ th {
     top: 23px;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Record list: compact one-line records with an expandable details    */
+/* drawer, used across the cargo / ticket / visa / client / receivable */
+/* / payable registers so many records fit at once, especially on       */
+/* phones where a wide table only showed one or two rows.               */
+/* ------------------------------------------------------------------ */
+.record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.record-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(10, 58, 92, 0.045);
+  overflow: hidden;
+}
+.record-card.open {
+  border-color: rgba(0, 172, 193, 0.4);
+}
+.record-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 14px;
+  flex-wrap: nowrap;
+}
+.record-title-cell {
+  min-width: 0;
+  flex: 0 0 auto;
+  width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.record-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--green);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.record-title .text-button {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--green);
+}
+.record-subtitle {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.record-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.record-cells {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.record-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.record-cell-label {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.record-cell-value {
+  font-size: 11px;
+  color: #1f2d40;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.record-cell-value.strong {
+  font-weight: 700;
+  color: var(--green);
+}
+.record-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.record-view {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--mint);
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 7px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.record-view:hover {
+  background: var(--mint-2);
+}
+.record-details {
+  border-top: 1px dashed var(--line);
+  padding: 13px 14px 15px;
+  background: #f8fbfd;
+}
+.record-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px 20px;
+}
+.record-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.record-detail-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.record-detail-value {
+  font-size: 12px;
+  color: #1f2d40;
+  word-break: break-word;
+}
+.record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+}
+.record-actions .row-actions {
+  flex-wrap: wrap;
+}
+
+/* Per-branch financial report blocks: branch KPI cards, then that branch's
+   per-service KPI cards, grouped inside one card per branch. */
+.branch-report-block {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 34px rgba(10, 58, 92, 0.05);
+  padding: 18px 18px 20px;
+  margin-bottom: 16px;
+}
+.branch-report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.branch-report-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--green);
+}
+.branch-report-subhead {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 16px 0 9px;
+}
+
+@media (max-width: 900px) {
+  .record-title-cell {
+    width: 140px;
+  }
+  .record-cells {
+    gap: 12px;
+  }
+}
+/* On phones drop to a stacked summary: title on top, the summary cells wrap
+   below as label/value pairs, badges and the View button on their own row. */
+@media (max-width: 700px) {
+  .record-summary {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .record-title-cell {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+  .record-cells {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+  }
+  .record-cell {
+    flex: 0 0 auto;
+  }
+  .record-badges {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+  .record-view {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  .record-detail-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}

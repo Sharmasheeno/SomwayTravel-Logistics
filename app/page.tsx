@@ -2721,6 +2721,92 @@ function TableShell({
   );
 }
 
+// A single record shown as a compact horizontal summary line (a handful of
+// labelled cells plus status badges) with a "View" toggle that expands the
+// full set of details and the row's actions. This replaces the wide tables in
+// the registers so many records fit on screen at once — especially on phones,
+// where a table only showed one or two rows. Used on every screen size.
+type RecordCell = {
+  label: string;
+  value: ReactNode;
+  strong?: boolean;
+  hide?: boolean;
+};
+function RecordList({ children }: { children: ReactNode }) {
+  return <div className="record-list">{children}</div>;
+}
+function RecordCard({
+  title,
+  subtitle,
+  chips,
+  cells,
+  badges,
+  details = [],
+  actions,
+  defaultOpen = false,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  chips?: ReactNode;
+  cells: RecordCell[];
+  badges?: ReactNode;
+  details?: RecordCell[];
+  actions?: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const shownCells = cells.filter((cell) => !cell.hide);
+  const shownDetails = details.filter((detail) => !detail.hide);
+  return (
+    <article className={`record-card${open ? " open" : ""}`}>
+      <div className="record-summary">
+        <div className="record-title-cell">
+          <div className="record-title">{title}</div>
+          {subtitle && <small className="record-subtitle">{subtitle}</small>}
+          {chips && <div className="record-chips">{chips}</div>}
+        </div>
+        <div className="record-cells">
+          {shownCells.map((cell, index) => (
+            <div className="record-cell" key={`${cell.label}-${index}`}>
+              <span className="record-cell-label">{cell.label}</span>
+              <span
+                className={`record-cell-value${cell.strong ? " strong" : ""}`}
+              >
+                {cell.value}
+              </span>
+            </div>
+          ))}
+        </div>
+        {badges && <div className="record-badges">{badges}</div>}
+        <button
+          type="button"
+          className="record-view"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <Icon name="eye" size={15} />
+          <span>{open ? "Hide" : "View"}</span>
+        </button>
+      </div>
+      {open && (
+        <div className="record-details">
+          {shownDetails.length > 0 && (
+            <div className="record-detail-grid">
+              {shownDetails.map((detail, index) => (
+                <div className="record-detail" key={`${detail.label}-${index}`}>
+                  <span className="record-detail-label">{detail.label}</span>
+                  <span className="record-detail-value">{detail.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {actions && <div className="record-actions">{actions}</div>}
+        </div>
+      )}
+    </article>
+  );
+}
+
 function CustomerPaymentForm({
   transactionType,
   transactionId,
@@ -5877,131 +5963,55 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
       </div>
       {rows.length ? (
         <Panel title="Ticket Register" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Passenger</th>
-              <th>Route / travel</th>
-              <th>Office</th>
-              <th>Payment</th>
-              {financial && (
-                <>
-                  <th>Sale</th>
-                  <th>Agency cost</th>
-                  <th>Profit</th>
-                </>
-              )}
-              <th>Payment status</th>
-              <th>Ticket status</th>
-              {canWrite && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((x) => {
-              const profit =
-                x.type === "Refund" ? -x.amount : x.amount - x.cost;
-              return (
-                <tr key={x.id}>
-                  <td>
-                    <div className="ref-cell">
-                      <div className="ref-cell-text">
-                        <strong>{x.ref}</strong>
-                        <small>{dateLabel(x.saleDate)}</small>
-                      </div>
-                      {x.type !== "Refund" && (
-                        <button
-                          type="button"
-                          className="receipt-chip"
-                          title={`Generate receipt for ${x.ref}`}
-                          aria-label={`Generate receipt for ${x.ref}`}
-                          onClick={() =>
-                            generateReceipt(
-                              ticketReceiptData(
-                                x,
-                                data.agencyName,
-                                paidViaLabel(
-                                  data,
-                                  "ticket",
-                                  x.id,
-                                  x.paymentMethod,
-                                ),
-                              ),
-                              "/somway-primary-logo.png",
-                            )
-                          }
-                        >
-                          <Icon name="receipt" size={14} />
-                          <span>Receipt</span>
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    {x.passenger}
-                    <small>{x.phone}</small>
-                  </td>
-                  <td>
-                    {x.route}
-                    <small>
-                      {dateLabel(x.travelDate)} · {x.airlinePnr || "No PNR"}
-                    </small>
-                  </td>
-                  <td>
-                    <BranchBadge data={data} office={x.office} />
-                  </td>
-                  <td>
-                    {x.paymentMethod}
-                    <small>
-                      {x.paymentStatus === "partial"
-                        ? `${money(x.amountPaid || 0, x.currency)} paid`
-                        : x.paid
-                          ? dateLabel(x.paymentDate)
-                          : x.type === "Refund"
-                            ? "Refund not paid"
-                            : "Awaiting payment"}
-                    </small>
-                  </td>
-                  {financial && (
-                    <>
-                      <td>
-                        {money(
-                          (x.type === "Refund" ? -1 : 1) * x.amount,
-                          x.currency,
-                        )}
-                      </td>
-                      <td>{money(x.cost, x.currency)}</td>
-                      <td className={profit < 0 ? "negative" : "positive"}>
-                        {money(profit, x.currency)}
-                      </td>
-                    </>
-                  )}
-                  <td>
-                    <Badge
-                      tone={
-                        x.type === "Refund"
-                          ? x.paid
-                            ? "success"
-                            : "danger"
-                          : x.paymentStatus === "paid"
-                            ? "success"
-                            : x.paymentStatus === "partial"
-                              ? "blue"
-                              : "warning"
-                      }
-                    >
-                      {x.type === "Refund"
-                        ? x.paid
-                          ? "Refunded"
-                          : "Refund due"
-                        : x.paymentStatus === "paid"
-                          ? "Paid"
-                          : x.paymentStatus === "partial"
-                            ? "Part paid"
-                            : "Unpaid"}
-                    </Badge>
-                  </td>
-                  <td>
+        <RecordList>
+          {rows.map((x) => {
+            const profit =
+              x.type === "Refund" ? -x.amount : x.amount - x.cost;
+            const payStatusTone =
+              x.type === "Refund"
+                ? x.paid
+                  ? "success"
+                  : "danger"
+                : x.paymentStatus === "paid"
+                  ? "success"
+                  : x.paymentStatus === "partial"
+                    ? "blue"
+                    : "warning";
+            const payStatusLabel =
+              x.type === "Refund"
+                ? x.paid
+                  ? "Refunded"
+                  : "Refund due"
+                : x.paymentStatus === "paid"
+                  ? "Paid"
+                  : x.paymentStatus === "partial"
+                    ? "Part paid"
+                    : "Unpaid";
+            return (
+              <RecordCard
+                key={x.id}
+                title={x.ref}
+                subtitle={
+                  <>
+                    <BranchName data={data} branch={x.office} /> ·{" "}
+                    {dateLabel(x.saleDate)}
+                  </>
+                }
+                cells={[
+                  { label: "Passenger", value: x.passenger, strong: true },
+                  { label: "Route", value: x.route },
+                  {
+                    label: "Sale",
+                    value: money(
+                      (x.type === "Refund" ? -1 : 1) * x.amount,
+                      x.currency,
+                    ),
+                    hide: !financial,
+                  },
+                ]}
+                badges={
+                  <>
+                    <Badge tone={payStatusTone}>{payStatusLabel}</Badge>
                     {canWrite ? (
                       <select
                         className={`inline-status ${x.status || "booked"}`}
@@ -6036,15 +6046,72 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                           ))}
                       </select>
                     ) : (
-                      <Badge
-                        tone={x.status === "cancelled" ? "danger" : "blue"}
-                      >
+                      <Badge tone={x.status === "cancelled" ? "danger" : "blue"}>
                         {serviceStatusLabel(x.status || "booked")}
                       </Badge>
                     )}
-                  </td>
-                  {canWrite && (
-                    <td>
+                  </>
+                }
+                details={[
+                  { label: "Reference", value: x.ref },
+                  { label: "Passenger", value: x.passenger },
+                  { label: "Phone", value: x.phone },
+                  { label: "Branch", value: <BranchName data={data} branch={x.office} /> },
+                  { label: "Route", value: x.route },
+                  { label: "Travel date", value: dateLabel(x.travelDate) },
+                  { label: "PNR", value: x.airlinePnr || "No PNR" },
+                  { label: "Sale date", value: dateLabel(x.saleDate) },
+                  {
+                    label: "Payment method",
+                    value:
+                      x.paymentStatus === "partial"
+                        ? `${x.paymentMethod} · ${money(x.amountPaid || 0, x.currency)} paid`
+                        : `${x.paymentMethod}${
+                            x.paid
+                              ? ` · ${dateLabel(x.paymentDate)}`
+                              : x.type === "Refund"
+                                ? " · Refund not paid"
+                                : " · Awaiting payment"
+                          }`,
+                  },
+                  {
+                    label: "Sale",
+                    value: money(
+                      (x.type === "Refund" ? -1 : 1) * x.amount,
+                      x.currency,
+                    ),
+                    hide: !financial,
+                  },
+                  { label: "Agency cost", value: money(x.cost, x.currency), hide: !financial },
+                  {
+                    label: "Profit",
+                    value: money(profit, x.currency),
+                    hide: !financial,
+                  },
+                ]}
+                actions={
+                  <>
+                    {x.type !== "Refund" && (
+                      <button
+                        type="button"
+                        className="receipt-chip"
+                        title={`Generate receipt for ${x.ref}`}
+                        onClick={() =>
+                          generateReceipt(
+                            ticketReceiptData(
+                              x,
+                              data.agencyName,
+                              paidViaLabel(data, "ticket", x.id, x.paymentMethod),
+                            ),
+                            "/somway-primary-logo.png",
+                          )
+                        }
+                      >
+                        <Icon name="receipt" size={14} />
+                        <span>Receipt</span>
+                      </button>
+                    )}
+                    {canWrite && (
                       <Actions
                         onEdit={() => setEditing(x)}
                         onDelete={canDelete ? () => setDeleting(x) : undefined}
@@ -6059,13 +6126,13 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                             : "Record payment"
                         }
                       />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
+                    )}
+                  </>
+                }
+              />
+            );
+          })}
+        </RecordList>
         </Panel>
       ) : (
         <Empty
@@ -6566,139 +6633,154 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
       />
       {rows.length ? (
         <Panel title="Shipments" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Tracking</th>
-              <th>Route</th>
-              <th>Sender → receiver</th>
-              <th>Shipment</th>
-              {financial && <th>Cargo charge</th>}
-              <th>Payment</th>
-              <th>Status</th>
-              <th>Last update</th>
-              {canWrite && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((x) => {
-              const amount = x.customerCharge ?? x.weight * x.rate;
-              const actions = cargoNextActions(x, user);
-              const canTakePayment =
-                user.role === "owner" ||
+        <RecordList>
+          {rows.map((x) => {
+            const amount = x.customerCharge ?? x.weight * x.rate;
+            const actions = cargoNextActions(x, user);
+            const canTakePayment =
+              user.role === "owner" ||
+              (user.role === "operator" &&
+                String(user.assignedBranchId || "") ===
+                  String(x.paidByBranchId || x.originBranchId || ""));
+            const canCancel =
+              !["delivered", "cancelled"].includes(
+                cargoStatusKey(x.status),
+              ) &&
+              (user.role === "owner" ||
                 (user.role === "operator" &&
-                  String(user.assignedBranchId || "") ===
-                    String(x.paidByBranchId || x.originBranchId || ""));
-              const canCancel =
-                !["delivered", "cancelled"].includes(
-                  cargoStatusKey(x.status),
-                ) &&
-                (user.role === "owner" ||
-                  (user.role === "operator" &&
-                    [x.originBranchId, x.destinationBranchId].some(
-                      (branchId) =>
-                        String(branchId || "") ===
-                        String(user.assignedBranchId || ""),
-                    )));
-              return (
-                <tr key={x.id}>
-                  <td>
-                    <div className="ref-cell">
-                      <div className="ref-cell-text">
-                        <button type="button" className="text-button" onClick={() => setDetails(x)}>
-                          <strong>{x.tracking}</strong>
-                        </button>
-                        <small>{dateLabel(x.dateIn)}</small>
-                      </div>
-                      <button
-                        type="button"
-                        className="receipt-chip"
-                        title={`Generate receipt for ${x.tracking}`}
-                        aria-label={`Generate receipt for ${x.tracking}`}
-                        onClick={() =>
-                          generateReceipt(
-                            cargoReceiptData(
-                              x,
-                              data.agencyName,
-                              data.users.find((u) => u.id === x.createdBy)?.name ||
-                                "Agency team",
-                              paidViaLabel(data, "cargo", x.id, x.paymentMethod),
-                            ),
-                            "/somway-primary-logo.png",
-                          )
-                        }
-                      >
-                        <Icon name="receipt" size={14} />
-                        <span>Receipt</span>
-                      </button>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="route-inline">
-                      {x.origin.slice(0, 3).toUpperCase()} <b>→</b>{" "}
-                      {x.destination.slice(0, 3).toUpperCase()}
-                    </span>
-                  </td>
-                  <td>
-                    {x.sender}
-                    <small>
-                      to {x.receiver} · Payer:{" "}
-                      {x.paymentResponsibility === "receiver"
-                        ? "Receiver"
-                        : x.paymentResponsibility === "sender"
-                          ? "Sender"
-                          : "Unresolved"}
-                    </small>
-                  </td>
-                  <td>
-                    {x.weight} kg · {x.contents}
-                    <small>{money(x.rate, x.currency)} / kg</small>
-                  </td>
-                  {financial && (
-                    <td>
-                      {money(amount, x.currency)}
-                      <small>Customer charge</small>
-                    </td>
-                  )}
-                  <td>
-                    <Badge
-                      tone={
-                        x.paymentStatus === "paid"
-                          ? "success"
-                          : x.paymentStatus === "partial"
-                            ? "blue"
-                            : "warning"
-                      }
-                    >
-                      {x.paymentStatus === "paid"
-                        ? "Paid"
-                        : x.paymentStatus === "partial"
-                          ? "Part paid"
-                          : "Unpaid"}
-                    </Badge>
-                    <small>
-                      {x.paymentStatus === "partial"
-                        ? `${money(x.amountPaid || 0, x.currency)} paid · ${money(x.balance || 0, x.currency)} due`
-                        : x.paymentStatus === "unpaid"
-                          ? `${money(x.balance ?? amount, x.currency)} due`
-                          : "Paid in full"}
-                    </small>
-                  </td>
-                  <td>
+                  [x.originBranchId, x.destinationBranchId].some(
+                    (branchId) =>
+                      String(branchId || "") ===
+                      String(user.assignedBranchId || ""),
+                  )));
+            const paymentTone =
+              x.paymentStatus === "paid"
+                ? "success"
+                : x.paymentStatus === "partial"
+                  ? "blue"
+                  : "warning";
+            const paymentLabel =
+              x.paymentStatus === "paid"
+                ? "Paid"
+                : x.paymentStatus === "partial"
+                  ? "Part paid"
+                  : "Unpaid";
+            return (
+              <RecordCard
+                key={x.id}
+                title={
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => setDetails(x)}
+                  >
+                    {x.tracking}
+                  </button>
+                }
+                subtitle={
+                  <>
+                    <BranchName data={data} branch={x.origin} /> ·{" "}
+                    {dateLabel(x.dateIn)}
+                  </>
+                }
+                cells={[
+                  {
+                    label: "Sender",
+                    value: x.sender,
+                    strong: true,
+                  },
+                  {
+                    label: "Route",
+                    value: `${x.origin.slice(0, 3).toUpperCase()} → ${x.destination.slice(0, 3).toUpperCase()}`,
+                  },
+                  {
+                    label: "Cargo charge",
+                    value: money(amount, x.currency),
+                    hide: !financial,
+                  },
+                ]}
+                badges={
+                  <>
+                    <Badge tone={paymentTone}>{paymentLabel}</Badge>
                     <Badge tone={cargoStatusTone(x.status)}>
                       {cargoStatusLabel(x.status)}
                     </Badge>
-                  </td>
-                  <td>
-                    {new Date(x.updatedAt).toLocaleDateString("en-GB")}
-                    <small>
-                      {x.statusHistory?.at(-1)?.userName ||
-                        data.users.find((u) => u.id === x.updatedBy)?.name ||
-                        "Team"}
-                    </small>
-                  </td>
-                  {canWrite && (
-                    <td>
+                  </>
+                }
+                details={[
+                  { label: "Tracking", value: x.tracking },
+                  { label: "Branch", value: <BranchName data={data} branch={x.origin} /> },
+                  { label: "Sender", value: x.sender },
+                  { label: "Receiver", value: x.receiver },
+                  {
+                    label: "Payer",
+                    value:
+                      x.paymentResponsibility === "receiver"
+                        ? "Receiver"
+                        : x.paymentResponsibility === "sender"
+                          ? "Sender"
+                          : "Unresolved",
+                  },
+                  {
+                    label: "Route",
+                    value: `${x.origin} → ${x.destination}`,
+                  },
+                  { label: "Shipment", value: `${x.weight} kg · ${x.contents}` },
+                  { label: "Rate", value: `${money(x.rate, x.currency)} / kg` },
+                  {
+                    label: "Cargo charge",
+                    value: money(amount, x.currency),
+                    hide: !financial,
+                  },
+                  {
+                    label: "Payment",
+                    value:
+                      x.paymentStatus === "partial"
+                        ? `${money(x.amountPaid || 0, x.currency)} paid · ${money(x.balance || 0, x.currency)} due`
+                        : x.paymentStatus === "unpaid"
+                          ? `${money(x.balance ?? amount, x.currency)} due`
+                          : "Paid in full",
+                  },
+                  { label: "Date created", value: dateLabel(x.dateIn) },
+                  {
+                    label: "Last update",
+                    value: `${new Date(x.updatedAt).toLocaleDateString("en-GB")} · ${
+                      x.statusHistory?.at(-1)?.userName ||
+                      data.users.find((u) => u.id === x.updatedBy)?.name ||
+                      "Team"
+                    }`,
+                  },
+                ]}
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      className="small-icon"
+                      onClick={() => setDetails(x)}
+                    >
+                      Full details
+                    </button>
+                    <button
+                      type="button"
+                      className="receipt-chip"
+                      title={`Generate receipt for ${x.tracking}`}
+                      onClick={() =>
+                        generateReceipt(
+                          cargoReceiptData(
+                            x,
+                            data.agencyName,
+                            data.users.find((u) => u.id === x.createdBy)?.name ||
+                              "Agency team",
+                            paidViaLabel(data, "cargo", x.id, x.paymentMethod),
+                          ),
+                          "/somway-primary-logo.png",
+                        )
+                      }
+                    >
+                      <Icon name="receipt" size={14} />
+                      <span>Receipt</span>
+                    </button>
+                    {canWrite && (
                       <div className="row-actions">
                         {canTakePayment && (x.balance ?? amount) > 0 && (
                           <button
@@ -6747,13 +6829,13 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                           </button>
                         )}
                       </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
+                    )}
+                  </>
+                }
+              />
+            );
+          })}
+        </RecordList>
         </Panel>
       ) : (
         <Empty
@@ -7757,41 +7839,28 @@ function Receivables({
           detail="Reading customer balances from MongoDB."
         />
       ) : rows.length ? (
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Service</th>
-              <th>Customer responsible</th>
-              <th>Branch</th>
-              <th>Date</th>
-              <th>Total charge</th>
-              <th>Total Paid</th>
-              <th>Remaining Balance</th>
-              <th>Status</th>
-              <th>Aging</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td>
-                  <strong>{row.reference}</strong>
-                </td>
-                <td>{row.service}</td>
-                <td>
-                  <strong>{row.customer}</strong>
-                  {!row.payerResolved && <small>Needs payer resolution</small>}
-                </td>
-                <td><BranchName data={data} branch={row.branch} /></td>
-                <td>{dateLabel(row.transactionDate)}</td>
-                <td>{money(row.totalCharge, row.currency)}</td>
-                <td>{money(row.totalPaid, row.currency)}</td>
-                <td className={row.balanceDue > 0 ? "negative" : "positive"}>
-                  {money(row.balanceDue, row.currency)}
-                </td>
-                <td>
+        <RecordList>
+          {rows.map((row) => (
+            <RecordCard
+              key={row.id}
+              title={row.reference}
+              subtitle={
+                <>
+                  <BranchName data={data} branch={row.branch} /> ·{" "}
+                  {dateLabel(row.transactionDate)}
+                </>
+              }
+              cells={[
+                { label: "Customer", value: row.customer, strong: true },
+                { label: "Service", value: row.service },
+                {
+                  label: "Balance",
+                  value: money(row.balanceDue, row.currency),
+                  strong: true,
+                },
+              ]}
+              badges={
+                <>
                   <Badge
                     tone={
                       row.paymentStatus === "paid"
@@ -7803,27 +7872,47 @@ function Receivables({
                   >
                     {row.paymentStatus}
                   </Badge>
-                </td>
-                <td>
-                  {row.ageDays} days -{" "}
-                  {row.aging === "current" ? "Current" : `${row.aging} days`}
-                </td>
-                <td>
-                  {row.balanceDue > 0 && row.payerResolved && (
-                    <div className="row-actions">
-                      <button type="button" onClick={() => setPaying(row)}>
-                        Receive Payment
-                      </button>
-                    </div>
-                  )}
-                  {row.balanceDue <= 0 && (
-                    <span className="paid-in-full">Paid in Full</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </TableShell>
+                  <Badge tone="neutral">
+                    {row.aging === "current" ? "Current" : `${row.aging} days`}
+                  </Badge>
+                </>
+              }
+              details={[
+                { label: "Reference", value: row.reference },
+                { label: "Service", value: row.service },
+                {
+                  label: "Customer responsible",
+                  value: (
+                    <>
+                      {row.customer}
+                      {!row.payerResolved && " · Needs payer resolution"}
+                    </>
+                  ),
+                },
+                { label: "Branch", value: <BranchName data={data} branch={row.branch} /> },
+                { label: "Date", value: dateLabel(row.transactionDate) },
+                { label: "Total charge", value: money(row.totalCharge, row.currency) },
+                { label: "Total paid", value: money(row.totalPaid, row.currency) },
+                { label: "Remaining balance", value: money(row.balanceDue, row.currency) },
+                {
+                  label: "Aging",
+                  value: `${row.ageDays} days - ${row.aging === "current" ? "Current" : `${row.aging} days`}`,
+                },
+              ]}
+              actions={
+                row.balanceDue > 0 && row.payerResolved ? (
+                  <div className="row-actions">
+                    <button type="button" onClick={() => setPaying(row)}>
+                      Receive Payment
+                    </button>
+                  </div>
+                ) : row.balanceDue <= 0 ? (
+                  <span className="paid-in-full">Paid in Full</span>
+                ) : undefined
+              }
+            />
+          ))}
+        </RecordList>
       ) : (
         <Empty
           title={
@@ -7983,114 +8072,55 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
       </div>
       {rows.length ? (
         <Panel title="Visa Register" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Applicant</th>
-              <th>Destination</th>
-              <th>Office</th>
-              {financial && (
-                <>
-                  <th>Sale / refund</th>
-                  <th>Profit / loss</th>
-                </>
-              )}
-              <th>Payment</th>
-              <th>Progress</th>
-              {canWrite && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((x) => {
-              const profit =
-                x.type === "Refund" ? -x.amount : x.amount - x.cost;
-              return (
-                <tr key={x.id}>
-                  <td>
-                    <div className="ref-cell">
-                      <div className="ref-cell-text">
-                        <strong>{x.ref}</strong>
-                        <small>{dateLabel(x.appDate)}</small>
-                      </div>
-                      {x.type !== "Refund" && (
-                        <button
-                          type="button"
-                          className="receipt-chip"
-                          title={`Generate receipt for ${x.ref}`}
-                          aria-label={`Generate receipt for ${x.ref}`}
-                          onClick={() =>
-                            generateReceipt(
-                              visaReceiptData(
-                                x,
-                                data.agencyName,
-                                paidViaLabel(data, "visa", x.id, x.paymentMethod),
-                              ),
-                              "/somway-primary-logo.png",
-                            )
-                          }
-                        >
-                          <Icon name="receipt" size={14} />
-                          <span>Receipt</span>
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    {x.applicant}
-                    <small>{x.phone}</small>
-                  </td>
-                  <td>
-                    {x.destination}
-                    <small>{x.visaType}</small>
-                  </td>
-                  <td>
-                    <BranchBadge data={data} office={x.office} />
-                  </td>
-                  {financial && (
-                    <>
-                      <td>
-                        {money(
-                          (x.type === "Refund" ? -1 : 1) * x.amount,
-                          x.currency,
-                        )}
-                      </td>
-                      <td className={profit < 0 ? "negative" : "positive"}>
-                        {money(profit, x.currency)}
-                      </td>
-                    </>
-                  )}
-                  <td>
-                    <Badge
-                      tone={
-                        x.type === "Refund"
-                          ? x.paymentStatus === "paid"
-                            ? "success"
-                            : "danger"
-                          : x.paymentStatus === "paid"
-                            ? "success"
-                            : x.paymentStatus === "partial"
-                              ? "blue"
-                              : "warning"
-                      }
-                    >
-                      {x.type === "Refund"
-                        ? x.paymentStatus === "paid"
-                          ? "Refunded"
-                          : "Refund due"
-                        : x.paymentStatus === "paid"
-                          ? "Paid"
-                          : x.paymentStatus === "partial"
-                            ? "Part paid"
-                            : "Unpaid"}
-                    </Badge>
-                    <small>
-                      {x.paymentStatus === "partial"
-                        ? `${money(x.amountPaid || 0, x.currency)} paid`
-                        : x.paymentMethod}
-                    </small>
-                  </td>
-                  <td>
+        <RecordList>
+          {rows.map((x) => {
+            const profit =
+              x.type === "Refund" ? -x.amount : x.amount - x.cost;
+            const payStatusTone =
+              x.type === "Refund"
+                ? x.paymentStatus === "paid"
+                  ? "success"
+                  : "danger"
+                : x.paymentStatus === "paid"
+                  ? "success"
+                  : x.paymentStatus === "partial"
+                    ? "blue"
+                    : "warning";
+            const payStatusLabel =
+              x.type === "Refund"
+                ? x.paymentStatus === "paid"
+                  ? "Refunded"
+                  : "Refund due"
+                : x.paymentStatus === "paid"
+                  ? "Paid"
+                  : x.paymentStatus === "partial"
+                    ? "Part paid"
+                    : "Unpaid";
+            return (
+              <RecordCard
+                key={x.id}
+                title={x.ref}
+                subtitle={
+                  <>
+                    <BranchName data={data} branch={x.office} /> ·{" "}
+                    {dateLabel(x.appDate)}
+                  </>
+                }
+                cells={[
+                  { label: "Applicant", value: x.applicant, strong: true },
+                  { label: "Destination", value: x.destination },
+                  {
+                    label: "Sale / refund",
+                    value: money(
+                      (x.type === "Refund" ? -1 : 1) * x.amount,
+                      x.currency,
+                    ),
+                    hide: !financial,
+                  },
+                ]}
+                badges={
+                  <>
+                    <Badge tone={payStatusTone}>{payStatusLabel}</Badge>
                     {canWrite ? (
                       <select
                         className={`inline-status ${x.status}`}
@@ -8134,9 +8164,60 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                         {serviceStatusLabel(x.status)}
                       </Badge>
                     )}
-                  </td>
-                  {canWrite && (
-                    <td>
+                  </>
+                }
+                details={[
+                  { label: "Reference", value: x.ref },
+                  { label: "Applicant", value: x.applicant },
+                  { label: "Phone", value: x.phone },
+                  { label: "Branch", value: <BranchName data={data} branch={x.office} /> },
+                  { label: "Destination", value: x.destination },
+                  { label: "Visa type", value: x.visaType },
+                  { label: "Application date", value: dateLabel(x.appDate) },
+                  {
+                    label: "Payment method",
+                    value:
+                      x.paymentStatus === "partial"
+                        ? `${x.paymentMethod} · ${money(x.amountPaid || 0, x.currency)} paid`
+                        : x.paymentMethod,
+                  },
+                  {
+                    label: "Sale / refund",
+                    value: money(
+                      (x.type === "Refund" ? -1 : 1) * x.amount,
+                      x.currency,
+                    ),
+                    hide: !financial,
+                  },
+                  {
+                    label: "Profit / loss",
+                    value: money(profit, x.currency),
+                    hide: !financial,
+                  },
+                ]}
+                actions={
+                  <>
+                    {x.type !== "Refund" && (
+                      <button
+                        type="button"
+                        className="receipt-chip"
+                        title={`Generate receipt for ${x.ref}`}
+                        onClick={() =>
+                          generateReceipt(
+                            visaReceiptData(
+                              x,
+                              data.agencyName,
+                              paidViaLabel(data, "visa", x.id, x.paymentMethod),
+                            ),
+                            "/somway-primary-logo.png",
+                          )
+                        }
+                      >
+                        <Icon name="receipt" size={14} />
+                        <span>Receipt</span>
+                      </button>
+                    )}
+                    {canWrite && (
                       <Actions
                         onEdit={() => setEditing(x)}
                         onDelete={canDelete ? () => setDeleting(x) : undefined}
@@ -8151,13 +8232,13 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                             : "Record payment"
                         }
                       />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
+                    )}
+                  </>
+                }
+              />
+            );
+          })}
+        </RecordList>
         </Panel>
       ) : (
         <Empty
@@ -10768,88 +10849,92 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
       </Panel>
       {bills.length ? (
         <Panel title="Payables" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Branch</th>
-              <th>Payable to</th>
-              <th>Description</th>
-              <th>Due</th>
-              <th>Billed</th>
-              <th>Paid</th>
-              <th>Balance</th>
-              <th>Status</th>
-              {canWrite && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {bills.map((x) => {
-              const paid = paidFor(x);
-              const b = balanceFor(x);
-              return (
-                <tr key={x.id}>
-                  <td>{dateLabel(x.date)}</td>
-                  <td><BranchName data={data} branch={branchName(data, x.branchId, "Unassigned")} /></td>
-                  <td>
-                    <strong>{x.supplier}</strong>
-                  </td>
-                  <td>{x.description}</td>
-                  <td>{dateLabel(x.dueDate)}</td>
-                  <td>{money(x.billed, x.currency)}</td>
-                  <td>{money(paid, x.currency)}</td>
-                  <td className={b > 0 ? "negative" : "positive"}>
-                    {money(b, x.currency)}
-                  </td>
-                  <td>
-                    <Badge
-                      tone={
-                        b <= 0 ? "success" : paid > 0 ? "warning" : "danger"
-                      }
-                    >
-                      {b <= 0 ? "Paid" : paid > 0 ? "Partial" : "Unpaid"}
-                    </Badge>
-                  </td>
-                  {canWrite && (
-                    <td>
-                      <div className="row-actions">
-                        {b > 0 && x.recordStatus !== "cancelled" && (
-                          <button type="button" onClick={() => setPaying(x)}>
-                            Pay
-                          </button>
-                        )}
-                        {x.recordStatus !== "cancelled" && (
-                          <Actions
-                            onEdit={() => setEditing(x)}
-                            onDelete={() => {
-                              const reason = window.prompt(
-                                "Reason for cancelling this payable",
-                              );
-                              if (!reason?.trim()) return;
-                              void save(
-                                (d) => ({
-                                  ...d,
-                                  suppliers: d.suppliers.filter(
-                                    (y) => y.id !== x.id,
-                                  ),
-                                }),
-                                {
-                                  entity: "Supplier",
-                                  detail: `Cancelled ${x.supplier} bill: ${reason.trim()}`,
-                                },
-                              );
-                              notify("Payable cancelled");
-                            }}
-                          />
-                        )}
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
+        <RecordList>
+          {bills.map((x) => {
+            const paid = paidFor(x);
+            const b = balanceFor(x);
+            return (
+              <RecordCard
+                key={x.id}
+                title={x.supplier}
+                subtitle={
+                  <>
+                    <BranchName
+                      data={data}
+                      branch={branchName(data, x.branchId, "Unassigned")}
+                    />{" "}
+                    · {dateLabel(x.date)}
+                  </>
+                }
+                cells={[
+                  { label: "Description", value: x.description },
+                  { label: "Balance", value: money(b, x.currency), strong: true },
+                  { label: "Due", value: dateLabel(x.dueDate) },
+                ]}
+                badges={
+                  <Badge
+                    tone={b <= 0 ? "success" : paid > 0 ? "warning" : "danger"}
+                  >
+                    {b <= 0 ? "Paid" : paid > 0 ? "Partial" : "Unpaid"}
+                  </Badge>
+                }
+                details={[
+                  { label: "Date", value: dateLabel(x.date) },
+                  {
+                    label: "Branch",
+                    value: (
+                      <BranchName
+                        data={data}
+                        branch={branchName(data, x.branchId, "Unassigned")}
+                      />
+                    ),
+                  },
+                  { label: "Payable to", value: x.supplier },
+                  { label: "Description", value: x.description },
+                  { label: "Due date", value: dateLabel(x.dueDate) },
+                  { label: "Billed", value: money(x.billed, x.currency) },
+                  { label: "Paid", value: money(paid, x.currency) },
+                  { label: "Balance", value: money(b, x.currency) },
+                ]}
+                actions={
+                  canWrite ? (
+                    <div className="row-actions">
+                      {b > 0 && x.recordStatus !== "cancelled" && (
+                        <button type="button" onClick={() => setPaying(x)}>
+                          Pay
+                        </button>
+                      )}
+                      {x.recordStatus !== "cancelled" && (
+                        <Actions
+                          onEdit={() => setEditing(x)}
+                          onDelete={() => {
+                            const reason = window.prompt(
+                              "Reason for cancelling this payable",
+                            );
+                            if (!reason?.trim()) return;
+                            void save(
+                              (d) => ({
+                                ...d,
+                                suppliers: d.suppliers.filter(
+                                  (y) => y.id !== x.id,
+                                ),
+                              }),
+                              {
+                                entity: "Supplier",
+                                detail: `Cancelled ${x.supplier} bill: ${reason.trim()}`,
+                              },
+                            );
+                            notify("Payable cancelled");
+                          }}
+                        />
+                      )}
+                    </div>
+                  ) : undefined
+                }
+              />
+            );
+          })}
+        </RecordList>
         </Panel>
       ) : (
         <Empty
@@ -11346,85 +11431,98 @@ function Clients({ data, user, save, notify }: ModuleProps) {
       </div>
       {rows.length ? (
         <Panel title="Client Directory" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Client</th>
-              <th>Home office</th>
-              <th>Type</th>
-              <th>Tickets</th>
-              <th>Cargo</th>
-              <th>Visas</th>
-              {financial && (
-                <>
-                  <th>Spend KES</th>
-                  <th>Spend USD</th>
-                </>
-              )}
-              <th>Last activity</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((x) => {
-              const s = clientStats(data, x);
-              return (
-                <tr key={x.id}>
-                  <td>
-                    <strong>{x.name}</strong>
-                    <small>
-                      {x.phone}
-                      {x.normalizedPhone ? ` · ${x.normalizedPhone}` : ""}
-                      {x.email ? ` · ${x.email}` : ""}
-                    </small>
-                  </td>
-                  <td>
-                    <BranchBadge data={data} office={x.homeOffice} />
-                  </td>
-                  <td>{x.type}</td>
-                  <td>{s.tickets}</td>
-                  <td>{s.cargo}</td>
-                  <td>{s.visas}</td>
-                  {financial && (
-                    <>
-                      <td>{money(s.spendKES, "KES")}</td>
-                      <td>{money(s.spendUSD, "USD")}</td>
-                    </>
-                  )}
-                  <td>{dateLabel(s.last)}</td>
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        aria-label="View client"
-                        onClick={() => void openClient(x)}
-                      >
-                        <Icon name="eye" size={16} />
-                      </button>
-                      {canWrite && (
-                        <>
+        <RecordList>
+          {rows.map((x) => {
+            const s = clientStats(data, x);
+            return (
+              <RecordCard
+                key={x.id}
+                title={x.name}
+                subtitle={
+                  <>
+                    {x.phone}
+                    {x.email ? ` · ${x.email}` : ""}
+                  </>
+                }
+                cells={[
+                  {
+                    label: "Home office",
+                    value: <BranchName data={data} branch={x.homeOffice} />,
+                  },
+                  { label: "Type", value: x.type },
+                  { label: "Last activity", value: dateLabel(s.last) },
+                ]}
+                badges={
+                  <>
+                    <Badge tone="blue">{s.tickets} tickets</Badge>
+                    <Badge tone="blue">{s.cargo} cargo</Badge>
+                    <Badge tone="neutral">{s.visas} visas</Badge>
+                  </>
+                }
+                details={[
+                  { label: "Name", value: x.name },
+                  { label: "Phone", value: x.phone },
+                  {
+                    label: "Normalized phone",
+                    value: x.normalizedPhone || "—",
+                    hide: !x.normalizedPhone,
+                  },
+                  { label: "Email", value: x.email || "—", hide: !x.email },
+                  {
+                    label: "Home office",
+                    value: <BranchName data={data} branch={x.homeOffice} />,
+                  },
+                  { label: "Type", value: x.type },
+                  { label: "Tickets", value: s.tickets },
+                  { label: "Cargo", value: s.cargo },
+                  { label: "Visas", value: s.visas },
+                  {
+                    label: "Spend KES",
+                    value: money(s.spendKES, "KES"),
+                    hide: !financial,
+                  },
+                  {
+                    label: "Spend USD",
+                    value: money(s.spendUSD, "USD"),
+                    hide: !financial,
+                  },
+                  { label: "Last activity", value: dateLabel(s.last) },
+                ]}
+                actions={
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="small-icon"
+                      onClick={() => void openClient(x)}
+                    >
+                      <Icon name="eye" size={16} /> Activity
+                    </button>
+                    {canWrite && (
+                      <>
+                        <button
+                          className="small-icon edit-action"
+                          aria-label="Edit"
+                          onClick={() => setEditing(x)}
+                        >
+                          <Icon name="edit" size={16} />
+                        </button>
+                        {canDelete && (
                           <button
-                            aria-label="Edit"
-                            onClick={() => setEditing(x)}
+                            className="small-icon delete-action"
+                            aria-label="Delete"
+                            onClick={() => setDeleting(x)}
                           >
-                            <Icon name="edit" size={16} />
+                            <Icon name="trash" size={16} />
                           </button>
-                          {canDelete && (
-                            <button
-                              aria-label="Delete"
-                              onClick={() => setDeleting(x)}
-                            >
-                              <Icon name="trash" size={16} />
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
+                        )}
+                      </>
+                    )}
+                  </div>
+                }
+              />
+            );
+          })}
+        </RecordList>
         </Panel>
       ) : (
         <Empty
@@ -12939,6 +13037,62 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
       };
     });
 
+  // Group the per-branch/currency service rows into one block per branch, each
+  // carrying that branch's currency sub-groups. Each sub-group aggregates its
+  // services into branch-level KPI figures (charges, payments, cost, profit)
+  // and keeps the per-service breakdown for the service KPI cards.
+  const branchReportGroups = Array.from(
+    serviceGroups
+      .reduce(
+        (map, group) => {
+          const totals = group.services.reduce(
+            (summary, service) => ({
+              customerCharges: summary.customerCharges + service.customerCharges,
+              paymentsReceived:
+                summary.paymentsReceived + service.paymentsReceived,
+              directCost: summary.directCost + service.directCost,
+              profit: summary.profit + service.profit,
+            }),
+            { customerCharges: 0, paymentsReceived: 0, directCost: 0, profit: 0 },
+          );
+          const existing = map.get(group.branchId) || {
+            branchId: group.branchId,
+            branch: group.branch,
+            currencies: [] as Array<{
+              currency: Currency;
+              totals: typeof totals;
+              services: typeof group.services;
+            }>,
+          };
+          existing.currencies.push({
+            currency: group.currency as Currency,
+            totals,
+            services: group.services,
+          });
+          map.set(group.branchId, existing);
+          return map;
+        },
+        new Map<
+          string,
+          {
+            branchId: string;
+            branch: string;
+            currencies: Array<{
+              currency: Currency;
+              totals: {
+                customerCharges: number;
+                paymentsReceived: number;
+                directCost: number;
+                profit: number;
+              };
+              services: (typeof serviceGroups)[number]["services"];
+            }>;
+          }
+        >(),
+      )
+      .values(),
+  );
+
   const trendCurrencies = selectedBranch
     ? branchCurrencies(selectedBranch)
     : availableCurrencies;
@@ -13003,7 +13157,7 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
       <PageHeader
         eyebrow="Protected financial view"
         title="Financial Reports"
-        detail={`${titleScope} / ${currency || "all currencies separately"} / ${dateLabel(from)} to ${dateLabel(to)}`}
+        detail={`${titleScope} / each currency shown separately / ${dateLabel(from)} to ${dateLabel(to)}`}
         actions={
           <div className="report-actions">
             <select
@@ -13019,18 +13173,6 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
                 <option key={branch.id} value={branch.id}>
                   {branch.name}
                 </option>
-              ))}
-            </select>
-            <select
-              value={currency}
-              onChange={(event) =>
-                setCurrency(event.target.value as "" | Currency)
-              }
-              aria-label="Report currency"
-            >
-              <option value="">All Currencies</option>
-              {availableCurrencies.map((item) => (
-                <option key={item}>{item}</option>
               ))}
             </select>
             <div className="date-range">
@@ -13058,129 +13200,135 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
           </div>
         }
       />
-      {performanceSummary.map((summary) => (
-        <section key={`summary-${summary.currency}`} className="report-summary-block">
+      {selectedBranch && performanceSummary.length > 0 && (
+        <section className="report-summary-block">
           <p className="eyebrow">
-            Service performance summary{performanceSummary.length > 1 ? ` · ${summary.currency}` : ""}
+            {titleScope} · financial performance
           </p>
-          <div className="metrics-grid six">
-            <MetricCard icon="receipt" tone="blue" label="Customer Charges" value={money(summary.customerCharges, summary.currency)} foot="Billed to customers" />
-            <MetricCard icon="money" tone="green" label="Payments Received" value={money(summary.paymentsReceived, summary.currency)} foot="Collected in period" />
-            <MetricCard icon="expense" tone="orange" label="Direct Cost" value={money(summary.directCost, summary.currency)} foot="Cost of service" />
-            <MetricCard icon="report" tone="violet" label="Profit" value={money(summary.profit, summary.currency)} foot="Charges less cost" />
-            <MetricCard icon="logout" tone="pink" label="Refunds" value={money(summary.refunds, summary.currency)} foot="Returned to customers" />
-            <MetricCard icon="wallet" tone="cyan" label="Net Revenue" value={money(summary.netReceived, summary.currency)} foot="Received less refunds" />
-          </div>
+          {performanceSummary.map((summary) => (
+            <div key={`summary-${summary.currency}`}>
+              {performanceSummary.length > 1 && (
+                <p className="branch-report-subhead">{summary.currency}</p>
+              )}
+              <div className="metrics-grid six">
+                <MetricCard icon="receipt" tone="blue" label="Customer Charges" value={money(summary.customerCharges, summary.currency)} foot="Billed to customers" />
+                <MetricCard icon="money" tone="green" label="Payments Received" value={money(summary.paymentsReceived, summary.currency)} foot="Collected in period" />
+                <MetricCard icon="expense" tone="orange" label="Direct Cost" value={money(summary.directCost, summary.currency)} foot="Cost of service" />
+                <MetricCard icon="report" tone="violet" label="Profit" value={money(summary.profit, summary.currency)} foot="Charges less cost" />
+                <MetricCard icon="logout" tone="pink" label="Refunds" value={money(summary.refunds, summary.currency)} foot="Returned to customers" />
+                <MetricCard icon="wallet" tone="cyan" label="Net Revenue" value={money(summary.netReceived, summary.currency)} foot="Received less refunds" />
+              </div>
+            </div>
+          ))}
         </section>
-      ))}
+      )}
 
       <section className="service-performance-section">
         <header className="service-performance-header">
-          <p className="eyebrow">Service performance</p>
-          <h2>Charges, payments and profit by service</h2>
+          <p className="eyebrow">
+            {selectedBranch ? "Service performance" : "Branch & service performance"}
+          </p>
+          <h2>
+            {selectedBranch
+              ? `${titleScope} — charges, payments and profit by service`
+              : "Each branch, then its services, by charges, payments and profit"}
+          </h2>
         </header>
-        {serviceGroups.length ? (
-          <div className="service-performance-groups">
-            {serviceGroups.map((group) => {
-              const groupTotals = group.services.reduce(
-                (summary, service) => ({
-                  customerCharges:
-                    summary.customerCharges + service.customerCharges,
-                  paymentsReceived:
-                    summary.paymentsReceived + service.paymentsReceived,
-                  directCost: summary.directCost + service.directCost,
-                  profit: summary.profit + service.profit,
-                }),
-                {
-                  customerCharges: 0,
-                  paymentsReceived: 0,
-                  directCost: 0,
-                  profit: 0,
-                },
-              );
-              return (
-                <article
-                  className="service-performance-group"
-                  key={`${group.branchId}-${group.currency}`}
-                >
-                  <div className="service-group-heading">
-                    <h3>
-                      <BranchName data={data} branch={group.branch} />
-                    </h3>
-                    <Badge
-                      tone={group.currency === "USD" ? "blue" : "success"}
-                    >
-                      {group.currency}
-                    </Badge>
-                  </div>
-                  <div className="service-group-summary">
-                    {(
-                      [
-                        ["Customer Charges", "customerCharges"],
-                        ["Payments Received", "paymentsReceived"],
-                        ["Direct Cost", "directCost"],
-                        ["Profit", "profit"],
-                      ] as const
-                    ).map(([label, metric]) => (
-                      <div key={metric}>
-                        <span className={`metric-icon tone-${metricLook(metric).tone}`}>
-                          <Icon name={metricLook(metric).icon} size={17} />
-                        </span>
-                        <span className="service-metric-label">{label}</span>
-                        <strong
-                          className={
-                            metric === "profit" && groupTotals[metric] < 0
-                              ? "negative"
-                              : ""
-                          }
-                        >
-                          {money(groupTotals[metric], group.currency)}
-                        </strong>
-                      </div>
+        {branchReportGroups.length ? (
+          <div className="branch-report-blocks">
+            {branchReportGroups.map((branch) => (
+              <article
+                className="branch-report-block"
+                key={branch.branchId || branch.branch}
+              >
+                <div className="branch-report-head">
+                  <h3>
+                    <BranchName data={data} branch={branch.branch} />
+                  </h3>
+                  <div className="record-badges">
+                    {branch.currencies.map((sub) => (
+                      <Badge
+                        key={sub.currency}
+                        tone={sub.currency === "USD" ? "blue" : "success"}
+                      >
+                        {sub.currency}
+                      </Badge>
                     ))}
                   </div>
-                  <TableShell>
-                    <thead>
-                      <tr>
-                        <th>Service</th>
-                        <th>Transactions</th>
-                        <th>Customer Charges</th>
-                        <th>Payments Received</th>
-                        <th>Direct Cost</th>
-                        <th>Profit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.services.map((service) => (
-                        <tr key={service.service}>
-                          <td>
-                            <strong>
-                              {service.service[0].toUpperCase() +
-                                service.service.slice(1)}
-                            </strong>
-                          </td>
-                          <td>{service.transactions}</td>
-                          <td>
-                            {money(service.customerCharges, group.currency)}
-                          </td>
-                          <td>
-                            {money(service.paymentsReceived, group.currency)}
-                          </td>
-                          <td>{money(service.directCost, group.currency)}</td>
-                          <td
-                            className={
-                              service.profit < 0 ? "negative" : "positive"
-                            }
-                          >
-                            {money(service.profit, group.currency)}
-                          </td>
-                        </tr>
+                </div>
+
+                {branch.currencies.map((sub) => (
+                  <div key={`${branch.branchId}-${sub.currency}`}>
+                    <p className="branch-report-subhead">
+                      Branch performance
+                      {branch.currencies.length > 1 ? ` · ${sub.currency}` : ""}
+                    </p>
+                    <div className="metrics-grid">
+                      <MetricCard
+                        icon="receipt"
+                        tone="blue"
+                        label="Customer Charges"
+                        value={money(sub.totals.customerCharges, sub.currency)}
+                        foot="Billed to customers"
+                      />
+                      <MetricCard
+                        icon="money"
+                        tone="green"
+                        label="Payments Received"
+                        value={money(sub.totals.paymentsReceived, sub.currency)}
+                        foot="Collected in period"
+                      />
+                      <MetricCard
+                        icon="expense"
+                        tone="orange"
+                        label="Direct Cost"
+                        value={money(sub.totals.directCost, sub.currency)}
+                        foot="Cost of service"
+                      />
+                      <MetricCard
+                        icon="report"
+                        tone="violet"
+                        label="Profit"
+                        value={money(sub.totals.profit, sub.currency)}
+                        foot="Charges less cost"
+                      />
+                    </div>
+
+                    <p className="branch-report-subhead">
+                      Service performance
+                      {branch.currencies.length > 1 ? ` · ${sub.currency}` : ""}
+                    </p>
+                    <div className="metrics-grid">
+                      {sub.services.map((service) => (
+                        <MetricCard
+                          key={service.service}
+                          icon={
+                            service.service === "cargo"
+                              ? "box"
+                              : service.service === "visa"
+                                ? "passport"
+                                : "ticket"
+                          }
+                          tone={
+                            service.service === "cargo"
+                              ? "cyan"
+                              : service.service === "visa"
+                                ? "violet"
+                                : "blue"
+                          }
+                          label={
+                            service.service[0].toUpperCase() +
+                            service.service.slice(1)
+                          }
+                          value={money(service.profit, sub.currency)}
+                          foot={`${service.transactions} txns · ${money(service.paymentsReceived, sub.currency)} received`}
+                        />
                       ))}
-                    </tbody>
-                  </TableShell>
-                </article>
-              );
-            })}
+                    </div>
+                  </div>
+                ))}
+              </article>
+            ))}
           </div>
         ) : (
           <Empty
