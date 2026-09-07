@@ -5747,10 +5747,10 @@ function LiveOverviewDashboard({
       <div className="metrics-grid six">
         <MetricCard icon="money" label="Payments Received" value={financial ? revenueValue.split("\n")[0] : "Protected"} tone="cyan" delta={trends.payments} foot="Selected period" />
         <MetricCard icon="box" label="Cargo Shipments" value={scopedCargo.length} tone="blue" delta={trends.cargo} foot={`${activeCargo.length} currently active`} />
-        <MetricCard icon="wallet" label="Accounts Receivable" value={financial ? receivableValue.split("\n")[0] : "Protected"} tone="green" foot={`${receivableRecords} outstanding records`} />
+        <MetricCard icon="wallet" label="Accounts Receivable" value={financial ? receivableValue.split("\n")[0] : "Protected"} tone="green" foot={`${receivableRecords} outstanding record${receivableRecords === 1 ? "" : "s"}`} />
         <MetricCard icon="users" label="Total Clients" value={scopedClients.filter((client) => client.isActive !== false).length} tone="violet" foot={selectedBranch?.name || "All active relationships"} />
         <MetricCard icon="passport" label="Visa Applications" value={scopedVisas.length} tone="cyan" delta={trends.visas} foot={`${pendingVisas.length} in progress`} />
-        <MetricCard icon="ticket" label="Tickets Issued" value={scopedTickets.filter((ticket) => ticket.status !== "cancelled").length} tone="blue" delta={trends.tickets} foot={`${scopedTickets.length} total records`} />
+        <MetricCard icon="ticket" label="Tickets Issued" value={scopedTickets.filter((ticket) => ticket.status !== "cancelled").length} tone="blue" delta={trends.tickets} foot={`${scopedTickets.length} total record${scopedTickets.length === 1 ? "" : "s"}`} />
       </div>
 
       {financial && (
