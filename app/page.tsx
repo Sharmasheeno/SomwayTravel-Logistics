@@ -1992,16 +1992,14 @@ function ProfileModal({
         </p>
         <div className="form-grid">
           <Field label="Current password">
-            <input
-              type="password"
+            <PasswordInput
               autoComplete="current-password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
             />
           </Field>
           <Field label="New password">
-            <input
-              type="password"
+            <PasswordInput
               autoComplete="new-password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
