@@ -564,20 +564,25 @@ h6,
 }
 
 .sidebar-brand .sidebar-logo {
-  width: min(100%, 220px);
-  height: 76px;
+  width: min(100%, 224px);
+  height: 64px;
   max-height: none;
-  object-fit: cover;
+  /* Show the whole wide lockup (no crop) and sit it on a white plaque so the
+     new logo's dark-navy "Som" and tagline stay legible on the dark sidebar. */
+  object-fit: contain;
   object-position: center;
   filter: none;
+  background: #fff;
+  padding: 8px 12px;
+  border-radius: 12px;
 }
 
 .public-logo-lockup .public-header-logo,
 .public-logo-lockup .public-footer-logo {
   width: 220px;
-  height: 68px;
-  object-fit: cover;
-  object-position: center;
+  height: 64px;
+  object-fit: contain;
+  object-position: left center;
   filter: none;
 }
 
@@ -588,15 +593,22 @@ h6,
 
 .auth-brand-logo {
   width: min(100%, 300px);
-  height: 104px;
-  object-fit: cover;
-  object-position: center;
+  height: 92px;
+  object-fit: contain;
+  object-position: left center;
   filter: none;
+  background: #fff;
+  padding: 10px 16px;
+  border-radius: 14px;
 }
 
 .loading-brand-logo {
   width: min(78vw, 320px);
-  height: 138px;
+  height: 120px;
+  object-fit: contain;
+  background: #fff;
+  padding: 12px 18px;
+  border-radius: 16px;
   margin: auto;
   border-radius: 6px;
 }
@@ -610,11 +622,13 @@ h6,
    it to fill a fixed 190x72 box, which is why only the middle of the wordmark
    showed. It must scale to fit, and shrink with the card on a phone. */
 .receipt-brand-logo {
-  width: clamp(120px, 42vw, 190px);
+  width: clamp(130px, 44vw, 200px);
   height: auto;
-  max-height: 62px;
-  padding: 8px 10px;
-  background: #061b3d;
+  max-height: 66px;
+  padding: 2px 0;
+  /* New logo carries dark-navy text on a transparent ground; the receipt sheet
+     is white, so no dark plaque is needed (a dark plaque would hide the text). */
+  background: transparent;
   object-fit: contain;
   object-position: left center;
   border-radius: 8px;
