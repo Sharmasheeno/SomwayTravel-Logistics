@@ -6568,6 +6568,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
   const [editing, setEditing] = useState<Cargo | null | undefined>();
   const [paying, setPaying] = useState<Cargo | null>(null);
   const [details, setDetails] = useState<Cargo | null>(null);
+  const [deleting, setDeleting] = useState<Cargo | null>(null);
   const rows = data.cargo
     .filter(
       (x) =>
@@ -6873,8 +6874,9 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                         </button>
                         {canCancel && (
                           <button
-                            className="delete-action"
+                            className="edit-action"
                             aria-label="Cancel shipment"
+                            title="Cancel shipment"
                             type="button"
                             onClick={() => {
                               const reason = window.prompt(
@@ -6884,6 +6886,17 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                                 void transitionCargo(x, "cancelled", reason);
                               }
                             }}
+                          >
+                            <Icon name="x" size={16} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            className="delete-action"
+                            aria-label="Delete"
+                            title="Archive shipment"
+                            type="button"
+                            onClick={() => setDeleting(x)}
                           >
                             <Icon name="trash" size={16} />
                           </button>
@@ -6981,6 +6994,25 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
             replaceData?.(next);
             setPaying(null);
             notify(`Payment recorded for cargo ${paying.tracking}`);
+          }}
+        />
+      )}
+      {deleting && (
+        <Confirm
+          title="Archive shipment?"
+          detail={`${deleting.tracking} will leave active registers while its history remains retained.`}
+          confirmLabel="Archive Shipment"
+          onClose={() => setDeleting(null)}
+          onConfirm={() => {
+            save(
+              (d) => ({
+                ...d,
+                cargo: d.cargo.filter((x) => x.id !== deleting.id),
+              }),
+              { entity: "Cargo", detail: `Archived ${deleting.tracking}` },
+            );
+            setDeleting(null);
+            notify("Shipment archived");
           }}
         />
       )}

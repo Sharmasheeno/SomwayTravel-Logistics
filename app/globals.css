@@ -6621,6 +6621,68 @@ th {
 .record-actions .row-actions {
   flex-wrap: wrap;
 }
+/* "Full details" chip inside a record card — give it a real chip look and keep
+   it the same compact height as the Receipt / Receive Payment chips beside it,
+   so the action row reads as one consistent set of buttons. */
+.record-actions .small-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #f4f7fb;
+  color: #35425c;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.record-actions .small-icon:hover {
+  filter: brightness(0.96);
+}
+/* Match the receipt chip's height to the other action chips so nothing looks
+   taller or shorter than its neighbours in the row. */
+.record-actions .receipt-chip {
+  min-height: 34px;
+}
+/* The trailing icon/text buttons (Receive Payment, status transitions, edit,
+   cancel, delete) share one wrapping group; let it flow to a new line and take
+   the full card width so long labels never spill out of their pill. */
+.record-actions > .row-actions {
+  flex: 1 1 100%;
+  gap: 8px;
+}
+
+/* On phones the action chips stack to full width so each label sits inside its
+   own pill instead of being squeezed and overlapping (as in the report). */
+@media (max-width: 700px) {
+  .record-actions {
+    gap: 8px;
+  }
+  .record-actions > .small-icon,
+  .record-actions > .receipt-chip {
+    flex: 1 1 100%;
+  }
+  .record-actions .row-actions {
+    width: 100%;
+  }
+  /* Text buttons (Receive Payment, Dispatch, etc.) take their own full row;
+     the compact icon buttons (Edit / Cancel / Delete) share a row. */
+  .record-actions .row-actions > button:not([aria-label]) {
+    flex: 1 1 100%;
+    min-height: 42px;
+    padding: 0 12px;
+  }
+  .record-actions .row-actions > button[aria-label] {
+    flex: 1 1 0;
+    min-height: 42px;
+  }
+}
 
 /* Per-branch financial report blocks: branch KPI cards, then that branch's
    per-service KPI cards, grouped inside one card per branch. */
