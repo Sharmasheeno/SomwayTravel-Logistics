@@ -11656,13 +11656,18 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                 ]}
                 badges={
                   <>
-                    <Badge tone="blue">{s.tickets} tickets</Badge>
-                    <Badge tone="blue">{s.cargo} cargo</Badge>
-                    <Badge tone="neutral">{s.visas} visas</Badge>
+                    <Badge tone="blue">
+                      {s.tickets} ticket{s.tickets === 1 ? "" : "s"}
+                    </Badge>
+                    <Badge tone="blue">
+                      {s.cargo} cargo
+                    </Badge>
+                    <Badge tone="neutral">
+                      {s.visas} visa{s.visas === 1 ? "" : "s"}
+                    </Badge>
                   </>
                 }
                 details={[
-                  { label: "Name", value: x.name },
                   { label: "Phone", value: x.phone },
                   {
                     label: "Normalized phone",
