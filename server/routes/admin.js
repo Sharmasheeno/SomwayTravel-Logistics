@@ -26,29 +26,46 @@ const slug = (value) =>
 // Generated credentials must satisfy the same policy as typed ones.
 const temporaryPassword = () => generateStrongPassword();
 
-const withLoginUrl = (req, user) => {
-  // Prefer an explicitly configured public URL so the link always carries the
-  // correct scheme/host/port (e.g. http://169.58.173.197:8080). Behind a proxy
-  // that terminates on port 80, req.get("host") drops the real port, producing
-  // a broken login link — the env var avoids that. Fall back to the request.
+// Resolve the public origin used to build staff login links, in priority
+// order: (1) the owner-editable Agency Settings value, (2) an env var, (3) the
+// incoming request. This means the correct scheme/host/port (e.g.
+// http://169.58.173.197:8080) is used even behind a proxy that terminates on
+// port 80 and drops the real port — and the owner can change it in-app with no
+// redeploy. Pass the pre-loaded settings row to avoid an extra query per user.
+const resolveLoginOrigin = (req, settings) => {
   const configured = String(
-    process.env.PUBLIC_APP_URL || process.env.PUBLIC_BASE_URL || "",
+    settings?.publicBaseUrl ||
+      process.env.PUBLIC_APP_URL ||
+      process.env.PUBLIC_BASE_URL ||
+      "",
   ).trim();
-  const origin = (
-    configured || `${req.protocol}://${req.get("host")}`
-  ).replace(/\/+$/, "");
+  return (configured || `${req.protocol}://${req.get("host")}`).replace(
+    /\/+$/,
+    "",
+  );
+};
+
+const withLoginUrl = (req, user, origin) => {
+  const base = (origin || `${req.protocol}://${req.get("host")}`).replace(
+    /\/+$/,
+    "",
+  );
   return {
     ...user.toSafeObject(true),
     loginUrl:
       user.role === "owner"
-        ? `${origin}/admin`
-        : `${origin}/portal/${user.loginToken}`,
+        ? `${base}/admin`
+        : `${base}/portal/${user.loginToken}`,
   };
 };
 
 router.get("/users", requireOwner, async (req, res) => {
-  const rows = await User.find({});
-  return res.json({ users: rows.map((row) => withLoginUrl(req, row)) });
+  const [rows, settings] = await Promise.all([
+    User.find({}),
+    AgencySettings.findOne({ key: "singleton" }).lean(),
+  ]);
+  const origin = resolveLoginOrigin(req, settings);
+  return res.json({ users: rows.map((row) => withLoginUrl(req, row, origin)) });
 });
 
 router.get("/settings", requireOwner, async (_req, res) => {
@@ -56,6 +73,7 @@ router.get("/settings", requireOwner, async (_req, res) => {
   return res.json({
     settings: {
       agencyName: settings?.agencyName || "SomWay Travel & Logistics",
+      publicBaseUrl: settings?.publicBaseUrl || "",
       timezone: settings?.timezone || "Africa/Mogadishu",
       businessDayStart: settings?.businessDayStart || "07:00",
       businessDayEnd: settings?.businessDayEnd || "18:00",
@@ -74,6 +92,28 @@ router.patch("/settings", requireOwner, async (req, res) => {
     return res.status(400).json({
       error: "Agency name must be between 3 and 120 characters.",
     });
+  }
+  // publicBaseUrl is optional and may be explicitly cleared to fall back to the
+  // env var / request. Only touch it when the caller actually sends the key.
+  let publicBaseUrl = current?.publicBaseUrl || "";
+  if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "publicBaseUrl")) {
+    publicBaseUrl = String(req.body.publicBaseUrl || "").trim();
+    if (publicBaseUrl) {
+      let parsed;
+      try {
+        parsed = new URL(publicBaseUrl);
+      } catch {
+        parsed = null;
+      }
+      if (!parsed || !/^https?:$/.test(parsed.protocol)) {
+        return res.status(400).json({
+          error:
+            "Login link base must be a full http(s) URL, e.g. http://169.58.173.197:8080",
+        });
+      }
+      // Store a clean origin (scheme + host + optional port), no trailing slash.
+      publicBaseUrl = parsed.origin;
+    }
   }
   const timezone = String(
     req.body?.timezone || current?.timezone || "Africa/Mogadishu",
@@ -101,7 +141,15 @@ router.patch("/settings", requireOwner, async (req, res) => {
   }
   await AgencySettings.findOneAndUpdate(
     { key: "singleton" },
-    { $set: { agencyName, timezone, businessDayStart, businessDayEnd } },
+    {
+      $set: {
+        agencyName,
+        publicBaseUrl,
+        timezone,
+        businessDayStart,
+        businessDayEnd,
+      },
+    },
     { upsert: true, setDefaultsOnInsert: true },
   );
   await Activity.create({
@@ -146,9 +194,11 @@ router.post("/users", requireOwner, async (req, res) => {
     active: true,
   });
 
-  return res
-    .status(201)
-    .json({ user: withLoginUrl(req, user), temporaryPassword: finalPassword });
+  const settings = await AgencySettings.findOne({ key: "singleton" }).lean();
+  return res.status(201).json({
+    user: withLoginUrl(req, user, resolveLoginOrigin(req, settings)),
+    temporaryPassword: finalPassword,
+  });
 });
 
 router.patch("/users", requireOwner, async (req, res) => {
@@ -205,8 +255,11 @@ router.patch("/users", requireOwner, async (req, res) => {
     detail: `Updated ${target.name} (${target.role}, ${target.active ? "active" : "suspended"})`,
   });
 
+  const settingsForLink = await AgencySettings.findOne({
+    key: "singleton",
+  }).lean();
   return res.json({
-    user: withLoginUrl(req, target),
+    user: withLoginUrl(req, target, resolveLoginOrigin(req, settingsForLink)),
     ...(password ? { temporaryPassword: password } : {}),
   });
 });

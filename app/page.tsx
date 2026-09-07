@@ -14527,6 +14527,89 @@ function BackupPanel({
   );
 }
 
+function LoginLinkPanel({ notify }: { notify: (message: string) => void }) {
+  const [value, setValue] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const response = await fetch("/api/admin/settings", {
+        cache: "no-store",
+      });
+      const payload = await response.json();
+      if (active && response.ok && payload.settings) {
+        setValue(payload.settings.publicBaseUrl || "");
+        setLoaded(true);
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+  const save = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publicBaseUrl: value.trim() }),
+      });
+      const payload = await response.json();
+      if (!response.ok)
+        throw new Error(payload.error || "Login link base could not be saved");
+      notify(
+        value.trim()
+          ? "Login link address updated"
+          : "Login link address cleared — links now follow the site address",
+      );
+    } catch (caught) {
+      notify(
+        caught instanceof Error
+          ? caught.message
+          : "Login link base could not be saved",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <article className="panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Staff access</p>
+          <h2>Login link address</h2>
+        </div>
+      </div>
+      <div className="form-grid compact-form">
+        <Field
+          label="Public site address"
+          wide
+          hint="The address staff use to open the site, including the port if any (e.g. http://169.58.173.197:8080). Staff login links are built from this. Leave blank to follow the address the site is opened from."
+        >
+          <input
+            type="url"
+            inputMode="url"
+            placeholder="http://169.58.173.197:8080"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
+        </Field>
+      </div>
+      <div className="button-row">
+        <button
+          className="button primary"
+          disabled={busy || !loaded}
+          onClick={() => void save()}
+        >
+          Save login link address
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function BusinessHoursPanel({ notify }: { notify: (message: string) => void }) {
   const [form, setForm] = useState({
     timezone: "Africa/Mogadishu",
@@ -14699,6 +14782,7 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
           </div>
         </article>
         <OwnerSecurity notify={notify} />
+        <LoginLinkPanel notify={notify} />
         <BusinessHoursPanel notify={notify} />
         <BranchManager data={data} notify={notify} />
         <BackupPanel notify={notify} replaceData={replaceData} />
