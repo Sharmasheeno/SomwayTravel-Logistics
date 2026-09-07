@@ -11067,6 +11067,7 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
                 }
                 cells={[
                   { label: "Description", value: x.description },
+                  { label: "Billed", value: money(x.billed, x.currency) },
                   { label: "Balance", value: money(b, x.currency), strong: true },
                   { label: "Due", value: dateLabel(x.dueDate) },
                 ]}
