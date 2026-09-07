@@ -3712,6 +3712,29 @@ h3 .branch-inline .branch-flag {
   white-space: nowrap;
 }
 
+/* On phones the 118px min-width plus the card's padding pushed the Suspend /
+   Reset password / Copy link row wider than the card, so the buttons spilled
+   past its right edge (and Copy link stranded on its own line). Let the action
+   group span the full card width and the buttons shrink to share the space:
+   Suspend + Reset password on one row, Copy link full-width beneath. */
+@media (max-width: 767px) {
+  .team-list .team-actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-content: stretch;
+    gap: 8px;
+  }
+  .team-list .team-actions > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 6px;
+  }
+  /* Copy link (only rendered when a login URL exists) takes its own full row. */
+  .team-list .team-actions > button:nth-child(3) {
+    flex-basis: 100%;
+  }
+}
+
 /* Every chart sits centred in its card on narrow screens: a donut, a bar
    chart or a grouped bar chart pinned left leaves dead space beside it. */
 @media (max-width: 767px) {
