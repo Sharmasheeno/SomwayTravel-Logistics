@@ -629,6 +629,28 @@ const roleLabel: Record<Role, string> = {
   officer_nairobi: "Legacy Nairobi Operator",
   officer_mogadishu: "Legacy Mogadishu Operator",
 };
+// crypto.randomUUID() only exists in a secure context (HTTPS/localhost). The
+// live site is served over plain HTTP, where it is undefined and throws. Fall
+// back to getRandomValues, then to a timestamp+random id, so ids always work.
+function safeUUID(): string {
+  const c: Crypto | undefined = globalThis.crypto;
+  if (c?.randomUUID) {
+    try {
+      return c.randomUUID();
+    } catch {
+      /* not a function / insecure context — fall through */
+    }
+  }
+  if (c?.getRandomValues) {
+    const b = c.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, "0"));
+    return `${h[0]}${h[1]}${h[2]}${h[3]}-${h[4]}${h[5]}-${h[6]}${h[7]}-${h[8]}${h[9]}-${h[10]}${h[11]}${h[12]}${h[13]}${h[14]}${h[15]}`;
+  }
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 const money = (value: number, currency: Currency) =>
   `${currency} ${new Intl.NumberFormat("en-KE", { maximumFractionDigits: 2 }).format(value || 0)}`;
 /** The same figure without its currency code, for narrow columns that name the
@@ -2905,7 +2927,7 @@ function CustomerPaymentForm({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": globalThis.crypto.randomUUID(),
+          "Idempotency-Key": safeUUID(),
         },
         body: JSON.stringify({
           transactionType,
