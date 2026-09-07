@@ -13561,11 +13561,19 @@ function Team({ data, user, notify }: ModuleProps) {
         {members.map((x) => (
           <article key={x.id}>
             <div className="user-avatar large">
-              {x.name
-                .split(" ")
-                .map((n) => n[0])
-                .slice(0, 2)
-                .join("")}
+              {x.avatarUrl ? (
+                <img
+                  className="user-avatar-photo"
+                  src={x.avatarUrl}
+                  alt=""
+                />
+              ) : (
+                x.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join("")
+              )}
             </div>
             <div>
               <strong>
