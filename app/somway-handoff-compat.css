@@ -3714,24 +3714,28 @@ h3 .branch-inline .branch-flag {
 
 /* On phones the 118px min-width plus the card's padding pushed the Suspend /
    Reset password / Copy link row wider than the card, so the buttons spilled
-   past its right edge (and Copy link stranded on its own line). Let the action
-   group span the full card width and the buttons shrink to share the space:
-   Suspend + Reset password on one row, Copy link full-width beneath. */
+   past its right edge (and Copy link stranded on its own line). Lay the action
+   group out as a deterministic 2-column grid that spans the whole card:
+   Suspend + Reset password share row 1, Copy link takes a full-width row 2.
+   !important guards these against the several other .team-actions rules. */
 @media (max-width: 767px) {
-  .team-list .team-actions {
-    grid-column: 1 / -1;
-    width: 100%;
-    justify-content: stretch;
-    gap: 8px;
+  .team-list article > .team-actions {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    align-items: stretch;
+    gap: 8px !important;
   }
-  .team-list .team-actions > button {
-    flex: 1 1 0;
-    min-width: 0;
-    padding: 0 6px;
+  .team-list article > .team-actions > button {
+    min-width: 0 !important;
+    width: 100% !important;
+    padding: 0 6px !important;
+    white-space: nowrap;
   }
   /* Copy link (only rendered when a login URL exists) takes its own full row. */
-  .team-list .team-actions > button:nth-child(3) {
-    flex-basis: 100%;
+  .team-list article > .team-actions > button:nth-child(3) {
+    grid-column: 1 / -1 !important;
   }
 }
 
