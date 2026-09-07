@@ -159,13 +159,19 @@ router.patch("/profile", requireUser, async (req, res) => {
   await user.save();
 
   if (passwordChanged) {
-    // Sign out this account everywhere else, keeping the session that made
-    // the change so the person is not logged out of the page they are on.
-    const token = readCookie(req, SESSION_COOKIE);
+    // Rotate this browser's session on password change. Issue a brand-new
+    // session + cookie for the current request FIRST, then delete every other
+    // session for this account (including the one that made this request).
+    // This signs the account out everywhere else while keeping THIS browser
+    // signed in, and — unlike matching the old cookie and deleting the rest —
+    // it can never accidentally end the current session, so a successful
+    // password change no longer bounces the user to "session has ended".
+    const freshToken = await createSession(user._id);
     await Session.deleteMany({
       userId: user._id,
-      ...(token ? { tokenHash: { $ne: hashToken(token) } } : {}),
+      tokenHash: { $ne: hashToken(freshToken) },
     });
+    setSessionCookie(res, freshToken);
     await Activity.create({
       id: `log_${randomToken(8)}`,
       at: new Date().toISOString(),
