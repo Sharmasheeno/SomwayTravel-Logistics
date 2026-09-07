@@ -4060,3 +4060,17 @@ h3 .branch-inline .branch-flag {
     flex-wrap: wrap;
   }
 }
+
+/* Financial report: on phones the branch-performance and service-performance
+   KPI cards default to one column because the shared .metrics-grid mobile rule
+   uses minmax(148px, 1fr), which is wider than the branch block's inner width.
+   Force exactly two columns for the report's KPI grids on small screens only —
+   larger screens keep the existing responsive column count untouched. */
+@media (max-width: 767px) {
+  .branch-report-block .metrics-grid,
+  .report-summary-block .metrics-grid,
+  .report-summary-block .metrics-grid.six {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+}
