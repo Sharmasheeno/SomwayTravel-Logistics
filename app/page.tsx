@@ -13670,10 +13670,10 @@ function Team({ data, user, notify }: ModuleProps) {
       <PageHeader
         eyebrow="Owner administration"
         title="Team & Role Access"
-        detail="Generate staff usernames, temporary passwords and dedicated access links. Accounts work across browsers."
+        detail="Create Owner and Operator user accounts with an email login, temporary passwords and dedicated access links. Accounts work across browsers."
         actions={
           <button className="button primary" onClick={() => setAdding(true)}>
-            <Icon name="plus" /> New Staff
+            <Icon name="plus" /> New User
           </button>
         }
       />
@@ -13795,10 +13795,10 @@ function Team({ data, user, notify }: ModuleProps) {
               <strong>{credentials.name}</strong>
             </p>
             <p>
-              <span>Username</span>
+              <span>Email</span>
               <strong>{credentials.username}</strong>
               <button
-                onClick={() => void copy(credentials.username, "Username")}
+                onClick={() => void copy(credentials.username, "Email")}
               >
                 Copy
               </button>
@@ -13861,8 +13861,8 @@ function UserForm({
   });
   return (
     <Modal
-      title="Create Staff"
-      subtitle="Leave username and password blank to generate both automatically."
+      title="Create User"
+      subtitle="Create an Owner or Operator account. Leave the password blank to generate one automatically."
       onClose={onClose}
     >
       <form
@@ -13902,11 +13902,13 @@ function UserForm({
               />
             </Field>
           )}
-          <Field label="Username (optional)">
+          <Field label="Email">
             <input
+              type="email"
+              required
               value={f.username}
               onChange={(e) => setF({ ...f, username: e.target.value })}
-              placeholder="Generated from the name"
+              placeholder="name@somway.com"
             />
           </Field>
           <Field label="Password (optional)">
@@ -13923,11 +13925,13 @@ function UserForm({
           </button>
           <button
             disabled={
-              !f.name.trim() || (f.role === "operator" && !f.assignedBranchId)
+              !f.name.trim() ||
+              !f.username.trim() ||
+              (f.role === "operator" && !f.assignedBranchId)
             }
             className="button primary"
           >
-            Create Staff
+            Create User
           </button>
         </div>
       </form>
