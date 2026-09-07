@@ -580,21 +580,21 @@ h6,
 .public-logo-lockup .public-header-logo,
 .public-logo-lockup .public-footer-logo {
   width: auto;
-  height: 44px;
+  height: 46px;
   max-width: 100%;
   object-fit: contain;
   object-position: left center;
   filter: none;
-  /* The logo's "Som"/tagline are white, but the public header/footer are light,
-     so seat it on a dark navy pill to keep the whole lockup legible. */
-  background: #0a2f4a;
-  padding: 8px 16px;
-  border-radius: 12px;
+  /* Public header and footer are dark navy, so the white logo sits directly on
+     them with no plaque — matching the sidebar/login. */
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 
 .public-footer .public-logo-lockup .public-footer-logo {
   width: auto;
-  height: 48px;
+  height: 50px;
 }
 
 .auth-brand-logo {
