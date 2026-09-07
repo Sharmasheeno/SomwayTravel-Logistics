@@ -6261,9 +6261,9 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
       )}
       {deleting && (
         <Confirm
-          title="Archive ticket?"
-          detail={`${deleting.ref} will leave active registers while its history remains retained.`}
-          confirmLabel="Archive Ticket"
+          title="Delete ticket?"
+          detail={`${deleting.ref} and any of its recorded payments will be permanently deleted. This cannot be undone.`}
+          confirmLabel="Delete Ticket"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
             save(
@@ -6271,10 +6271,10 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                 ...d,
                 tickets: d.tickets.filter((x) => x.id !== deleting.id),
               }),
-              { entity: "Ticket", detail: `Archived ${deleting.ref}` },
+              { entity: "Ticket", detail: `Deleted ${deleting.ref}` },
             );
             setDeleting(null);
-            notify("Ticket archived");
+            notify("Ticket deleted");
           }}
         />
       )}
@@ -6924,7 +6924,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                           <button
                             className="delete-action"
                             aria-label="Delete"
-                            title="Archive shipment"
+                            title="Delete shipment"
                             type="button"
                             onClick={() => setDeleting(x)}
                           >
@@ -7029,9 +7029,9 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
       )}
       {deleting && (
         <Confirm
-          title="Archive shipment?"
-          detail={`${deleting.tracking} will leave active registers while its history remains retained.`}
-          confirmLabel="Archive Shipment"
+          title="Delete shipment?"
+          detail={`${deleting.tracking} and any of its recorded payments will be permanently deleted. This cannot be undone.`}
+          confirmLabel="Delete Shipment"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
             save(
@@ -7039,10 +7039,10 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                 ...d,
                 cargo: d.cargo.filter((x) => x.id !== deleting.id),
               }),
-              { entity: "Cargo", detail: `Archived ${deleting.tracking}` },
+              { entity: "Cargo", detail: `Deleted ${deleting.tracking}` },
             );
             setDeleting(null);
-            notify("Shipment archived");
+            notify("Shipment deleted");
           }}
         />
       )}
@@ -8446,9 +8446,9 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
       )}
       {deleting && (
         <Confirm
-          title="Archive visa case?"
-          detail={`${deleting.ref} will leave active registers while its history remains retained.`}
-          confirmLabel="Archive Visa"
+          title="Delete visa case?"
+          detail={`${deleting.ref} and any of its recorded payments will be permanently deleted. This cannot be undone.`}
+          confirmLabel="Delete Visa"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
             save(
@@ -8456,10 +8456,10 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                 ...d,
                 visas: d.visas.filter((x) => x.id !== deleting.id),
               }),
-              { entity: "Visa", detail: `Archived ${deleting.ref}` },
+              { entity: "Visa", detail: `Deleted ${deleting.ref}` },
             );
             setDeleting(null);
-            notify("Visa case archived");
+            notify("Visa case deleted");
           }}
         />
       )}
@@ -10698,10 +10698,12 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
                       onDelete={
                         canDelete
                           ? () => {
-                              const reason = window.prompt(
-                                "Reason for voiding this expense",
-                              );
-                              if (!reason?.trim()) return;
+                              if (
+                                !window.confirm(
+                                  `Delete this expense (${x.description})? This permanently removes it and cannot be undone.`,
+                                )
+                              )
+                                return;
                               void save(
                                 (d) => ({
                                   ...d,
@@ -10711,10 +10713,10 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
                                 }),
                                 {
                                   entity: "Expense",
-                                  detail: `Voided ${x.description}: ${reason.trim()}`,
+                                  detail: `Deleted ${x.description}`,
                                 },
                               );
-                              notify("Expense voided");
+                              notify("Expense deleted");
                             }
                           : undefined
                       }
@@ -11105,10 +11107,12 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
                         <Actions
                           onEdit={() => setEditing(x)}
                           onDelete={() => {
-                            const reason = window.prompt(
-                              "Reason for cancelling this payable",
-                            );
-                            if (!reason?.trim()) return;
+                            if (
+                              !window.confirm(
+                                `Delete ${x.supplier} bill? This will permanently remove the payable and any of its recorded payments. This cannot be undone.`,
+                              )
+                            )
+                              return;
                             void save(
                               (d) => ({
                                 ...d,
@@ -11118,10 +11122,10 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
                               }),
                               {
                                 entity: "Supplier",
-                                detail: `Cancelled ${x.supplier} bill: ${reason.trim()}`,
+                                detail: `Deleted ${x.supplier} bill`,
                               },
                             );
-                            notify("Payable cancelled");
+                            notify("Payable deleted");
                           }}
                         />
                       )}

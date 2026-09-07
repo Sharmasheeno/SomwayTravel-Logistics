@@ -571,114 +571,60 @@ export const deleteEntity = async ({ collection, id, user, action }) => {
   const actorId = user.id?.toString?.() || user._id?.toString?.() || "";
   const at = new Date().toISOString();
   const reason = String(
-    action?.detail || "Archived from the agency workspace",
+    action?.detail || "Deleted from the agency workspace",
   ).trim();
+  void actorId;
+  void at;
+  void reason;
+  // The owner has full control and can permanently delete any record. To keep
+  // the books consistent we cascade: related customer/supplier payments are
+  // removed with the parent, and client references on service records are
+  // unlinked so nothing is left pointing at a deleted client. (Only the owner
+  // reaches this point — the role check above blocks everyone else.)
   if (collection === "cargo") {
-    const error = new Error(
-      "Cargo history cannot be deleted. Use the Cancel shipment action with a reason.",
-    );
-    error.status = 409;
-    throw error;
-  }
-  if (["closes", "payments", "supplierPayments"].includes(collection)) {
-    const error = new Error(
-      "Financial history cannot be deleted. Use its correction or reopen workflow.",
-    );
-    error.status = 409;
-    throw error;
-  }
-  if (collection === "rates") {
-    await Model.findOneAndUpdate(
-      { id },
-      { $set: { isActive: false } },
-      { new: true, runValidators: true },
-    );
-  } else if (collection === "expenses") {
-    await Model.findOneAndUpdate(
-      { id },
-      {
-        $set: {
-          recordStatus: "void",
-          voidedAt: at,
-          voidedByUserId: actorId,
-          voidReason: reason,
-        },
-      },
-      { new: true, runValidators: true },
-    );
+    await Payment.deleteMany({ transactionType: "cargo", transactionId: id });
+    await Model.deleteOne({ id });
+  } else if (collection === "tickets") {
+    await Payment.deleteMany({ transactionType: "ticket", transactionId: id });
+    await Model.deleteOne({ id });
+  } else if (collection === "visas") {
+    await Payment.deleteMany({ transactionType: "visa", transactionId: id });
+    await Model.deleteOne({ id });
   } else if (collection === "suppliers") {
-    const hasPayments = await SupplierPayment.exists({
-      supplierBillId: id,
-      status: { $ne: "void" },
-    });
-    if (hasPayments) {
-      const error = new Error(
-        "A payable with payment history cannot be cancelled.",
-      );
-      error.status = 409;
-      throw error;
-    }
-    await Model.findOneAndUpdate(
-      { id },
-      {
-        $set: {
-          recordStatus: "cancelled",
-          cancelledAt: at,
-          cancelledByUserId: actorId,
-          cancellationReason: reason,
-        },
-      },
-      { new: true, runValidators: true },
-    );
+    await SupplierPayment.deleteMany({ supplierBillId: id });
+    await Model.deleteOne({ id });
   } else if (collection === "clients") {
-    const linked = await Promise.all([
-      Ticket.exists({ clientId: existing._id }),
-      Visa.exists({ clientId: existing._id }),
-      Cargo.exists({
-        $or: [
-          { senderClientId: existing._id },
-          { receiverClientId: existing._id },
-        ],
-      }),
+    // Unlink this client from every service record before removing it so no
+    // ticket/visa/cargo is left referencing a deleted id. The records keep the
+    // stored name/phone strings, so their history still reads correctly.
+    await Promise.all([
+      Ticket.updateMany(
+        { clientId: existing._id },
+        { $set: { clientId: null } },
+      ),
+      Visa.updateMany({ clientId: existing._id }, { $set: { clientId: null } }),
+      Cargo.updateMany(
+        { senderClientId: existing._id },
+        { $set: { senderClientId: null } },
+      ),
+      Cargo.updateMany(
+        { receiverClientId: existing._id },
+        { $set: { receiverClientId: null } },
+      ),
+      Cargo.updateMany(
+        { payerClientId: existing._id },
+        { $set: { payerClientId: null } },
+      ),
+      Payment.updateMany(
+        { clientId: existing._id },
+        { $set: { clientId: null } },
+      ),
     ]);
-    if (linked.some(Boolean)) {
-      const error = new Error(
-        "A client with transaction history cannot be archived.",
-      );
-      error.status = 409;
-      throw error;
-    }
-    await Model.findOneAndUpdate(
-      { id },
-      {
-        $set: {
-          isActive: false,
-          archivedAt: at,
-          archivedByUserId: actorId,
-          archiveReason: reason,
-        },
-      },
-      { new: true, runValidators: true },
-    );
-  } else if (["tickets", "visas"].includes(collection)) {
-    await Model.findOneAndUpdate(
-      { id },
-      {
-        $set: {
-          recordStatus: "archived",
-          archivedAt: at,
-          archivedByUserId: actorId,
-          archiveReason: reason,
-        },
-      },
-      { new: true, runValidators: true },
-    );
+    await Model.deleteOne({ id });
   } else {
-    const error = new Error(
-      "This record cannot be deleted from normal operations.",
-    );
-    error.status = 409;
-    throw error;
+    // expenses, closes, rates, startingBalances, paymentMethods,
+    // branchPaymentMethods — remove permanently.
+    await Model.deleteOne({ id });
   }
   await createActivity(action, user);
 };
