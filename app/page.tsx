@@ -13744,6 +13744,25 @@ function Team({ data, user, notify }: ModuleProps) {
         loginUrl: result.user.loginUrl,
       });
   };
+  const remove = async (member: User) => {
+    if (
+      !window.confirm(
+        `Permanently delete ${member.name} (${member.username})? This removes the account and signs it out of every device. This cannot be undone.`,
+      )
+    )
+      return;
+    setBusy(member.id);
+    const response = await fetch(
+      `/api/admin/users/${encodeURIComponent(member.id)}`,
+      { method: "DELETE" },
+    );
+    const result = await response.json();
+    setBusy("");
+    if (!response.ok)
+      return notify(result.error || "Account could not be deleted");
+    setMembers((current) => current.filter((item) => item.id !== member.id));
+    notify(`${member.name} deleted`);
+  };
   const copy = async (value: string, label: string) => {
     // navigator.clipboard only exists in a secure context (HTTPS or localhost).
     // The app is also served over plain HTTP (e.g. http://169.58.173.197:8080),
@@ -13865,6 +13884,13 @@ function Team({ data, user, notify }: ModuleProps) {
                     Copy link
                   </button>
                 )}
+                <button
+                  className="delete-action"
+                  disabled={busy === x.id}
+                  onClick={() => void remove(x)}
+                >
+                  Delete
+                </button>
               </div>
             )}
           </article>

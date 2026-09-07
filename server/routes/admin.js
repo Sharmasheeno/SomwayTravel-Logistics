@@ -206,6 +206,48 @@ router.patch("/users", requireOwner, async (req, res) => {
   });
 });
 
+// Permanently remove a staff account. Owner-only, and guarded so the agency can
+// never be left without an owner and an owner cannot delete their own account.
+router.delete("/users/:id", requireOwner, async (req, res) => {
+  const id = String(req.params.id || "");
+  if (!id || id === req.user.id.toString()) {
+    return res
+      .status(400)
+      .json({ error: "You cannot delete your own account." });
+  }
+
+  const target = await User.findById(id);
+  if (!target) {
+    return res.status(404).json({ error: "Staff account not found." });
+  }
+
+  if (target.role === "owner") {
+    const otherOwners = await User.countDocuments({
+      role: "owner",
+      _id: { $ne: target._id },
+    });
+    if (otherOwners === 0) {
+      return res.status(409).json({
+        error: "Cannot delete the last owner. Create another owner first.",
+      });
+    }
+  }
+
+  await Session.deleteMany({ userId: target._id });
+  await target.deleteOne();
+  await Activity.create({
+    id: `log_${randomToken(8)}`,
+    at: new Date().toISOString(),
+    userId: req.user.id.toString(),
+    userName: req.user.name,
+    action: "Deleted staff",
+    entity: "Security",
+    detail: `Deleted ${target.name} (${target.role})`,
+  });
+
+  return res.json({ ok: true, id });
+});
+
 router.patch("/account", requireOwner, async (req, res) => {
   const { currentPassword, newPassword } = req.body ?? {};
   if (!currentPassword || !newPassword) {
