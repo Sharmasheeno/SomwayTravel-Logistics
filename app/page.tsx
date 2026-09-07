@@ -11642,8 +11642,27 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                 title={x.name}
                 subtitle={
                   <>
-                    {x.phone}
-                    {x.email ? ` · ${x.email}` : ""}
+                    <a
+                      className="linkish"
+                      href={`tel:${(x.normalizedPhone || x.phone || "").replace(/\s+/g, "")}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {x.phone}
+                    </a>
+                    {x.email ? (
+                      <>
+                        {" · "}
+                        <a
+                          className="linkish"
+                          href={`mailto:${x.email}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {x.email}
+                        </a>
+                      </>
+                    ) : (
+                      ""
+                    )}
                   </>
                 }
                 cells={[
@@ -11651,7 +11670,16 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                     label: "Home office",
                     value: <BranchName data={data} branch={x.homeOffice} />,
                   },
-                  { label: "Type", value: x.type },
+                  {
+                    label: "Type",
+                    value: (
+                      <StatusBadge
+                        tone={x.type === "Corporate" ? "violet" : "cyan"}
+                      >
+                        {x.type}
+                      </StatusBadge>
+                    ),
+                  },
                   { label: "Last activity", value: dateLabel(s.last) },
                 ]}
                 badges={
@@ -11679,19 +11707,34 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                     label: "Home office",
                     value: <BranchName data={data} branch={x.homeOffice} />,
                   },
-                  { label: "Type", value: x.type },
+                  {
+                    label: "Type",
+                    value: (
+                      <StatusBadge
+                        tone={x.type === "Corporate" ? "violet" : "cyan"}
+                      >
+                        {x.type}
+                      </StatusBadge>
+                    ),
+                  },
                   { label: "Tickets", value: s.tickets },
                   { label: "Cargo", value: s.cargo },
                   { label: "Visas", value: s.visas },
                   {
                     label: "Spend KES",
                     value: money(s.spendKES, "KES"),
-                    hide: !financial,
+                    // Only show a currency the client has actually transacted in
+                    // (unless neither has activity, so at least one still shows).
+                    hide:
+                      !financial ||
+                      (s.spendKES === 0 && s.spendUSD !== 0),
                   },
                   {
                     label: "Spend USD",
                     value: money(s.spendUSD, "USD"),
-                    hide: !financial,
+                    hide:
+                      !financial ||
+                      (s.spendUSD === 0 && s.spendKES !== 0),
                   },
                   { label: "Last activity", value: dateLabel(s.last) },
                 ]}
