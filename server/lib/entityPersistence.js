@@ -496,13 +496,16 @@ const persistEntity = async ({ collection, id, record, user, action }) => {
     throw error;
   }
   if (collection === "clients" && candidate.normalizedPhone) {
+    // Two different people may share a phone number, so a client is a duplicate
+    // only when BOTH the name and the phone match an existing record.
     const duplicate = await Client.findOne({
       normalizedPhone: candidate.normalizedPhone,
+      normalizedName: candidate.normalizedName,
       id: { $ne: candidate.id },
     });
     if (duplicate) {
       const error = new Error(
-        "A client with this phone number already exists.",
+        "A client with this name and phone number already exists.",
       );
       error.status = 409;
       throw error;

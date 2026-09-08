@@ -3,8 +3,21 @@ import Ticket from "../models/Ticket.js";
 import Visa from "../models/Visa.js";
 import Cargo from "../models/Cargo.js";
 import { normalizePhoneDetails } from "./phone.js";
+import { randomToken } from "../utils/tokens.js";
 
 const clean = (value) => String(value || "").trim();
+
+// A person is identified by BOTH their name and phone number, because two
+// different people (e.g. family members) legitimately share one phone. We match
+// on a normalized name (lower-cased, accents stripped, whitespace collapsed) so
+// harmless spelling/spacing differences still resolve to the same client.
+export const normalizeName = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
 
 export const languageOrDefault = (value) =>
   ["so", "en"].includes(value) ? value : "so";
@@ -20,6 +33,7 @@ export const buildClientSeed = ({
   const phoneDetails = normalizePhoneDetails(phone, { office: homeOffice });
   return {
     name: clean(name),
+    normalizedName: normalizeName(name),
     phone: clean(phone),
     normalizedPhone: phoneDetails.normalizedPhone,
     phoneIsValid: phoneDetails.isValid,
@@ -42,11 +56,20 @@ export const findOrCreateClient = async (seed) => {
     throw error;
   }
 
-  const existing = await Client.findOne({
-    normalizedPhone: client.normalizedPhone,
-  });
+  // Identity is name + phone: the same phone can belong to several people, so we
+  // only reuse a client when the normalized name also matches. A blank name
+  // (should not happen for a real service) falls back to phone-only matching.
+  const query = client.normalizedName
+    ? {
+        normalizedPhone: client.normalizedPhone,
+        normalizedName: client.normalizedName,
+      }
+    : { normalizedPhone: client.normalizedPhone };
+  const existing = await Client.findOne(query);
   if (existing) {
     const updates = {};
+    if (!existing.normalizedName && client.normalizedName)
+      updates.normalizedName = client.normalizedName;
     if (!existing.email && client.email) updates.email = client.email;
     if (!existing.phone && client.phone) updates.phone = client.phone;
     if (!existing.homeBranchId && client.homeBranchId)
@@ -61,8 +84,10 @@ export const findOrCreateClient = async (seed) => {
     return existing;
   }
 
+  // The client id must be unique per person, so it can no longer be derived
+  // from the phone alone (that collided when people share a number).
   return Client.create({
-    id: `client_${client.normalizedPhone}`,
+    id: `client_${client.normalizedPhone}_${randomToken(4)}`,
     ...client,
     isActive: true,
   });
@@ -81,7 +106,9 @@ export const attachClientRelationships = async (collection, record) => {
     return {
       ...record,
       ...seed,
-      id: record.id || `client_${seed.normalizedPhone || Date.now()}`,
+      id:
+        record.id ||
+        `client_${seed.normalizedPhone || "na"}_${randomToken(4)}`,
     };
   }
 

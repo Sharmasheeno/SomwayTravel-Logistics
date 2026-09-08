@@ -26,6 +26,7 @@ import { runRegisteredMigration } from "./lib/migrations.js";
 import { runServiceWorkflowMigration } from "./lib/serviceWorkflowMigration.js";
 import { removeLegacyCustomerPaymentSnapshots } from "./lib/accountsReceivableMigration.js";
 import { cleanupDeletedServiceFinance, resumeServiceDeletions } from "./lib/serviceDeletion.js";
+import { runClientNameSplitMigration } from "./lib/clientNameSplitMigration.js";
 
 dotenv.config();
 
@@ -225,6 +226,18 @@ const startServer = async () => {
   console.log("Service workflow migration", JSON.stringify(workflowMigration));
 
   await runRegisteredMigration("2026-09-08-service-finance-cascade-v1", cleanupDeletedServiceFinance);
+
+  // Repair the "two people share one phone" bug: backfill client names and
+  // re-link any service whose person no longer matches its client (splits e.g.
+  // Ali off Fartun into his own client).
+  const clientSplitMigration = await runRegisteredMigration(
+    "2026-09-08-client-name-split-v1",
+    runClientNameSplitMigration,
+  );
+  console.log(
+    "Client name split migration",
+    JSON.stringify(clientSplitMigration),
+  );
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Macruf API running on http://localhost:${PORT}`);

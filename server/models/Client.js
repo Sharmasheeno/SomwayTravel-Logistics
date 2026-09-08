@@ -4,6 +4,7 @@ const clientSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, unique: true },
     name: { type: String, default: "" },
+    normalizedName: { type: String, default: "", index: true },
     phone: { type: String, default: "" },
     normalizedPhone: { type: String, default: "", index: true },
     phoneIsValid: { type: Boolean, default: false },

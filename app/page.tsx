@@ -11174,22 +11174,30 @@ function clientStats(data: AgencyData, client: Client) {
   const phoneKeys = [client.normalizedPhone, client.phone]
     .filter(Boolean)
     .map(String);
-  const tickets = data.tickets.filter(
-    (x) =>
-      (x.clientId && ids.includes(String(x.clientId))) ||
-      phoneKeys.includes(String(x.normalizedPhone || x.phone)),
+  // A person is identified by their clientId. The phone-key fallback applies
+  // ONLY to records that were never linked to any client, so that two different
+  // people who share a phone number never show each other's activity.
+  const tickets = data.tickets.filter((x) =>
+    x.clientId
+      ? ids.includes(String(x.clientId))
+      : phoneKeys.includes(String(x.normalizedPhone || x.phone)),
   );
-  const cargo = data.cargo.filter(
-    (x) =>
-      (x.senderClientId && ids.includes(String(x.senderClientId))) ||
-      (x.receiverClientId && ids.includes(String(x.receiverClientId))) ||
+  const cargo = data.cargo.filter((x) => {
+    if (x.senderClientId || x.receiverClientId) {
+      return (
+        (x.senderClientId && ids.includes(String(x.senderClientId))) ||
+        (x.receiverClientId && ids.includes(String(x.receiverClientId)))
+      );
+    }
+    return (
       phoneKeys.includes(String(x.senderNormalizedPhone || x.senderPhone)) ||
-      phoneKeys.includes(String(x.receiverNormalizedPhone || x.receiverPhone)),
-  );
-  const visas = data.visas.filter(
-    (x) =>
-      (x.clientId && ids.includes(String(x.clientId))) ||
-      phoneKeys.includes(String(x.normalizedPhone || x.phone)),
+      phoneKeys.includes(String(x.receiverNormalizedPhone || x.receiverPhone))
+    );
+  });
+  const visas = data.visas.filter((x) =>
+    x.clientId
+      ? ids.includes(String(x.clientId))
+      : phoneKeys.includes(String(x.normalizedPhone || x.phone)),
   );
   const spend = (c: Currency) =>
     tickets.filter((x) => x.currency === c).reduce((s, x) => s + x.amount, 0) +
