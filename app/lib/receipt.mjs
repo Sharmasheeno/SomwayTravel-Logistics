@@ -14,7 +14,21 @@ export function buildReceiptHtml(receipt, logoUrl = "/Som-way2.png", autoPrint =
   const title = receiptTitles[kind];
   const esc = escapeHtml;
   const tagline = { ticket: "Fly further. Travel easier.", visa: "Your journey. Our support.", cargo: "Your cargo. Our commitment." }[kind];
-  const icon = { ticket: "✈", visa: "◎", cargo: "▣" }[kind];
+  // Meaningful, print-safe line icons so each receipt is instantly recognisable:
+  // a plane for air tickets, a passport for visa assistance, a shipping box for
+  // air cargo. Drawn white (currentColor) to sit on the blue circle.
+  const icons = {
+    // Plane (Lucide "plane") — air ticketing.
+    ticket:
+      '<svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>',
+    // Passport: a booklet cover with a globe and spine — visa assistance.
+    visa:
+      '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="9.5" r="3.2"/><path d="M8.8 9.5h6.4"/><path d="M12 6.3c1.4 1.9 1.4 4.5 0 6.4c-1.4-1.9-1.4-4.5 0-6.4z"/><path d="M9.5 17.5h5"/></svg>',
+    // Package box (Lucide "package") — air cargo.
+    cargo:
+      '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5.05L20.7 7"/><path d="M12 22.08V12"/></svg>',
+  };
+  const icon = icons[kind] || icons.cargo;
   const status = String(receipt.paymentStatus || "unpaid");
   const paid = ["paid", "refunded"].includes(status.toLowerCase());
   const details = [
