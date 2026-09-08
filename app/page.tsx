@@ -665,8 +665,12 @@ const moneyByCurrency = <T,>(
   rows: T[],
   currencyFor: (row: T) => Currency,
   valueFor: (row: T) => number,
+  // Currencies to consider. When a single branch is in scope, pass that
+  // branch's currencies so a Mogadishu (USD-only) view never shows a stray
+  // "KES 0" and a Nairobi (KES-only) view never shows a stray "USD 0".
+  currencies: Currency[] = ["KES", "USD"],
 ) =>
-  (["KES", "USD"] as Currency[])
+  currencies
     .map((currency) => ({
       currency,
       value: rows
@@ -5814,16 +5818,25 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
   // Cancelled tickets stay visible in the register but must not count towards
   // revenue, profit, the issued total or pending refunds.
   const financeRows = scopedRows.filter((ticket) => !isCancelledService(ticket));
+  // When a single branch is in scope, only that branch's currencies are shown,
+  // so a Mogadishu (USD-only) view never displays a stray "KES 0".
+  const scopeBranch =
+    office === "All" ? undefined : branchById(data, branchIdForOffice(data, office));
+  const scopeCurrencies = scopeBranch
+    ? branchCurrencies(scopeBranch)
+    : (["KES", "USD"] as Currency[]);
   const ticketRevenue = moneyByCurrency(
     financeRows,
     (ticket) => ticket.currency,
     (ticket) => (ticket.type === "Refund" ? -ticket.amount : ticket.amount),
+    scopeCurrencies,
   );
   const ticketProfit = moneyByCurrency(
     financeRows,
     (ticket) => ticket.currency,
     (ticket) =>
       ticket.type === "Refund" ? -ticket.amount : ticket.amount - ticket.cost,
+    scopeCurrencies,
   );
   const pendingRefunds = financeRows.filter(
     (ticket) => ticket.type === "Refund" && ticket.paymentStatus !== "paid",
@@ -5905,11 +5918,21 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
       <div className="metrics-grid">
         <MetricCard icon="ticket" label="Tickets Issued" value={financeRows.length} tone="blue" foot="Selected branch" />
         <MetricCard icon="money" label="Revenue" value={ticketRevenue} tone="cyan" foot="Sales less refunds" />
-        <MetricCard icon="trend" label="Gross Profit" value={ticketProfit} tone="green" foot="Revenue less agency cost" />
+        {financial ? (
+          <MetricCard icon="trend" label="Gross Profit" value={ticketProfit} tone="green" foot="Revenue less agency cost" />
+        ) : (
+          <MetricCard
+            icon="check"
+            label="Issued Tickets"
+            value={financeRows.filter((ticket) => ticket.status === "issued").length}
+            tone="green"
+            foot="Confirmed & ticketed"
+          />
+        )}
         <MetricCard
           icon="wallet"
           label="Pending Refunds"
-          value={moneyByCurrency(pendingRefunds, (ticket) => ticket.currency, (ticket) => ticket.amount)}
+          value={moneyByCurrency(pendingRefunds, (ticket) => ticket.currency, (ticket) => ticket.amount, scopeCurrencies)}
           tone="orange"
           foot={`${pendingRefunds.length} open record${pendingRefunds.length === 1 ? "" : "s"}`}
         />
@@ -6069,7 +6092,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                         onEdit={() => setEditing(x)}
                         onDelete={canDelete ? () => setDeleting(x) : undefined}
                         onPayment={
-                          (x.balance ?? x.amount) > 0
+                          !isCancelledService(x) && (x.balance ?? x.amount) > 0
                             ? () => setPaying(x)
                             : undefined
                         }
@@ -6490,6 +6513,13 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
           .includes(query.toLowerCase()),
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  // When a single origin branch is in scope, only that branch's currencies are
+  // shown so a USD-only branch never displays a stray "KES 0".
+  const cargoScopeBranch =
+    office === "All" ? undefined : branchById(data, branchIdForOffice(data, office));
+  const cargoScopeCurrencies = cargoScopeBranch
+    ? branchCurrencies(cargoScopeBranch)
+    : (["KES", "USD"] as Currency[]);
   const cargoStatusCounts = [
     ["Received", "received", "#0b66e3"],
     ["In Transit", "in_transit", "#7c3aed"],
@@ -6564,7 +6594,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
           <MetricCard
             icon="money"
             label="Cargo Revenue"
-            value={moneyByCurrency(rows, (cargo) => cargo.currency, (cargo) => cargo.customerCharge ?? cargo.weight * cargo.rate)}
+            value={moneyByCurrency(rows, (cargo) => cargo.currency, (cargo) => cargo.customerCharge ?? cargo.weight * cargo.rate, cargoScopeCurrencies)}
             tone="cyan"
             foot="Customer charges"
           />
@@ -6755,7 +6785,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                     </button>
                     {canWrite && (
                       <div className="row-actions">
-                        {canTakePayment && (x.balance ?? amount) > 0 && (
+                        {canTakePayment && !isCancelledService(x) && (x.balance ?? amount) > 0 && (
                           <button
                             type="button"
                             className="payment-action"
@@ -8256,7 +8286,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                         onEdit={() => setEditing(x)}
                         onDelete={canDelete ? () => setDeleting(x) : undefined}
                         onPayment={
-                          (x.balance ?? x.amount) > 0
+                          !isCancelledService(x) && (x.balance ?? x.amount) > 0
                             ? () => setPaying(x)
                             : undefined
                         }
@@ -10481,6 +10511,13 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         .includes(query.toLowerCase()),
   );
   const activeExpenseRows = rows.filter((expense) => (expense.recordStatus || "active") !== "void");
+  // Only show the scoped branch's currencies so a USD-only branch never
+  // displays a stray "KES 0" in the expense totals.
+  const expenseScopeBranch =
+    office === "All" ? undefined : branchById(data, branchIdForOffice(data, office));
+  const expenseScopeCurrencies = expenseScopeBranch
+    ? branchCurrencies(expenseScopeBranch)
+    : (["KES", "USD"] as Currency[]);
   const categoryTotals = Object.entries(
     activeExpenseRows.reduce<Record<string, number>>((totals, expense) => {
       totals[expense.category || "Other"] = (totals[expense.category || "Other"] || 0) + expense.amount;
@@ -10529,9 +10566,9 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         }
       />
       <div className="metrics-grid">
-        <MetricCard icon="wallet" label="Total Expenses" value={moneyByCurrency(activeExpenseRows, (expense) => expense.currency, (expense) => expense.amount)} tone="blue" foot="Selected filters" />
-        <MetricCard icon="check" label="Paid Expenses" value={moneyByCurrency(activeExpenseRows.filter((expense) => expense.paid), (expense) => expense.currency, (expense) => expense.amount)} tone="green" foot="Payment completed" />
-        <MetricCard icon="clock" label="Pending Payment" value={moneyByCurrency(activeExpenseRows.filter((expense) => !expense.paid), (expense) => expense.currency, (expense) => expense.amount)} tone="orange" foot="Still outstanding" />
+        <MetricCard icon="wallet" label="Total Expenses" value={moneyByCurrency(activeExpenseRows, (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="blue" foot="Selected filters" />
+        <MetricCard icon="check" label="Paid Expenses" value={moneyByCurrency(activeExpenseRows.filter((expense) => expense.paid), (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="green" foot="Payment completed" />
+        <MetricCard icon="clock" label="Pending Payment" value={moneyByCurrency(activeExpenseRows.filter((expense) => !expense.paid), (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="orange" foot="Still outstanding" />
         <MetricCard icon="briefcase" label="Most Used Category" value={categoryTotals[0]?.[0] || "No expenses"} tone="violet" foot={categoryTotals[0] ? new Intl.NumberFormat("en-KE").format(categoryTotals[0][1]) : "No recorded amount"} />
       </div>
       <div className="split-3" style={{ marginTop: 14 }}>
