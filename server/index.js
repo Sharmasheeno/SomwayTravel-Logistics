@@ -190,6 +190,13 @@ const startServer = async () => {
     "Phase 3 client relationship migration",
     JSON.stringify(clientMigration),
   );
+  // Backfill services created before client linking was deployed. This is
+  // intentionally versioned separately so existing installations run it once.
+  const clientLinkBackfill = await runRegisteredMigration(
+    "2026-09-08-client-links-backfill-v1",
+    runPhase3Migration,
+  );
+  console.log("Client links backfill", JSON.stringify(clientLinkBackfill));
   const cargoMigration = await runRegisteredMigration(
     "2026-09-01-phase4-cargo-v1",
     runPhase4Migration,
