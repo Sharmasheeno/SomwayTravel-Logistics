@@ -8813,14 +8813,21 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
         ? sum + value
         : sum;
     }, 0);
-  const metric = (field: keyof DailySummaryRow) =>
-    currencyCodes.length ? (
-      currencyCodes.map((code) => (
-        <strong key={code}>{money(totalFor(rows, field, code), code)}</strong>
+  // Render a field's per-currency values for any subset of rows, so the same
+  // card markup works for the combined view and for each branch group.
+  const metricFor = (list: DailySummaryRow[], field: keyof DailySummaryRow) => {
+    const codes = (["KES", "USD"] as Currency[]).filter((code) =>
+      list.some((row) => row.currency === code),
+    );
+    return codes.length ? (
+      codes.map((code) => (
+        <strong key={code}>{money(totalFor(list, field, code), code)}</strong>
       ))
     ) : (
       <strong>No activity</strong>
     );
+  };
+  const metric = (field: keyof DailySummaryRow) => metricFor(rows, field);
   // Business-day analytics. Currencies are never summed together, so the charts
   // report the currency with the most activity (or the one being filtered on).
   const analyticsCurrency = ((): Currency => {
@@ -9180,6 +9187,33 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
     { field: "expectedClosing", label: "Expected Closing", icon: "database", tone: "blue", foot: "After debts settle" },
   ] as const;
   const openCard = kpiCards.find((card) => card.field === openMetric);
+  // When "All branches" is selected the KPIs are grouped per branch instead of
+  // being summed into one confusing total. Each group carries that branch's own
+  // rows (one per currency). A single branch in view keeps the flat layout.
+  const showBranchGroups = !branchId;
+  const branchGroups = (() => {
+    if (!showBranchGroups) return [];
+    const groups = new Map<
+      string,
+      { branchId: string; branch: string; rows: DailySummaryRow[] }
+    >();
+    for (const row of rows) {
+      const key = String(row.branchId || row.branch || "unassigned");
+      if (!groups.has(key))
+        groups.set(key, {
+          branchId: row.branchId,
+          branch: row.branch,
+          rows: [],
+        });
+      groups.get(key)!.rows.push(row);
+    }
+    // Order branches by their busiest revenue so the most active leads.
+    return [...groups.values()].sort(
+      (a, b) =>
+        b.rows.reduce((s, r) => s + (r.revenue || 0), 0) -
+        a.rows.reduce((s, r) => s + (r.revenue || 0), 0),
+    );
+  })();
   // Panel titles read "(Today)" as the design does, but name the day instead
   // whenever a past business date is being reviewed.
   const dayTag =
@@ -9259,53 +9293,92 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
             />
           ) : rows.length ? (
             <>
-              <section className="daily-summary-kpis metrics-grid">
-                {kpiCards.map((card) => {
-                  const delta = deltaFor(card.field);
-                  const open = openMetric === card.field;
-                  return (
-                    <div
-                      className={`metric-card card-hover${open ? " is-open" : ""}`}
-                      key={card.field}
+              {showBranchGroups ? (
+                <div className="ds-branch-groups">
+                  {branchGroups.map((group) => (
+                    <section
+                      className="ds-branch-group"
+                      key={group.branchId || group.branch}
                     >
-                      <div className={`metric-icon tone-${card.tone}`}>
-                        <Icon name={card.icon} size={22} />
-                      </div>
-                      <div className="metric-main">
-                        <span className="eyebrow-soft">{card.label}</span>
-                        <div className="metric-values">{metric(card.field)}</div>
-                        <div className="metric-foot">
-                          {delta && (
-                            <span
-                              className={delta.up ? "positive" : "negative"}
-                            >
-                              {`${delta.up ? "↑" : "↓"} ${Math.abs(delta.percent).toFixed(1)}%`}
-                            </span>
-                          )}
-                          <span>
-                            {delta
-                              ? // The comparison is read in one currency, so it
-                                // is named whenever the card shows more than one.
-                                `vs Yesterday${currencyCodes.length > 1 ? ` (${analyticsCurrency})` : ""}`
-                              : card.foot}
-                          </span>
+                      <header className="ds-branch-group-head">
+                        <h3>
+                          <BranchName data={data} branch={group.branch} />
+                        </h3>
+                        <div className="ds-branch-group-totals">
+                          {metricFor(group.rows, "revenue")}
+                          <span>revenue today</span>
                         </div>
+                      </header>
+                      <div className="daily-summary-kpis metrics-grid">
+                        {kpiCards.map((card) => (
+                          <div className="metric-card" key={card.field}>
+                            <div className={`metric-icon tone-${card.tone}`}>
+                              <Icon name={card.icon} size={20} />
+                            </div>
+                            <div className="metric-main">
+                              <span className="eyebrow-soft">{card.label}</span>
+                              <div className="metric-values">
+                                {metricFor(group.rows, card.field)}
+                              </div>
+                              <div className="metric-foot">
+                                <span>{card.foot}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <button
-                        type="button"
-                        className="ds-kpi-more"
-                        aria-expanded={open}
-                        aria-label={`${open ? "Hide" : "Show"} ${card.label} by branch`}
-                        onClick={() => setOpenMetric(open ? "" : card.field)}
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <section className="daily-summary-kpis metrics-grid">
+                  {kpiCards.map((card) => {
+                    const delta = deltaFor(card.field);
+                    const open = openMetric === card.field;
+                    return (
+                      <div
+                        className={`metric-card card-hover${open ? " is-open" : ""}`}
+                        key={card.field}
                       >
-                        <Icon name="chevron" size={15} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </section>
+                        <div className={`metric-icon tone-${card.tone}`}>
+                          <Icon name={card.icon} size={22} />
+                        </div>
+                        <div className="metric-main">
+                          <span className="eyebrow-soft">{card.label}</span>
+                          <div className="metric-values">{metric(card.field)}</div>
+                          <div className="metric-foot">
+                            {delta && (
+                              <span
+                                className={delta.up ? "positive" : "negative"}
+                              >
+                                {`${delta.up ? "↑" : "↓"} ${Math.abs(delta.percent).toFixed(1)}%`}
+                              </span>
+                            )}
+                            <span>
+                              {delta
+                                ? // The comparison is read in one currency, so it
+                                  // is named whenever the card shows more than one.
+                                  `vs Yesterday${currencyCodes.length > 1 ? ` (${analyticsCurrency})` : ""}`
+                                : card.foot}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="ds-kpi-more"
+                          aria-expanded={open}
+                          aria-label={`${open ? "Hide" : "Show"} ${card.label} by branch`}
+                          onClick={() => setOpenMetric(open ? "" : card.field)}
+                        >
+                          <Icon name="chevron" size={15} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </section>
+              )}
 
-              {openCard && (
+              {!showBranchGroups && openCard && (
                 <Panel
                   className="ds-kpi-detail"
                   title={`${openCard.label} by branch`}
