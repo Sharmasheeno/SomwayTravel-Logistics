@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { assertServiceNotDeleting } from "./serviceDeletion.js";
 import { withServiceLock } from "./serviceLock.js";
-import { payableService, hasPayableParent, serviceKeys } from "./serviceRelationships.js";
+import { payableService, hasPayableParent, serviceKeys, isCancelledService } from "./serviceRelationships.js";
 import Branch from "../models/Branch.js";
 import BranchPaymentMethod from "../models/BranchPaymentMethod.js";
 import Cargo from "../models/Cargo.js";
@@ -637,8 +637,16 @@ export const buildFinanceReport = async ({
     supplierPayments,
   ] = await Promise.all([
     Branch.find({}),
-    Ticket.find({ saleDate: { $lte: to }, recordStatus: { $ne: "archived" } }),
-    Visa.find({ appDate: { $lte: to }, recordStatus: { $ne: "archived" } }),
+    Ticket.find({
+      saleDate: { $lte: to },
+      recordStatus: { $ne: "archived" },
+      status: { $nin: ["cancelled", "Cancelled"] },
+    }),
+    Visa.find({
+      appDate: { $lte: to },
+      recordStatus: { $ne: "archived" },
+      status: { $nin: ["cancelled", "Cancelled"] },
+    }),
     Cargo.find({
       dateIn: { $lte: to },
       status: { $nin: ["cancelled", "Cancelled"] },
@@ -656,7 +664,13 @@ export const buildFinanceReport = async ({
     }),
   ]);
   const [allTickets, allVisas, allCargo] = await Promise.all([Ticket.find({}), Visa.find({}), Cargo.find({})]);
-  const parentKeys = serviceKeys({ tickets: allTickets, visas: allVisas, cargo: allCargo });
+  // Cancelled services raise no charge and settle no payable, so their payments
+  // and bills must not be attributed to any branch either.
+  const parentKeys = serviceKeys({
+    tickets: allTickets.filter((row) => !isCancelledService(row)),
+    visas: allVisas.filter((row) => !isCancelledService(row)),
+    cargo: allCargo.filter((row) => !isCancelledService(row)),
+  });
   const branchNameById = new Map(
     branches.map((branch) => [branch._id.toString(), branch.name]),
   );

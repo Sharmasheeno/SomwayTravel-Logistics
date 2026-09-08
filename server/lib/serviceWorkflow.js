@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Ticket from "../models/Ticket.js";
 import Visa from "../models/Visa.js";
 import { assertBranchAccess } from "./branches.js";
@@ -141,6 +142,13 @@ export const transitionServiceStatus = async ({
       ),
       { status: 409 },
     );
+  }
+  // Cancelling a service reverses its finance: remove the auto-generated
+  // payable and any recorded payments so the cancellation is reflected in the
+  // daily summary, receivables and reports. The record itself is kept (with its
+  // status history) so the cancellation remains auditable.
+  if (nextStatus === "cancelled" && mongoose.connection.readyState !== 0) {
+    await purgeServiceFinance(kind, id);
   }
   return updated;
 };

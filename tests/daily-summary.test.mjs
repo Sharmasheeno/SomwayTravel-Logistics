@@ -151,6 +151,32 @@ test("daily summary separates revenue, cash, debt, payable, expense and profit",
   assert.equal(row.expectedClosing, 240);
 });
 
+test("a cancelled ticket contributes no revenue to the daily summary", () => {
+  const [row] = buildDailySummaryRows({
+    ...source,
+    businessDate: "2026-09-01",
+    now: new Date("2026-09-01T10:00:00.000Z"),
+    tickets: [
+      {
+        id: "ticket_cancelled",
+        ref: "TKT-CANX",
+        branchId,
+        saleDate: "2026-09-01",
+        currency: "USD",
+        type: "Sale",
+        amount: 120,
+        cost: 100,
+        status: "cancelled",
+      },
+    ],
+  });
+
+  // No live services: the summary row for the branch either does not exist or
+  // shows zero revenue/receivable from the cancelled ticket.
+  assert.equal(row?.revenue || 0, 0);
+  assert.equal(row?.accountsReceivable || 0, 0);
+});
+
 test("previous physical closing becomes next business day opening", () => {
   const [row] = buildDailySummaryRows({
     ...source,

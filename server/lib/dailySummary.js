@@ -18,6 +18,7 @@ import {
   cargoCustomerCharge,
   deriveCustomerFinanceSummary,
 } from "./finance.js";
+import { isCancelledService } from "./serviceRelationships.js";
 
 export const DEFAULT_BUSINESS_TIME = {
   timezone: "Africa/Mogadishu",
@@ -70,32 +71,38 @@ export const businessDayState = ({
 };
 
 const serviceRows = ({ tickets, visas, cargo }) => [
-  ...tickets.map((record) => ({
-    service: "Tickets",
-    transactionType: "ticket",
-    transactionId: record.id,
-    branchId: id(record.branchId),
-    date: dateOnly(record.saleDate),
-    currency: record.currency,
-    charge: (record.type === "Refund" ? -1 : 1) * (Number(record.amount) || 0),
-    receivableCharge: record.type === "Refund" ? 0 : Number(record.amount) || 0,
-    directCost: record.type === "Refund" ? 0 : Number(record.cost) || 0,
-  })),
-  ...visas.map((record) => ({
-    service: "Visas",
-    transactionType: "visa",
-    transactionId: record.id,
-    branchId: id(record.branchId),
-    date: dateOnly(record.appDate),
-    currency: record.currency,
-    charge: (record.type === "Refund" ? -1 : 1) * (Number(record.amount) || 0),
-    receivableCharge: record.type === "Refund" ? 0 : Number(record.amount) || 0,
-    directCost: record.type === "Refund" ? 0 : Number(record.cost) || 0,
-  })),
+  ...tickets
+    .filter((record) => !isCancelledService(record))
+    .map((record) => ({
+      service: "Tickets",
+      transactionType: "ticket",
+      transactionId: record.id,
+      branchId: id(record.branchId),
+      date: dateOnly(record.saleDate),
+      currency: record.currency,
+      charge:
+        (record.type === "Refund" ? -1 : 1) * (Number(record.amount) || 0),
+      receivableCharge:
+        record.type === "Refund" ? 0 : Number(record.amount) || 0,
+      directCost: record.type === "Refund" ? 0 : Number(record.cost) || 0,
+    })),
+  ...visas
+    .filter((record) => !isCancelledService(record))
+    .map((record) => ({
+      service: "Visas",
+      transactionType: "visa",
+      transactionId: record.id,
+      branchId: id(record.branchId),
+      date: dateOnly(record.appDate),
+      currency: record.currency,
+      charge:
+        (record.type === "Refund" ? -1 : 1) * (Number(record.amount) || 0),
+      receivableCharge:
+        record.type === "Refund" ? 0 : Number(record.amount) || 0,
+      directCost: record.type === "Refund" ? 0 : Number(record.cost) || 0,
+    })),
   ...cargo
-    .filter(
-      (record) => String(record.status || "").toLowerCase() !== "cancelled",
-    )
+    .filter((record) => !isCancelledService(record))
     .map((record) => ({
       service: "Cargo",
       transactionType: "cargo",

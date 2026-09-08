@@ -17,3 +17,13 @@ export const hasPayableParent = (bill, keys) => {
   const parent = payableService(bill);
   return !parent || keys.has(`${parent.type}:${parent.id}`);
 };
+
+// A service (ticket, visa or cargo) whose status is cancelled must be reversed
+// out of every financial view: revenue, profit, receivables, payables, the
+// daily summary and client history. A cancelled service raises no charge and
+// carries no cost. Statuses are stored lower-cased but we normalize defensively.
+export const isCancelledService = (record) =>
+  ["cancelled", "canceled"].includes(
+    String(record?.status || "").toLowerCase(),
+  );
+

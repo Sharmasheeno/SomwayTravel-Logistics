@@ -355,6 +355,28 @@ test("receivables exclude future and cancelled cargo from the current balance", 
   assert.deepEqual(rows, []);
 });
 
+test("a cancelled ticket raises no receivable", () => {
+  const rows = deriveReceivables({
+    ...base,
+    tickets: [
+      {
+        id: "cancelled-ticket",
+        ref: "CANX-1",
+        type: "Sale",
+        branchId,
+        clientId,
+        passenger: "Amina Ali",
+        saleDate: "2026-08-15",
+        amount: 120,
+        currency: "USD",
+        status: "cancelled",
+      },
+    ],
+  });
+
+  assert.deepEqual(rows, []);
+});
+
 test("legacy cargo without explicit payer remains unresolved", () => {
   const [row] = deriveReceivables({
     ...base,

@@ -741,6 +741,12 @@ const paymentMethodsFor = (
     .filter((name): name is PaymentMethod => Boolean(name));
   return names;
 };
+// A cancelled service (ticket, visa or cargo) is reversed out of every
+// financial view — revenue, profit, receivables and client spend — so it no
+// longer counts anywhere despite remaining on record for audit.
+const isCancelledService = (record: {
+  status?: string | null;
+}) => ["cancelled", "canceled"].includes(String(record?.status || "").toLowerCase());
 const cargoStatusKey = (status: CargoStatus | string) =>
   (({
     "In Transit": "in_transit",
@@ -5135,15 +5141,23 @@ function Overview({
   }, [branchId, financial, from, to]);
 
   const selectedBranch = branches.find((branch) => branch.id === branchId);
-  const scopedTickets = branchId
-    ? data.tickets.filter((ticket) => ticket.branchId === branchId)
-    : data.tickets;
-  const scopedCargo = branchId
-    ? data.cargo.filter((cargo) => cargo.originBranchId === branchId)
-    : data.cargo;
-  const scopedVisas = branchId
-    ? data.visas.filter((visa) => visa.branchId === branchId)
-    : data.visas;
+  // Cancelled services are excluded from every dashboard figure and list; they
+  // remain on record but represent no activity, revenue or open work.
+  const scopedTickets = (
+    branchId
+      ? data.tickets.filter((ticket) => ticket.branchId === branchId)
+      : data.tickets
+  ).filter((ticket) => !isCancelledService(ticket));
+  const scopedCargo = (
+    branchId
+      ? data.cargo.filter((cargo) => cargo.originBranchId === branchId)
+      : data.cargo
+  ).filter((cargo) => !isCancelledService(cargo));
+  const scopedVisas = (
+    branchId
+      ? data.visas.filter((visa) => visa.branchId === branchId)
+      : data.visas
+  ).filter((visa) => !isCancelledService(visa));
   const scopedClients = branchId
     ? data.clients.filter((client) => client.homeBranchId === branchId)
     : data.clients;
@@ -5798,18 +5812,21 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
     if (ticketView === "cancelled") return ticket.status === "cancelled";
     return true;
   });
+  // Cancelled tickets stay visible in the register but must not count towards
+  // revenue, profit, the issued total or pending refunds.
+  const financeRows = scopedRows.filter((ticket) => !isCancelledService(ticket));
   const ticketRevenue = moneyByCurrency(
-    scopedRows,
+    financeRows,
     (ticket) => ticket.currency,
     (ticket) => (ticket.type === "Refund" ? -ticket.amount : ticket.amount),
   );
   const ticketProfit = moneyByCurrency(
-    scopedRows,
+    financeRows,
     (ticket) => ticket.currency,
     (ticket) =>
       ticket.type === "Refund" ? -ticket.amount : ticket.amount - ticket.cost,
   );
-  const pendingRefunds = scopedRows.filter(
+  const pendingRefunds = financeRows.filter(
     (ticket) => ticket.type === "Refund" && ticket.paymentStatus !== "paid",
   );
   const updateTicketStatus = async (
@@ -5887,7 +5904,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
         ))}
       </div>
       <div className="metrics-grid">
-        <MetricCard icon="ticket" label="Tickets Issued" value={scopedRows.length} tone="blue" foot="Selected branch" />
+        <MetricCard icon="ticket" label="Tickets Issued" value={financeRows.length} tone="blue" foot="Selected branch" />
         <MetricCard icon="money" label="Revenue" value={ticketRevenue} tone="cyan" foot="Sales less refunds" />
         <MetricCard icon="trend" label="Gross Profit" value={ticketProfit} tone="green" foot="Revenue less agency cost" />
         <MetricCard
@@ -11176,13 +11193,17 @@ function clientStats(data: AgencyData, client: Client) {
     .map(String);
   // A person is identified by their clientId. The phone-key fallback applies
   // ONLY to records that were never linked to any client, so that two different
-  // people who share a phone number never show each other's activity.
-  const tickets = data.tickets.filter((x) =>
-    x.clientId
-      ? ids.includes(String(x.clientId))
-      : phoneKeys.includes(String(x.normalizedPhone || x.phone)),
+  // people who share a phone number never show each other's activity. Cancelled
+  // services are excluded — they carry no ticket count, cargo count or spend.
+  const tickets = data.tickets.filter(
+    (x) =>
+      !isCancelledService(x) &&
+      (x.clientId
+        ? ids.includes(String(x.clientId))
+        : phoneKeys.includes(String(x.normalizedPhone || x.phone))),
   );
   const cargo = data.cargo.filter((x) => {
+    if (isCancelledService(x)) return false;
     if (x.senderClientId || x.receiverClientId) {
       return (
         (x.senderClientId && ids.includes(String(x.senderClientId))) ||
@@ -11194,10 +11215,12 @@ function clientStats(data: AgencyData, client: Client) {
       phoneKeys.includes(String(x.receiverNormalizedPhone || x.receiverPhone))
     );
   });
-  const visas = data.visas.filter((x) =>
-    x.clientId
-      ? ids.includes(String(x.clientId))
-      : phoneKeys.includes(String(x.normalizedPhone || x.phone)),
+  const visas = data.visas.filter(
+    (x) =>
+      !isCancelledService(x) &&
+      (x.clientId
+        ? ids.includes(String(x.clientId))
+        : phoneKeys.includes(String(x.normalizedPhone || x.phone))),
   );
   const spend = (c: Currency) =>
     tickets.filter((x) => x.currency === c).reduce((s, x) => s + x.amount, 0) +

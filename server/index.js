@@ -27,6 +27,7 @@ import { runServiceWorkflowMigration } from "./lib/serviceWorkflowMigration.js";
 import { removeLegacyCustomerPaymentSnapshots } from "./lib/accountsReceivableMigration.js";
 import { cleanupDeletedServiceFinance, resumeServiceDeletions } from "./lib/serviceDeletion.js";
 import { runClientNameSplitMigration } from "./lib/clientNameSplitMigration.js";
+import { runCancelledFinancePurgeMigration } from "./lib/cancelledFinancePurgeMigration.js";
 
 dotenv.config();
 
@@ -237,6 +238,17 @@ const startServer = async () => {
   console.log(
     "Client name split migration",
     JSON.stringify(clientSplitMigration),
+  );
+
+  // Reverse the finance of services cancelled before cancellation purged it, so
+  // existing cancelled tickets/visas stop counting in reports and receivables.
+  const cancelledPurge = await runRegisteredMigration(
+    "2026-09-08-cancelled-finance-purge-v1",
+    runCancelledFinancePurgeMigration,
+  );
+  console.log(
+    "Cancelled service finance purge",
+    JSON.stringify(cancelledPurge),
   );
 
   app.listen(PORT, "0.0.0.0", () => {
