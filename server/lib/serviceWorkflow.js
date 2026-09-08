@@ -1,6 +1,7 @@
 import Ticket from "../models/Ticket.js";
 import Visa from "../models/Visa.js";
 import { assertBranchAccess } from "./branches.js";
+import { purgeServiceFinance } from "./serviceDeletion.js";
 
 export const TICKET_STATUSES = ["booked", "issued", "changed", "cancelled"];
 export const VISA_STATUSES = ["submitted", "approved", "refused", "delivered"];
@@ -34,6 +35,7 @@ export const normalizeServiceStatus = (kind, value) => {
           approved: "approved",
           refused: "refused",
           delivered: "delivered",
+          cancelled: "cancelled",
         }
       : {
           booked: "booked",

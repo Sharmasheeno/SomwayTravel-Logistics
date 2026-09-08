@@ -246,6 +246,7 @@ export const transitionCargoStatus = async ({
   if (nextStatus === "cancelled") {
     fields.cancelledAt = entry.at;
     fields.cancelledByUserId = entry.userId;
+    await purgeServiceFinance("cargo", id);
     fields.cancellationReason = cancellationReason || note;
   }
   const updated = await Cargo.findOneAndUpdate(
