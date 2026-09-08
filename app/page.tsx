@@ -2577,6 +2577,7 @@ function Toolbar({
   setOffice,
   branches = [],
   allowAll = true,
+  showBranch = true,
 }: {
   query: string;
   setQuery: (v: string) => void;
@@ -2584,6 +2585,7 @@ function Toolbar({
   setOffice: (v: string) => void;
   branches?: Branch[];
   allowAll?: boolean;
+  showBranch?: boolean;
 }) {
   return (
     <div className="toolbar filter-row">
@@ -2595,21 +2597,23 @@ function Toolbar({
           placeholder="Search records…"
         />
       </label>
-      <label className="filter-field">
-        <span>Branch</span>
-        <div>
-          <Icon name="building" size={16} />
-          <select value={office} onChange={(e) => setOffice(e.target.value)}>
-            {allowAll && <option value="All">All Branches</option>}
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.name}>
-                {branch.name}
-              </option>
-            ))}
-          </select>
-          <Icon name="chevron" size={14} />
-        </div>
-      </label>
+      {showBranch && (
+        <label className="filter-field">
+          <span>Branch</span>
+          <div>
+            <Icon name="building" size={16} />
+            <select value={office} onChange={(e) => setOffice(e.target.value)}>
+              {allowAll && <option value="All">All Branches</option>}
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.name}>
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+            <Icon name="chevron" size={14} />
+          </div>
+        </label>
+      )}
     </div>
   );
 }
@@ -4825,21 +4829,7 @@ function PreviousOverview({
             : `Your ${office} operational desk is ready. Agency-wide financials are protected.`
         }
         actions={
-          financial ? (
-            <select
-              className="overview-branch-select"
-              value={branchId}
-              onChange={(event) => setBranchId(event.target.value)}
-              aria-label="Dashboard branch"
-            >
-              <option value="">All Branches</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-          ) : (
+          !financial && (
             <button className="button primary" onClick={() => onNavigate("cargo")}>
               <Icon name="plus" /> New Cargo
             </button>
@@ -5898,6 +5888,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
         setOffice={setOffice}
         branches={branches}
         allowAll={!roleOffice}
+        showBranch={false}
       />
       <div className="subtabs" aria-label="Ticket views">
         {[
@@ -6635,6 +6626,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
         office={office}
         setOffice={setOffice}
         branches={branchOptions(data, user)}
+        showBranch={false}
       />
       {rows.length ? (
         <Panel title="Shipments" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
@@ -8122,6 +8114,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
             setOffice={setOffice}
             branches={branches}
             allowAll={!roleOffice}
+            showBranch={false}
           />
         </div>
         <Panel title="Approval Rate">
@@ -10611,6 +10604,7 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         setOffice={setOffice}
         branches={branches}
         allowAll={!roleOffice}
+        showBranch={false}
       />
       <div className="expense-filters">
         <select
@@ -12976,7 +12970,10 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
   const [to, setTo] = useState(today());
   const [branchId, setBranchId] = useState("");
   // Follow the global branch scope chosen in the top bar.
-  useBranchScope(scopeBranchId, (id) => setBranchId(id));
+  useBranchScope(scopeBranchId, (id) => {
+    setBranchId(id);
+    setCurrency("");
+  });
   const [currency, setCurrency] = useState<"" | Currency>("");
   const [trendCurrency, setTrendCurrency] = useState<"" | Currency>("");
   const [report, setReport] = useState<FinanceReport | null>(null);
@@ -13203,21 +13200,6 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
         detail={`${titleScope} / each currency shown separately / ${dateLabel(from)} to ${dateLabel(to)}`}
         actions={
           <div className="report-actions">
-            <select
-              value={branchId}
-              onChange={(event) => {
-                setBranchId(event.target.value);
-                setCurrency("");
-              }}
-              aria-label="Report branch"
-            >
-              <option value="">All Branches</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
             <div className="date-range">
               <input
                 type="date"
