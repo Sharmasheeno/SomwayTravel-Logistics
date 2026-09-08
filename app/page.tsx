@@ -5087,7 +5087,12 @@ function Overview({
   from: string;
   to: string;
 }) {
-  const financial = user.role === "owner" || user.role === "consultant";
+  // Owners/consultants see agency-wide analytics (profit, cost, per-branch
+  // charts). Operators now see their OWN branch's money figures too — Payments
+  // Received and Accounts Receivable are theirs to act on, so they are no longer
+  // masked. `financialCharts` still gates the cost/profit-heavy analytics row.
+  const financialCharts = user.role === "owner" || user.role === "consultant";
+  const financial = financialCharts || user.role === "operator";
   const branches = activeBranches(data);
   const [report, setReport] = useState<FinanceReport | null>(null);
   // Totals for the window immediately before the selected one, so the money
@@ -5391,6 +5396,7 @@ function Overview({
     data={data}
     user={user}
     financial={financial}
+    financialCharts={financialCharts}
     branches={branches}
     branchId={branchId}
     displayCurrencies={displayCurrencies}
@@ -5423,6 +5429,7 @@ type LiveOverviewDashboardProps = {
   data: AgencyData;
   user: User;
   financial: boolean;
+  financialCharts: boolean;
   branches: Branch[];
   branchId: string;
   displayCurrencies: Currency[];
@@ -5477,6 +5484,7 @@ function LiveOverviewDashboard({
   data,
   user,
   financial,
+  financialCharts,
   branches,
   branchId,
   displayCurrencies,
@@ -5624,15 +5632,15 @@ function LiveOverviewDashboard({
       </div>
 
       <div className="metrics-grid six">
-        <MetricCard icon="money" label="Payments Received" value={financial ? revenueValue.split("\n")[0] : "Protected"} tone="cyan" delta={trends.payments} foot="Selected period" />
+        <MetricCard icon="money" label="Payments Received" value={revenueValue.split("\n")[0]} tone="cyan" delta={trends.payments} foot="Selected period" />
         <MetricCard icon="box" label="Cargo Shipments" value={scopedCargo.length} tone="blue" delta={trends.cargo} foot={`${activeCargo.length} currently active`} />
-        <MetricCard icon="wallet" label="Accounts Receivable" value={financial ? receivableValue.split("\n")[0] : "Protected"} tone="green" foot={`${receivableRecords} outstanding record${receivableRecords === 1 ? "" : "s"}`} />
+        <MetricCard icon="wallet" label="Accounts Receivable" value={receivableValue.split("\n")[0]} tone="green" foot={`${receivableRecords} outstanding record${receivableRecords === 1 ? "" : "s"}`} />
         <MetricCard icon="users" label="Total Clients" value={scopedClients.filter((client) => client.isActive !== false).length} tone="violet" foot={selectedBranch?.name || "All active relationships"} />
         <MetricCard icon="passport" label="Visa Applications" value={scopedVisas.length} tone="cyan" delta={trends.visas} foot={`${pendingVisas.length} in progress`} />
         <MetricCard icon="ticket" label="Tickets Issued" value={scopedTickets.filter((ticket) => ticket.status !== "cancelled").length} tone="blue" delta={trends.tickets} foot={`${scopedTickets.length} total record${scopedTickets.length === 1 ? "" : "s"}`} />
       </div>
 
-      {financial && (
+      {financialCharts && (
         <div
           className="split-3 dashboard-analytics-row"
           style={{ marginTop: 14, gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.25fr)" }}
