@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { apiFetch, apiRequest, SESSION_EXPIRED_EVENT } from "./lib/api";
+import { createPortal } from "react-dom";
 
 // A signed-in session belongs to the tab that established it. Opening the
 // workspace in a new tab, or returning after the browser was closed, goes
@@ -3630,8 +3631,8 @@ export default function Home() {
           onSaved={(updated) => setUser({ ...user, ...updated })}
         />
       )}
-      {toast && (
-        <div className={`toast toast-${toastTone}`} role="status">
+      {toast && createPortal(
+        <div className={`toast workspace-notification toast-${toastTone}`} role={toastTone === "error" ? "alert" : "status"} aria-atomic="true">
           <Icon name={toastTone === "error" ? "alert" : "check"} size={16} />
           <span>{toast}</span>
           <button
@@ -3642,7 +3643,8 @@ export default function Home() {
           >
             <Icon name="x" size={13} />
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

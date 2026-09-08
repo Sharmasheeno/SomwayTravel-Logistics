@@ -4102,3 +4102,15 @@ h3 .branch-inline .branch-flag {
   line-height: 1.4;
   color: #6b7a90;
 }
+/* Body-level notifications stay above every modal and its backdrop blur. */
+.toast.workspace-notification {
+  position: fixed;
+  z-index: 10000;
+  top: max(20px, env(safe-area-inset-top));
+  bottom: auto;
+  right: max(20px, env(safe-area-inset-right));
+  max-width: min(560px, calc(100vw - 40px));
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
