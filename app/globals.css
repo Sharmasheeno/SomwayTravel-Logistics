@@ -6287,12 +6287,57 @@ th {
   background: #fff;
   color: var(--ink);
 }
+.expense-date-range {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 7px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.expense-date-range-title {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding-top: 7px;
+}
+.expense-date-range label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.expense-date-range label > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.expense-date-range input {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.expense-date-separator {
+  color: var(--muted);
+  font-size: 11px;
+  padding-bottom: 11px;
+}
 @media (max-width: 900px) {
   .daily-summary-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .expense-filters {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .expense-date-range {
+    grid-column: span 3;
   }
   .payable-filters {
     flex-wrap: wrap;
@@ -6305,6 +6350,9 @@ th {
   }
   .expense-filters {
     grid-template-columns: 1fr;
+  }
+  .expense-date-range {
+    grid-column: span 1;
   }
   .payable-filters,
   .payable-filters select {

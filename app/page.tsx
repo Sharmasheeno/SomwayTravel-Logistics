@@ -10650,18 +10650,30 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
           <option value="void">Voided</option>
           <option value="all">All statuses</option>
         </select>
-        <input
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          aria-label="From date"
-        />
-        <input
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          aria-label="To date"
-        />
+        <div className="expense-date-range" aria-label="Expense date range">
+          <span className="expense-date-range-title">Date range</span>
+          <label>
+            <span>From</span>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              aria-label="From date"
+            />
+          </label>
+          <span className="expense-date-separator" aria-hidden="true">
+            to
+          </span>
+          <label>
+            <span>To</span>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              aria-label="To date"
+            />
+          </label>
+        </div>
       </div>
       {rows.length ? (
         <TableShell>
