@@ -3464,8 +3464,10 @@ export default function Home() {
           <div className="top-actions">
             {/* Branch scope is global: it drives every module's branch filter.
                 Operators are pinned to their own branch, so they see a label
-                rather than a control they are not allowed to change. */}
-            {branchOptions(data, user).length > 1 ? (
+                rather than a control they are not allowed to change. The Daily
+                Summary screen owns its own Branch dropdown, so the global chip
+                is hidden there to avoid a confusing duplicate control. */}
+            {page === "daily-close" ? null : branchOptions(data, user).length > 1 ? (
               <label className="topbar-filter topbar-control">
                 <Icon name="building" size={16} />
                 <select
@@ -8844,10 +8846,18 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
     }, 0);
   // Render a field's per-currency values for any subset of rows, so the same
   // card markup works for the combined view and for each branch group.
-  const metricFor = (list: DailySummaryRow[], field: keyof DailySummaryRow) => {
-    const codes = (["KES", "USD"] as Currency[]).filter((code) =>
+  const metricFor = (
+    list: DailySummaryRow[],
+    field: keyof DailySummaryRow,
+    // When a branch has no rows for the day we still want to show its own
+    // currencies at zero rather than a bare "No activity", so a quiet branch
+    // reads e.g. "USD 0" instead of disappearing.
+    fallbackCurrencies?: Currency[],
+  ) => {
+    const present = (["KES", "USD"] as Currency[]).filter((code) =>
       list.some((row) => row.currency === code),
     );
+    const codes = present.length ? present : fallbackCurrencies || [];
     return codes.length ? (
       codes.map((code) => (
         <strong key={code}>{money(totalFor(list, field, code), code)}</strong>
@@ -9222,6 +9232,7 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
   const showBranchGroups = !branchId;
   const branchGroups = (() => {
     if (!showBranchGroups) return [];
+    // Group the returned rows by branch first.
     const groups = new Map<
       string,
       { branchId: string; branch: string; rows: DailySummaryRow[] }
@@ -9235,6 +9246,16 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
           rows: [],
         });
       groups.get(key)!.rows.push(row);
+    }
+    // Every active branch in scope must appear even with no activity today, so
+    // "All branches" always lists both offices instead of hiding a quiet one.
+    for (const branch of branches) {
+      if (!groups.has(branch.id))
+        groups.set(branch.id, {
+          branchId: branch.id,
+          branch: branch.name,
+          rows: [],
+        });
     }
     // Order branches by their busiest revenue so the most active leads.
     return [...groups.values()].sort(
@@ -9324,7 +9345,13 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
             <>
               {showBranchGroups ? (
                 <div className="ds-branch-groups">
-                  {branchGroups.map((group) => (
+                  {branchGroups.map((group) => {
+                    // A branch with no activity today still shows its own
+                    // currencies at zero rather than vanishing from the list.
+                    const groupCurrencies = branchCurrencies(
+                      branchById(data, group.branchId),
+                    );
+                    return (
                     <section
                       className="ds-branch-group"
                       key={group.branchId || group.branch}
@@ -9334,7 +9361,7 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
                           <BranchName data={data} branch={group.branch} />
                         </h3>
                         <div className="ds-branch-group-totals">
-                          {metricFor(group.rows, "revenue")}
+                          {metricFor(group.rows, "revenue", groupCurrencies)}
                           <span>revenue today</span>
                         </div>
                       </header>
@@ -9347,7 +9374,7 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
                             <div className="metric-main">
                               <span className="eyebrow-soft">{card.label}</span>
                               <div className="metric-values">
-                                {metricFor(group.rows, card.field)}
+                                {metricFor(group.rows, card.field, groupCurrencies)}
                               </div>
                               <div className="metric-foot">
                                 <span>{card.foot}</span>
@@ -9357,7 +9384,8 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
                         ))}
                       </div>
                     </section>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <section className="daily-summary-kpis metrics-grid">
