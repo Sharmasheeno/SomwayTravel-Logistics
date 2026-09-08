@@ -269,8 +269,14 @@ export const createCustomerPayment = async ({
     async () => {
       if (mongoose.connection.readyState !== 0)
         await assertServiceNotDeleting(transactionType, transactionId);
-      if (!await Model.findOne({ id: transactionId }))
+      const lockedTransaction = await Model.findOne({ id: transactionId });
+      if (!lockedTransaction)
         throw Object.assign(new Error("Transaction not found."), { status: 404 });
+      if (isCancelledService(lockedTransaction)) {
+        const error = new Error("Cancelled services cannot receive payments.");
+        error.status = 409;
+        throw error;
+      }
       if (normalizedIdempotencyKey) {
         const existingPayment = await Payment.findOne({
           idempotencyKey: normalizedIdempotencyKey,
@@ -392,7 +398,9 @@ export const createSupplierPayment = async ({
     if (!await Supplier.findOne({ id: supplierBillId })) throw Object.assign(new Error("Supplier bill not found."), { status: 404 });
     if (parent && mongoose.connection.readyState !== 0) {
       await assertServiceNotDeleting(parent.type, parent.id);
-      if (!await modelFor(parent.type)?.findOne({ id: parent.id })) throw Object.assign(new Error("Parent service not found."), { status: 404 });
+      const parentRecord = await modelFor(parent.type)?.findOne({ id: parent.id });
+      if (!parentRecord) throw Object.assign(new Error("Parent service not found."), { status: 404 });
+      if (isCancelledService(parentRecord)) throw Object.assign(new Error("Cancelled service payables cannot be paid."), { status: 409 });
     }
   const branchId = bill.branchId || null;
   if (branchId)

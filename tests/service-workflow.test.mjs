@@ -131,6 +131,38 @@ test("ticket and visa transitions follow their canonical workflows", async () =>
   assert.equal(visa.workflowVersion, 2);
 });
 
+test("visa cancellation is a normal terminal workflow state", async () => {
+  const visa = {
+    id: "v-cancel",
+    branchId: nbo,
+    status: "submitted",
+    workflowVersion: 0,
+    statusHistory: [],
+  };
+  await withWorkflowMocks({ visas: [visa] }, async () => {
+    await transitionServiceStatus({
+      kind: "visa",
+      id: visa.id,
+      toStatus: "cancelled",
+      user: nairobi,
+    });
+    await assert.rejects(
+      transitionServiceStatus({
+        kind: "visa",
+        id: visa.id,
+        toStatus: "approved",
+        user: nairobi,
+      }),
+      /cannot move/i,
+    );
+  });
+  assert.equal(visa.status, "cancelled");
+  assert.deepEqual(
+    visa.statusHistory.map((entry) => entry.toStatus),
+    ["cancelled"],
+  );
+});
+
 test("operators cannot skip workflow steps or update another branch", async () => {
   const visa = {
     id: "v-guard",
@@ -213,5 +245,6 @@ test("legacy service statuses normalize deterministically", () => {
   assert.equal(normalizeServiceStatus("ticket", "Created"), "booked");
   assert.equal(normalizeServiceStatus("ticket", "Canceled"), "cancelled");
   assert.equal(normalizeServiceStatus("visa", "Approved"), "approved");
+  assert.equal(normalizeServiceStatus("visa", "Cancelled"), "cancelled");
   assert.equal(normalizeServiceStatus("visa", "unknown"), "submitted");
 });

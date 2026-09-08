@@ -50,7 +50,7 @@ export const deleteServiceRecords = (type, id) => withServiceLock(`${type}:${id}
   await ServiceDeletion.deleteOne({ _id: key });
 });
 
-export const purgeServiceFinance = (type, id) => withServiceLock(`${type}:${id}`, async () => {
+export const purgeServiceFinanceRecords = async (type, id) => {
   const payableId = `payable_${type}_${id}`;
   const bills = await Supplier.find({ $or: [{ id: payableId }, { transactionType: type, transactionId: id }] });
   const billIds = [...new Set([payableId, ...bills.map((bill) => bill.id)])];
@@ -59,7 +59,10 @@ export const purgeServiceFinance = (type, id) => withServiceLock(`${type}:${id}`
   await Supplier.deleteMany({ id: { $in: billIds } });
   await refreshCloseSnapshots();
   await rebuildStoredDailySummaries();
-});
+};
+
+export const purgeServiceFinance = (type, id) =>
+  withServiceLock(`${type}:${id}`, () => purgeServiceFinanceRecords(type, id));
 
 export const resumeServiceDeletions = async () => {
   for (const job of await ServiceDeletion.find({}))

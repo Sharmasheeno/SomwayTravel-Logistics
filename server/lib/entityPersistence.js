@@ -299,12 +299,19 @@ const withServerFields = async (collection, record, user, existing) => {
   }
   if (user.role === "operator" && user.assignedBranchId) {
     const branchId = user.assignedBranchId.toString();
-    if (
-      ["tickets", "visas", "expenses", "closes", "clients"].includes(collection)
-    )
+    const assignedBranch = await assertActiveBranch(branchId);
+    const assignedOffice = assignedBranch?.name || next.office || next.homeOffice || next.origin || "";
+    if (["tickets", "visas", "expenses", "closes"].includes(collection)) {
       next.branchId = branchId;
+      next.office = assignedOffice;
+    }
+    if (collection === "clients") {
+      next.homeBranchId = branchId;
+      next.homeOffice = assignedOffice;
+    }
     if (collection === "cargo") {
       next.originBranchId = branchId;
+      next.origin = assignedOffice;
       if (
         !next.paidByBranchId &&
         (next.paymentMethod || next.paidByOffice)

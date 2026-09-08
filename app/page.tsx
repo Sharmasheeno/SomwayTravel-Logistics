@@ -94,7 +94,7 @@ type User = {
   loginUrl?: string;
 };
 type TicketStatus = "booked" | "issued" | "changed" | "cancelled";
-type VisaStatus = "submitted" | "approved" | "refused" | "delivered";
+type VisaStatus = "submitted" | "approved" | "refused" | "delivered" | "cancelled";
 type Ticket = {
   id: string;
   ref: string;
@@ -790,10 +790,11 @@ const ticketNextStatuses: Record<string, TicketStatus[]> = {
   cancelled: [],
 };
 const visaNextStatuses: Record<string, VisaStatus[]> = {
-  submitted: ["approved", "refused"],
-  approved: ["delivered"],
+  submitted: ["approved", "refused", "cancelled"],
+  approved: ["delivered", "cancelled"],
   refused: [],
   delivered: [],
+  cancelled: [],
 };
 
 function syncClients(data: AgencyData): AgencyData {
@@ -8051,9 +8052,11 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
     approved: rows.filter((visa) => visa.status === "approved").length,
     refused: rows.filter((visa) => visa.status === "refused").length,
     delivered: rows.filter((visa) => visa.status === "delivered").length,
+    cancelled: rows.filter((visa) => visa.status === "cancelled").length,
   };
+  const activeDecisionRows = rows.filter((visa) => visa.status !== "cancelled");
   const approvedVisas = visaCounts.approved + visaCounts.delivered;
-  const approvalRate = rows.length ? Math.round((approvedVisas / rows.length) * 100) : 0;
+  const approvalRate = activeDecisionRows.length ? Math.round((approvedVisas / activeDecisionRows.length) * 100) : 0;
   const updateStatus = async (visa: Visa, status: Visa["status"]) => {
     const normallyAllowed = (visaNextStatuses[visa.status] || []).includes(
       status,
@@ -8105,7 +8108,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
             <MetricCard icon="file" label="Submitted" value={visaCounts.submitted} tone="violet" foot="Awaiting decision" />
             <MetricCard icon="check" label="Approved" value={approvedVisas} tone="green" foot="Approved or delivered" />
             <MetricCard icon="clock" label="Pending" value={visaCounts.submitted} tone="orange" foot="In progress" />
-            <MetricCard icon="alert" label="Refused" value={visaCounts.refused} tone="red" foot="Closed as refused" />
+            <MetricCard icon="alert" label="Closed" value={visaCounts.refused + visaCounts.cancelled} tone="red" foot="Refused or cancelled" />
           </div>
           <Toolbar
             query={query}
@@ -8122,9 +8125,9 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
             total={`${approvalRate}%`}
             centerLabel="Approval Rate"
             segments={[
-              { value: rows.length ? (approvedVisas / rows.length) * 100 : 0, color: "#16a34a", label: "Approved", amount: String(approvedVisas) },
-              { value: rows.length ? (visaCounts.refused / rows.length) * 100 : 0, color: "#ef4444", label: "Refused", amount: String(visaCounts.refused) },
-              { value: rows.length ? (visaCounts.submitted / rows.length) * 100 : 0, color: "#f59e0b", label: "Pending", amount: String(visaCounts.submitted) },
+              { value: activeDecisionRows.length ? (approvedVisas / activeDecisionRows.length) * 100 : 0, color: "#16a34a", label: "Approved", amount: String(approvedVisas) },
+              { value: activeDecisionRows.length ? (visaCounts.refused / activeDecisionRows.length) * 100 : 0, color: "#ef4444", label: "Refused", amount: String(visaCounts.refused) },
+              { value: activeDecisionRows.length ? (visaCounts.submitted / activeDecisionRows.length) * 100 : 0, color: "#f59e0b", label: "Pending", amount: String(visaCounts.submitted) },
             ]}
           />
         </Panel>
@@ -8197,6 +8200,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                                 "approved",
                                 "refused",
                                 "delivered",
+                                "cancelled",
                               ] as const)
                             : visaNextStatuses[x.status] || []),
                         ]
@@ -8215,7 +8219,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                         tone={
                           x.status === "delivered" || x.status === "approved"
                             ? "success"
-                            : x.status === "refused"
+                            : x.status === "refused" || x.status === "cancelled"
                               ? "danger"
                               : "blue"
                         }

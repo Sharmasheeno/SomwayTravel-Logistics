@@ -2,10 +2,11 @@ import mongoose from "mongoose";
 import Ticket from "../models/Ticket.js";
 import Visa from "../models/Visa.js";
 import { assertBranchAccess } from "./branches.js";
-import { purgeServiceFinance } from "./serviceDeletion.js";
+import { purgeServiceFinanceRecords } from "./serviceDeletion.js";
+import { withServiceLock } from "./serviceLock.js";
 
 export const TICKET_STATUSES = ["booked", "issued", "changed", "cancelled"];
-export const VISA_STATUSES = ["submitted", "approved", "refused", "delivered"];
+export const VISA_STATUSES = ["submitted", "approved", "refused", "delivered", "cancelled"];
 
 const TRANSITIONS = {
   ticket: {
@@ -15,10 +16,11 @@ const TRANSITIONS = {
     cancelled: [],
   },
   visa: {
-    submitted: ["approved", "refused"],
-    approved: ["delivered"],
+    submitted: ["approved", "refused", "cancelled"],
+    approved: ["delivered", "cancelled"],
     refused: [],
     delivered: [],
+    cancelled: [],
   },
 };
 
@@ -78,7 +80,7 @@ export const transitionServiceStatus = async ({
   note = "",
   correctionReason = "",
   user,
-}) => {
+}) => withServiceLock(`${kind}:${id}`, async () => {
   const Model = MODELS[kind];
   if (!Model) {
     throw Object.assign(new Error("Unknown service workflow."), {
@@ -148,7 +150,7 @@ export const transitionServiceStatus = async ({
   // daily summary, receivables and reports. The record itself is kept (with its
   // status history) so the cancellation remains auditable.
   if (nextStatus === "cancelled" && mongoose.connection.readyState !== 0) {
-    await purgeServiceFinance(kind, id);
+    await purgeServiceFinanceRecords(kind, id);
   }
   return updated;
-};
+});
