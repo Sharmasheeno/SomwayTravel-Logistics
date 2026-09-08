@@ -1,5 +1,7 @@
+import mongoose from "mongoose";
 import Cargo from "../models/Cargo.js";
 import { assertActiveBranch } from "./branches.js";
+import { purgeServiceFinance } from "./serviceDeletion.js";
 
 export const CARGO_STATUSES = [
   "received",
@@ -246,7 +248,12 @@ export const transitionCargoStatus = async ({
   if (nextStatus === "cancelled") {
     fields.cancelledAt = entry.at;
     fields.cancelledByUserId = entry.userId;
-    await purgeServiceFinance("cargo", id);
+    // Cancelling reverses the shipment's finance: remove the auto-generated
+    // payable and any recorded payments so it drops out of the reports,
+    // receivables and daily summary. The record itself is kept for audit.
+    if (mongoose.connection.readyState !== 0) {
+      await purgeServiceFinance("cargo", id);
+    }
     fields.cancellationReason = cancellationReason || note;
   }
   const updated = await Cargo.findOneAndUpdate(
