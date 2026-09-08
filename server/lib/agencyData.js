@@ -125,6 +125,20 @@ export const readAgencyData = async () => {
   const paymentMethodIdByMongoId = new Map(
     paymentMethods.map((method) => [method._id.toString(), method.id]),
   );
+  // Service links are stored as Mongo ObjectIds, while the client-facing
+  // workspace uses the stable client.id. Normalize both sides so counts,
+  // filters and activity cards include tickets, visas and cargo consistently.
+  const clientIdByMongoId = new Map(
+    clients.map((client) => [client._id.toString(), client.id]),
+  );
+  const normalizeClientLinks = (record) => {
+    const next = { ...record };
+    for (const field of ["clientId", "senderClientId", "receiverClientId", "payerClientId"]) {
+      const value = next[field]?.toString?.() || next[field];
+      if (value && clientIdByMongoId.has(value)) next[field] = clientIdByMongoId.get(value);
+    }
+    return next;
+  };
   const paymentsByTransaction = new Map();
   for (const payment of payments) {
     const key = `${payment.transactionType}:${payment.transactionId}`;
@@ -170,9 +184,9 @@ export const readAgencyData = async () => {
 
   return {
     agencyName,
-    tickets: tickets.map((row) => withCustomerFinance("ticket", row)),
-    cargo: cargo.map((row) => withCustomerFinance("cargo", row)),
-    visas: visas.map((row) => withCustomerFinance("visa", row)),
+    tickets: tickets.map((row) => normalizeClientLinks(withCustomerFinance("ticket", row))),
+    cargo: cargo.map((row) => normalizeClientLinks(withCustomerFinance("cargo", row))),
+    visas: visas.map((row) => normalizeClientLinks(withCustomerFinance("visa", row))),
     expenses: expenses.map(toPlain),
     suppliers: liveBills.map(toPlain),
     clients: clients.map(toPlain),
