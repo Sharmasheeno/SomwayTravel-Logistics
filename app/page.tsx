@@ -10665,9 +10665,6 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
               aria-label="From date"
             />
           </label>
-          <span className="expense-date-separator" aria-hidden="true">
-            to
-          </span>
           <label>
             <span>To</span>
             <input

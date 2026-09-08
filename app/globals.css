@@ -6290,9 +6290,9 @@ th {
 .expense-date-range {
   grid-column: span 2;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: end;
-  gap: 7px;
+  gap: 7px 14px;
   min-width: 0;
   padding: 0 8px;
   border: 1px solid var(--line);
@@ -6323,11 +6323,6 @@ th {
   border: 0;
   padding: 0;
   background: transparent;
-}
-.expense-date-separator {
-  color: var(--muted);
-  font-size: 11px;
-  padding-bottom: 11px;
 }
 @media (max-width: 900px) {
   .daily-summary-kpis {
