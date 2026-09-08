@@ -8,16 +8,23 @@ import Activity from "../server/models/Activity.js";
 import operatorRoutes from "../server/routes/operatorAccess.js";
 import authRoutes from "../server/routes/auth.js";
 import adminRoutes from "../server/routes/admin.js";
-import { validateOperatorRoute, generateOperatorRoute, operatorSettings } from "../server/lib/operatorAccess.js";
+import { validateOperatorRoute, generateOperatorRoute, operatorSettings, parseOperatorAddress } from "../server/lib/operatorAccess.js";
 
 test("operator paths reject reserved routes, traversal, URLs and ambiguous encodings", () => {
-  for (const route of ["/admin", "/api", "/portal", "/", "//evil", "https://evil.test", "/a/b", "/../admin", "/%61dmin", "/Admin", "/staff?x=1", "/staff#x", "/staff/", " /staff", "/assets", "/_next"]) {
+  for (const route of ["/admin", "/api", "/portal", "//evil", "https://evil.test", "/a/b", "/../admin", "/%61dmin", "/Admin", "/staff?x=1", "/staff#x", "/staff/", " /staff", "/assets", "/_next"]) {
     assert.throws(() => validateOperatorRoute(route), { status: 400 });
   }
   assert.equal(validateOperatorRoute("/operator-access"), "/operator-access");
   assert.equal(validateOperatorRoute("/staff-portal-8472"), "/staff-portal-8472");
   assert.notEqual(generateOperatorRoute(), generateOperatorRoute());
   assert.doesNotThrow(() => validateOperatorRoute(generateOperatorRoute()));
+});
+
+test("one address field accepts domains, full URLs and short paths", () => {
+  assert.deepEqual(parseOperatorAddress("staff.example.com"), { publicBaseUrl: "https://staff.example.com", operatorAccessRoute: "/" });
+  assert.deepEqual(parseOperatorAddress("http://169.58.173.197:8080/staff"), { publicBaseUrl: "http://169.58.173.197:8080", operatorAccessRoute: "/staff" });
+  assert.deepEqual(parseOperatorAddress("/s"), { operatorAccessRoute: "/s" });
+  for (const value of ["", "javascript:alert(1)", "https://a:b@example.com", "https://example.com/admin", "https://example.com/?x=1", "https://example.com/#x"]) assert.throws(() => parseOperatorAddress(value));
 });
 
 test("Owner rotation, operator read-only access, old link rejection and reset URLs", async () => {
@@ -85,6 +92,13 @@ test("Owner rotation, operator read-only access, old link rejection and reset UR
     assert.equal(deletedSessions, 1, "password reset still revokes the target sessions");
     assert.equal((await request("/api/operator-access", "PATCH", { route: "/admin" })).status, 400);
     assert.equal(settings.operatorAccessRoute, regenerated.data.route);
+    const domain = await request("/api/operator-access", "PATCH", { address: "staff.example.com" });
+    assert.equal(domain.status, 200);
+    assert.equal(domain.data.url, "https://staff.example.com/");
+    assert.equal((await request("/api/operator-access/validate?path=/")).status, 200);
+    // Use a separate username to avoid the intentional sign-in rate limit.
+    assert.equal((await login("/", "staff@example.test")).status, 200);
+    assert.equal((await request(`/api/operator-access/validate?path=${regenerated.data.route}`)).status, 404);
   } finally {
     await new Promise(resolve => server.close(resolve));
     originals.reverse().forEach(restore => restore());

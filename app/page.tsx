@@ -2972,6 +2972,7 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [portalPath, setPortalPath] = useState("/");
   const [routeUnavailable, setRouteUnavailable] = useState(false);
+  const [publicLanding, setPublicLanding] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState<Page>("overview");
   const [mobileNav, setMobileNav] = useState(false);
@@ -3012,12 +3013,9 @@ export default function Home() {
     const load = async () => {
       const path = window.location.pathname;
       setPortalPath(path);
-      if (path === "/") {
-        setReady(true);
-        return;
-      }
       try {
         const routeResponse = await fetch(`/api/operator-access/validate?path=${encodeURIComponent(path)}`, { cache: "no-store" });
+        if (routeResponse.status === 404 && path === "/") { setPublicLanding(true); return; }
         if (!routeResponse.ok) { setRouteUnavailable(true); return; }
         const statusResponse = await fetch("/api/auth/status", {
           cache: "no-store",
@@ -3190,7 +3188,7 @@ export default function Home() {
     setToast(message);
   };
   useEffect(() => {
-    if (portalPath === "/") return;
+    if (publicLanding) return;
     let active = true;
     const check = async () => {
       try {
@@ -3201,7 +3199,7 @@ export default function Home() {
     const timer = window.setInterval(check, 10000);
     window.addEventListener("focus", check);
     return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", check); };
-  }, [portalPath]);
+  }, [portalPath, publicLanding]);
   if (routeUnavailable) return <AuthMessage title="Access link unavailable" detail="This operator link is no longer active. Ask the Owner for the current login URL." />;
   if (!ready)
     return (
@@ -3210,7 +3208,7 @@ export default function Home() {
         <p>Preparing your agency workspace…</p>
       </main>
     );
-  if (portalPath === "/") return <Landing />;
+  if (publicLanding) return <Landing />;
   if (loadError && !user)
     return <AuthMessage title="Access unavailable" detail={loadError} />;
   if (!user)
@@ -14266,7 +14264,7 @@ function OperatorAccessPanel({ owner }: { owner: boolean }) {
         const response = await fetch("/api/operator-access", { cache: "no-store" });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Could not load operator URL.");
-        if (active) { setAccess(payload); setDraft(current => current || payload.route); }
+        if (active) { setAccess(payload); setDraft(current => current || payload.url); }
       } catch (e) { if (active) setError(e instanceof Error ? e.message : "Could not load operator URL."); }
     };
     void load();
@@ -14278,11 +14276,11 @@ function OperatorAccessPanel({ owner }: { owner: boolean }) {
     try {
       const response = await fetch("/api/operator-access", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(regenerate ? { regenerate: true } : { route: draft }),
+        body: JSON.stringify(regenerate ? { regenerate: true } : { address: draft }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Could not update operator route.");
-      setAccess(payload); setDraft(payload.route); setMessage("Operator route updated. Share the new URL with your operators.");
+      setAccess(payload); setDraft(payload.url); setMessage("Operator URL updated. Share the new URL with your operators.");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not update operator route."); }
     finally { setBusy(false); }
   };
@@ -14306,15 +14304,16 @@ function OperatorAccessPanel({ owner }: { owner: boolean }) {
     } catch (e) { setError(e instanceof Error ? e.message : "Select and copy the URL manually."); }
   };
   return <article className="panel">
-    <div className="panel-head"><h2>Operator Access Route</h2></div>
-    <p>{owner ? "Set the login URL for all operators. Changing it disables the previous URL. Owner access remains at /admin." : "Your current login URL. Only the Owner can change this address."}</p>
+    <div className="panel-head"><h2>Operator login URL</h2></div>
+    <p>{owner ? "Use a domain or a full URL. A domain without a path opens operator login on the homepage. Owner login stays at /admin." : "Your current login URL. Only the Owner can change this address."}</p>
     <Field label="Active operator URL"><input readOnly value={access.url} /></Field>
     <div className="button-row"><button className="button secondary" disabled={!access.url || busy} onClick={() => void copy()}>Copy operator URL</button></div>
     {owner && <>
-      <Field label="Operator route"><input value={draft} maxLength={65} placeholder="/operator-access" onChange={e => setDraft(e.target.value)} /></Field>
+      <p>The domain must already point to this server. Saving here does not register or connect a domain.</p>
+      <Field label="New login address"><input value={draft} maxLength={2048} placeholder="staff.example.com or https://example.com/staff" onChange={e => setDraft(e.target.value)} /></Field>
       <div className="button-row">
-        <button className="button primary" disabled={busy || !access.url || draft === access.route} onClick={() => void save(false)}>Save route</button>
-        <button className="button secondary" disabled={busy || !access.url} onClick={() => void save(true)}>Regenerate route</button>
+        <button className="button primary" disabled={busy || !access.url || draft === access.url} onClick={() => void save(false)}>Save login URL</button>
+        <button className="button secondary" disabled={busy || !access.url} onClick={() => void save(true)}>Generate new path</button>
       </div>
     </>}
     {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
@@ -14579,7 +14578,6 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
         </article>
         <OwnerSecurity notify={notify} />
         <OperatorAccessPanel owner />
-        <LoginLinkPanel notify={notify} />
         <BusinessHoursPanel notify={notify} />
         <BranchManager data={data} notify={notify} />
         <BackupPanel notify={notify} replaceData={replaceData} />
