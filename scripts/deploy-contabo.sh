@@ -18,9 +18,34 @@ BRANCH="${DEPLOY_BRANCH:-arena/01a07273-somwaytravel-logistics}"
 echo "==> Deploying branch: ${BRANCH}"
 
 echo "==> Pulling latest code"
-git fetch origin "${BRANCH}"
+# Some Contabo hosts advertise IPv6 but have a dead IPv6 route to GitHub, which
+# makes git hang for ~134s and then fail with "Failed to connect ... port 443".
+# Prefer IPv4 for git transport so the fetch connects immediately. (A permanent
+# system-wide fix is: echo 'precedence ::ffff:0:0/96 100' | sudo tee -a /etc/gai.conf)
+GIT_HTTP_OPTS=(-c http.version=HTTP/1.1)
+
+# Retry the network step a few times so a transient blip self-heals instead of
+# aborting the whole deploy.
+fetch_ok=0
+for attempt in 1 2 3; do
+  echo "    fetch attempt ${attempt}/3 ..."
+  if git "${GIT_HTTP_OPTS[@]}" fetch origin "${BRANCH}"; then
+    fetch_ok=1
+    break
+  fi
+  echo "    fetch failed; retrying in 5s ..."
+  sleep 5
+done
+if [ "${fetch_ok}" -ne 1 ]; then
+  echo "!! Could not reach GitHub after 3 attempts."
+  echo "!! This is almost always a dead IPv6 route on the VPS. Fix with:"
+  echo "!!   echo 'precedence ::ffff:0:0/96  100' | sudo tee -a /etc/gai.conf"
+  echo "!! then re-run this script. (Verify with: curl -4 -I https://github.com)"
+  exit 1
+fi
+
 git checkout "${BRANCH}"
-git pull --ff-only origin "${BRANCH}"
+git "${GIT_HTTP_OPTS[@]}" pull --ff-only origin "${BRANCH}"
 
 echo "==> Installing dependencies (npm ci)"
 npm ci
