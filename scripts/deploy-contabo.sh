@@ -30,7 +30,7 @@ npm run build
 
 echo "==> Restarting pm2 processes"
 # --update-env makes pm2 pick up any new environment variables too.
-pm2 restart all --update-env
+pm2 restart somway-api somway-web --update-env
 
 echo "==> pm2 status"
 pm2 status || true

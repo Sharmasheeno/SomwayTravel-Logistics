@@ -36,6 +36,7 @@ const tabHasSession = () => {
     return true;
   }
 };
+import { buildReceiptHtml } from "./lib/receipt.mjs";
 import { SomwayIcon } from "./somway-icon";
 
 const fetch = apiFetch;
@@ -883,140 +884,13 @@ type ReceiptData = {
   paymentStatus: string;
   serviceStatus: string;
   amount: number;
-  cost?: number;
-  profit: number;
-  amountPaid: number;
-  balance: number;
   currency: Currency;
   served: string;
-  notes?: string;
-  kind: string;
+  kind: "ticket" | "visa" | "cargo";
+  details: Array<[string, string]>;
 };
 function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
-  const esc = (value: string | number) =>
-    String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  const m = (value: number) => esc(money(value, receipt.currency));
-  const paidTone = /paid|refunded/i.test(receipt.paymentStatus)
-    ? "#0d8a4f"
-    : "#b7791f";
-  const rows: Array<[string, string]> = [
-    ["Date", esc(dateLabel(receipt.date))],
-    ["Client", esc(receipt.client)],
-    ["Description", esc(receipt.description)],
-    ["Branch", esc(receipt.branch)],
-    ["Paid via", esc(receipt.method)],
-    ["Payment status", esc(receipt.paymentStatus)],
-    ["Service status", esc(receipt.serviceStatus)],
-  ];
-  const finance: Array<[string, string, string?]> = [
-    ...(receipt.cost !== undefined
-      ? ([["Agency cost", m(receipt.cost)]] as Array<[string, string]>)
-      : []),
-    ["Profit", m(receipt.profit), receipt.profit < 0 ? "#d64545" : "#0d8a4f"],
-    ["Paid", m(receipt.amountPaid)],
-    ["Balance", m(receipt.balance)],
-  ];
-  const logo = logoUrl
-    ? `<img class="brand" src="${esc(logoUrl)}" alt="${esc(receipt.agencyName)}" />`
-    : `<div class="brand brand-fallback">SW</div>`;
-  // The primary logo already contains the "SomWay Travel & Logistics" wordmark,
-  // so avoid repeating the name next to it; only show the branch subtitle. When
-  // no logo is supplied (fallback chip), keep the text name.
-  const heading = logoUrl
-    ? `<div><p>Nairobi &middot; Mogadishu</p></div>`
-    : `<div><h1>${esc(receipt.agencyName)}</h1><p>Nairobi &middot; Mogadishu</p></div>`;
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>receipt-${esc(receipt.ref)}</title>
-<style>
-  :root { --green:#0d47a1; --muted:#61708c; --line:#dce6f2; --cream:#fff9e9; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #eef2f7; color: #14243d;
-    font-family: "Poppins", "Inter", system-ui, -apple-system, sans-serif; }
-  .sheet { max-width: 640px; margin: 26px auto; background: #fff;
-    border: 1px solid var(--line); border-radius: 6px; padding: 40px 46px;
-    box-shadow: 0 18px 44px rgba(3,23,53,.10); }
-  header { display: grid; grid-template-columns: auto 1fr auto; align-items: center;
-    gap: 18px; padding-bottom: 22px; border-bottom: 2px solid var(--green); }
-  .brand { width: auto; height: 52px; max-width: 62vw; border-radius: 10px;
-    object-fit: contain; object-position: left center; background: #000; padding: 8px 14px; display: block;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .brand-fallback { width: 72px; height: 72px; display: grid; place-items: center;
-    background: var(--green); color: #fff; font: 700 28px/1 Georgia, serif; padding: 0; }
-  h1 { font: 500 21px/1.15 Georgia, serif; color: var(--green); margin: 0; }
-  header p { font-size: 10px; color: var(--muted); margin: 4px 0 0; }
-  .tag { align-self: start; padding: 6px 12px; border-radius: 999px;
-    background: #e0f5e9; color: #0d8a4f; font-size: 11px; font-weight: 700; }
-  .ref { display: flex; justify-content: space-between; align-items: center;
-    background: var(--cream); padding: 14px 16px; margin: 24px 0; border-radius: 9px; }
-  .ref span { font-size: 10px; color: #846d3d; }
-  .ref strong { font-size: 15px; color: var(--green); letter-spacing: .02em; }
-  dl { margin: 0; }
-  dl > div { display: grid; grid-template-columns: 130px 1fr; padding: 12px 0;
-    border-bottom: 1px solid #edf1f0; }
-  dt { font-size: 11px; color: var(--muted); }
-  dd { font-size: 12px; font-weight: 700; margin: 0; }
-  .total { display: flex; justify-content: space-between; align-items: end; padding: 24px 0; }
-  .total span { font-size: 11px; color: var(--muted); }
-  .total strong { font: 500 30px/1 Georgia, serif; color: var(--green);
-    font-variant-numeric: tabular-nums; }
-  .grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px;
-    padding-bottom: 22px; }
-  .grid > div { display: flex; flex-direction: column; gap: 5px; padding: 11px 13px;
-    background: #f5f8fc; border-radius: 8px; }
-  .grid span { color: var(--muted); font-size: 10px; }
-  .grid strong { font-size: 14px; font-variant-numeric: tabular-nums; }
-  .notes { padding: 12px 14px; margin: 0 0 18px; background: var(--cream);
-    border-radius: 8px; color: #765d2b; font-size: 11px; line-height: 1.5; }
-  footer { border-top: 1px solid var(--line); padding-top: 18px; }
-  footer p { font: 500 17px/1.2 Georgia, serif; color: var(--green); margin: 0 0 4px; }
-  footer span { font-size: 10px; color: var(--muted); }
-  .toolbar { max-width: 640px; margin: 18px auto 0; display: flex; gap: 10px;
-    justify-content: flex-end; }
-  .toolbar button { border: 0; border-radius: 10px; padding: 11px 18px; cursor: pointer;
-    font: 600 13px/1 inherit; }
-  .toolbar .print { background: var(--green); color: #fff; }
-  .toolbar .close { background: #e7edf5; color: #35425c; }
-  @media print { body { background: #fff; } .sheet { box-shadow: none; border: 0;
-    margin: 0; max-width: none; } .toolbar { display: none; } }
-</style>
-</head>
-<body>
-  <div class="sheet">
-    <header>
-      ${logo}
-      ${heading}
-      <span class="tag">Receipt</span>
-    </header>
-    <div class="ref"><span>Receipt number</span><strong>${esc(receipt.ref)}</strong></div>
-    <dl>${rows
-      .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
-      .join("")}</dl>
-    <div class="total"><span>Sale price</span><strong>${m(receipt.amount)}</strong></div>
-    <div class="grid">${finance
-      .map(
-        ([k, v, color]) =>
-          `<div><span>${k}</span><strong${color ? ` style="color:${color}"` : ""}>${v}</strong></div>`,
-      )
-      .join("")}</div>
-    ${receipt.notes ? `<p class="notes">${esc(receipt.notes)}</p>` : ""}
-    <footer><p>Thank you for your business.</p><span>Served by ${esc(receipt.served)}</span></footer>
-  </div>
-  <div class="toolbar">
-    <button class="close" onclick="window.close()">Close</button>
-    <button class="print" onclick="window.print()">Print / Save PDF</button>
-  </div>
-  <script>
-    window.addEventListener('load', function(){ setTimeout(function(){ window.focus(); window.print(); }, 350); });
-  <\/script>
-</body>
-</html>`;
+  const html = buildReceiptHtml(receipt, new URL(logoUrl || "/Som-way2.png", window.location.origin).href, true);
   const win = window.open("", "_blank", "width=760,height=900");
   if (win && win.document) {
     // Direct document write: works in the common case and keeps the tab under
@@ -1214,11 +1088,10 @@ function ticketReceiptData(
   method?: string,
 ): ReceiptData {
   const amountValue = ticket.amount || 0;
-  const paid = ticket.amountPaid || 0;
   return {
     agencyName,
     ref: ticket.ref,
-    date: ticket.saleDate,
+    date: dateLabel(ticket.saleDate),
     client: ticket.passenger,
     description: `Flight ${ticket.route}${ticket.airlinePnr ? ` · ${ticket.airlinePnr}` : ""}`,
     branch: ticket.office,
@@ -1226,14 +1099,10 @@ function ticketReceiptData(
     paymentStatus: ticket.paymentStatus || (ticket.paid ? "paid" : "unpaid"),
     serviceStatus: ticket.status || "booked",
     amount: amountValue,
-    cost: ticket.cost,
-    profit: amountValue - (ticket.cost || 0),
-    amountPaid: paid,
-    balance: ticket.balance ?? Math.max(0, amountValue - paid),
     currency: ticket.currency,
     served: ticket.servedBy || "Agency team",
-    notes: ticket.notes,
     kind: "ticket",
+    details: [["Route", ticket.route], ["Airline / PNR", ticket.airlinePnr || "?"], ["Travel date", dateLabel(ticket.travelDate)], ["Booking status", ticket.status || "booked"]],
   };
 }
 // Turn a visa register row into receipt data for the one-click generator.
@@ -1243,11 +1112,10 @@ function visaReceiptData(
   method?: string,
 ): ReceiptData {
   const amountValue = visa.amount || 0;
-  const paid = visa.amountPaid || 0;
   return {
     agencyName,
     ref: visa.ref,
-    date: visa.appDate,
+    date: dateLabel(visa.appDate),
     client: visa.applicant,
     description: `${visa.visaType} visa · ${visa.destination}`,
     branch: visa.office,
@@ -1255,14 +1123,10 @@ function visaReceiptData(
     paymentStatus: visa.paymentStatus || (visa.paid ? "paid" : "unpaid"),
     serviceStatus: visa.status || "submitted",
     amount: amountValue,
-    cost: visa.cost,
-    profit: amountValue - (visa.cost || 0),
-    amountPaid: paid,
-    balance: visa.balance ?? Math.max(0, amountValue - paid),
     currency: visa.currency,
     served: visa.servedBy || "Agency team",
-    notes: visa.notes,
     kind: "visa",
+    details: [["Destination country", visa.destination], ["Visa type", visa.visaType], ["Application status", visa.status || "submitted"]],
   };
 }
 // Turn a cargo register row into receipt data for the one-click generator.
@@ -1274,29 +1138,24 @@ function cargoReceiptData(
 ): ReceiptData {
   const amountValue =
     cargo.customerCharge ?? (cargo.weight || 0) * (cargo.rate || 0);
-  const paid = cargo.amountPaid || 0;
   return {
     agencyName,
     ref: cargo.tracking,
-    date: cargo.dateIn,
+    date: dateLabel(cargo.dateIn),
     client:
       cargo.paymentResponsibility === "receiver"
         ? cargo.receiver
         : cargo.sender,
-    description: `Cargo ${cargo.origin} → ${cargo.destination} · ${cargo.weight} kg @ ${money(cargo.rate || 0, cargo.currency)} / kg`,
+    description: `Cargo ${cargo.origin} ? ${cargo.destination} ? ${cargo.weight} kg`,
     branch: cargo.paidByOffice || cargo.origin,
     method: method ?? cargo.paymentMethod ?? "—",
     paymentStatus: cargo.paymentStatus || (cargo.paid ? "paid" : "unpaid"),
     serviceStatus: cargoStatusLabel(cargo.status),
     amount: amountValue,
-    cost: cargo.cost,
-    profit: amountValue - (cargo.cost || 0),
-    amountPaid: paid,
-    balance: cargo.balance ?? Math.max(0, amountValue - paid),
     currency: cargo.currency,
     served: servedBy || "Agency team",
-    notes: cargo.notes,
     kind: "cargo",
+    details: [["Sender", cargo.sender], ["Receiver", cargo.receiver], ["Destination", cargo.destination], ["Weight", `${cargo.weight} kg`], ["Description", cargo.contents]],
   };
 }
 function Icon({ name, size = 18 }: { name: string; size?: number }) {
@@ -6223,8 +6082,8 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
           branches={branches}
           data={data}
           onClose={() => setEditing(undefined)}
-          onSave={(record) => {
-            void save(
+          onSave={async (record) => {
+            const saved = await save(
               (d) => ({
                 ...d,
                 tickets: editing
@@ -6236,6 +6095,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                 detail: `${editing ? "Updated" : "Created"} ${record.ref}`,
               },
             );
+            if (!saved) return;
             setEditing(undefined);
             notify(
               `Ticket ${record.ref} ${editing ? "updated" : "created"} for ${record.passenger || "passenger"}`,
@@ -6266,7 +6126,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
       {deleting && (
         <Confirm
           title="Delete ticket?"
-          detail={`${deleting.ref} and any of its recorded payments will be permanently deleted. This cannot be undone.`}
+          detail={`${deleting.ref} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.`}
           confirmLabel="Delete Ticket"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
@@ -6298,7 +6158,7 @@ function TicketForm({
   branches: Branch[];
   data: AgencyData;
   onClose: () => void;
-  onSave: (r: Ticket) => void;
+  onSave: (r: Ticket) => void | Promise<void>;
 }) {
   const initialBranch = current?.branchId || branches[0]?.id || "";
   const selectedBranch = branchById(data, initialBranch);
@@ -6329,11 +6189,11 @@ function TicketForm({
     paymentMethod: initialPaymentMethod,
     notes: current?.notes || "",
   });
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!f.passenger || !f.phone || !f.route || !f.amount || !f.paymentMethod)
       return;
-    onSave({
+    await onSave({
       id: current?.id || uid("tkt"),
       ref: current?.ref || "",
       office: branchName(data, f.branchId, f.office),
@@ -7034,7 +6894,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
       {deleting && (
         <Confirm
           title="Delete shipment?"
-          detail={`${deleting.tracking} and any of its recorded payments will be permanently deleted. This cannot be undone.`}
+          detail={`${deleting.tracking} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.`}
           confirmLabel="Delete Shipment"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
@@ -8408,8 +8268,8 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
           data={data}
           user={user}
           onClose={() => setEditing(undefined)}
-          onSave={(r) => {
-            save(
+          onSave={async (r) => {
+            const saved = await save(
               (d) => ({
                 ...d,
                 visas: editing
@@ -8421,6 +8281,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                 detail: `${editing ? "Updated" : "Created"} ${r.ref}`,
               },
             );
+            if (!saved) return;
             setEditing(undefined);
             notify(
               `Visa ${r.ref} ${editing ? "updated" : "created"} for ${r.applicant || "applicant"}`,
@@ -8451,7 +8312,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
       {deleting && (
         <Confirm
           title="Delete visa case?"
-          detail={`${deleting.ref} and any of its recorded payments will be permanently deleted. This cannot be undone.`}
+          detail={`${deleting.ref} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.`}
           confirmLabel="Delete Visa"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
@@ -8482,7 +8343,7 @@ function VisaForm({
   data: AgencyData;
   user: User;
   onClose: () => void;
-  onSave: (r: Visa) => void;
+  onSave: (r: Visa) => void | Promise<void>;
 }) {
   const branches = branchOptions(data, user);
   const legacyOffice = officeForRole(user.role);
@@ -8559,9 +8420,9 @@ function VisaForm({
     >
       <form
         className="modal-form"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          onSave({
+          await onSave({
             id: current?.id || uid("visa"),
             ref: current?.ref || "",
             branchId: f.branchId,
@@ -11108,32 +10969,7 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
                           Pay
                         </button>
                       )}
-                      {x.recordStatus !== "cancelled" && (
-                        <Actions
-                          onEdit={() => setEditing(x)}
-                          onDelete={() => {
-                            if (
-                              !window.confirm(
-                                `Delete ${x.supplier} bill? This will permanently remove the payable and any of its recorded payments. This cannot be undone.`,
-                              )
-                            )
-                              return;
-                            void save(
-                              (d) => ({
-                                ...d,
-                                suppliers: d.suppliers.filter(
-                                  (y) => y.id !== x.id,
-                                ),
-                              }),
-                              {
-                                entity: "Supplier",
-                                detail: `Deleted ${x.supplier} bill`,
-                              },
-                            );
-                            notify("Payable deleted");
-                          }}
-                        />
-                      )}
+
                     </div>
                   ) : undefined
                 }
@@ -12063,260 +11899,40 @@ function ClientForm({
 
 function Receipt({ data }: { data: AgencyData }) {
   const [ref, setRef] = useState("");
-  const ticket = data.tickets.find(
-    (x) => x.ref.toLowerCase() === ref.trim().toLowerCase(),
-  );
-  const visa = data.visas.find(
-    (x) => x.ref.toLowerCase() === ref.trim().toLowerCase(),
-  );
-  const cargo = data.cargo.find(
-    (x) => x.tracking.toLowerCase() === ref.trim().toLowerCase(),
-  );
-  const item = ticket
-    ? {
-        ref: ticket.ref,
-        date: ticket.saleDate,
-        client: ticket.passenger,
-        description: `Flight ${ticket.route}${ticket.airlinePnr ? ` · ${ticket.airlinePnr}` : ""}`,
-        amount: ticket.amount,
-        cost: ticket.cost,
-        profit: ticket.amount - ticket.cost,
-        currency: ticket.currency,
-        method: ticket.paymentMethod,
-        paymentStatus: ticket.paymentStatus || (ticket.paid ? "paid" : "unpaid"),
-        amountPaid: ticket.amountPaid || 0,
-        balance: ticket.balance ?? Math.max(0, ticket.amount - (ticket.amountPaid || 0)),
-        branch: ticket.office,
-        status: ticket.status || "booked",
-        served: ticket.servedBy,
-        notes: ticket.notes,
-      }
-    : visa
-      ? {
-          ref: visa.ref,
-          date: visa.appDate,
-          client: visa.applicant,
-          description: `${visa.visaType} visa · ${visa.destination}`,
-          amount: visa.amount,
-          cost: visa.cost,
-          profit: visa.amount - visa.cost,
-          currency: visa.currency,
-          method: visa.paymentMethod,
-          paymentStatus: visa.paymentStatus || (visa.paid ? "paid" : "unpaid"),
-          amountPaid: visa.amountPaid || 0,
-          balance: visa.balance ?? Math.max(0, visa.amount - (visa.amountPaid || 0)),
-          branch: visa.office,
-          status: visa.status,
-          served: visa.servedBy,
-          notes: visa.notes,
-        }
-      : cargo
-        ? {
-            ref: cargo.tracking,
-            date: cargo.dateIn,
-            client: cargo.sender,
-            description: `Cargo ${cargo.origin} → ${cargo.destination} · ${cargo.weight} kg @ ${money(cargo.rate, cargo.currency)} / kg`,
-            amount: cargo.customerCharge ?? cargo.weight * cargo.rate,
-            cost: cargo.cost,
-            profit:
-              (cargo.customerCharge ?? cargo.weight * cargo.rate) -
-              (cargo.cost || 0),
-            currency: cargo.currency,
-            method: cargo.paymentMethod,
-            paymentStatus: cargo.paymentStatus || (cargo.paid ? "paid" : "unpaid"),
-            amountPaid: cargo.amountPaid || 0,
-            balance:
-              cargo.balance ??
-              Math.max(
-                0,
-                (cargo.customerCharge ?? cargo.weight * cargo.rate) -
-                  (cargo.amountPaid || 0),
-              ),
-            branch: cargo.paidByOffice,
-            status: cargoStatusLabel(cargo.status),
-            served:
-              data.users.find((u) => u.id === cargo.createdBy)?.name ||
-              "Agency team",
-            notes: cargo.notes,
-          }
-        : null;
-  /**
-   * The receipt PDF is the receipt itself, not a transcription of it. The
-   * hand-rolled PDF writer used elsewhere can only place Helvetica text, so
-   * it produced a plain list with no logo, flag, colour or alignment. Printing
-   * the styled card instead means the saved PDF is exactly what is on screen.
-   * The document title becomes the suggested filename in the save dialog.
-   */
-  const download = () => {
-    if (!item) return;
-    const previousTitle = document.title;
-    document.title = `receipt-${item.ref}`;
-    const restore = () => {
-      document.title = previousTitle;
-      window.removeEventListener("afterprint", restore);
-    };
-    window.addEventListener("afterprint", restore);
-    window.print();
-    // Safari and some Android browsers never fire afterprint.
-    setTimeout(restore, 60000);
-  };
+  const query = ref.trim().toLowerCase();
+  const ticket = data.tickets.find((row) => row.ref.toLowerCase() === query);
+  const visa = data.visas.find((row) => row.ref.toLowerCase() === query);
+  const cargo = data.cargo.find((row) => row.tracking.toLowerCase() === query);
+  const item = ticket ? ticketReceiptData(ticket, data.agencyName)
+    : visa ? visaReceiptData(visa, data.agencyName)
+    : cargo ? cargoReceiptData(cargo, data.agencyName, data.users.find((u) => u.id === cargo.createdBy)?.name || "Agency team")
+    : null;
   const downloadTextCopy = () => {
     if (!item) return;
     downloadPdf(`receipt-${item.ref}.pdf`, data.agencyName, [
-      `OFFICIAL RECEIPT - ${item.ref}`,
-      "",
-      `Date: ${dateLabel(item.date)}`,
-      `Client: ${item.client}`,
-      `Service: ${item.description}`,
-      `Branch: ${item.branch}`,
-      `Sale price: ${money(item.amount, item.currency)}`,
-      ...(item.cost !== undefined
-        ? [`Agency cost: ${money(item.cost, item.currency)}`]
-        : []),
-      `Profit: ${money(item.profit, item.currency)}`,
-      `Payment status: ${item.paymentStatus}`,
-      `Payment method: ${item.method}`,
-      `Paid: ${money(item.amountPaid, item.currency)}`,
-      `Balance: ${money(item.balance, item.currency)}`,
-      `Service status: ${item.status}`,
-      ...(item.notes ? [`Notes: ${item.notes}`] : []),
-      "",
-      `Served by: ${item.served}`,
-      "Thank you for your business.",
+      `RECEIPT - ${item.ref}`, `Date: ${item.date}`, `Client: ${item.client}`,
+      ...item.details.map(([label, value]) => `${label}: ${value}`),
+      `Total amount: ${money(item.amount, item.currency)}`,
+      `Payment status: ${item.paymentStatus}`, `Payment method: ${item.method}`,
+      `Served by: ${item.served}`, "Thank you for choosing SomWay.",
     ]);
   };
-  return (
-    <>
-      <PageHeader
-        eyebrow="Client document"
-        title="Receipt Builder"
-        detail="Find any ticket, visa or cargo transaction, then print it or download a PDF receipt."
-      />
-      <div className="receipt-layout">
-        <section className="panel lookup-panel">
-          <h2>Find a transaction</h2>
-          <p>References are generated when records are created.</p>
-          <label className="lookup-input">
-            <Icon name="search" />
-            <input
-              autoFocus
-              value={ref}
-              onChange={(e) => setRef(e.target.value)}
-              placeholder="TKT-N-… / VIS-M-… / NBO-…"
-            />
-          </label>
-          {ref && !item && (
-            <p className="form-error">No matching record found.</p>
-          )}
-          <div className="lookup-help">
-            <strong>Accepted records</strong>
-            <span>Ticket booking reference</span>
-            <span>Visa application reference</span>
-            <span>Cargo tracking number</span>
-          </div>
-        </section>
-        <section className={`receipt-card ${item ? "ready" : "empty-receipt"}`}>
-          {item ? (
-            <>
-              <header>
-                <BrandLogo className="receipt-brand-logo" />
-                <div>
-                  <h2>{data.agencyName}</h2>
-                  <p>Nairobi · Mogadishu</p>
-                </div>
-                <Badge tone="success">Receipt</Badge>
-              </header>
-              <div className="receipt-ref">
-                <span>Receipt number</span>
-                <strong>{item.ref}</strong>
-              </div>
-              <dl>
-                <div>
-                  <dt>Date</dt>
-                  <dd>{dateLabel(item.date)}</dd>
-                </div>
-                <div>
-                  <dt>Client</dt>
-                  <dd>{item.client}</dd>
-                </div>
-                <div>
-                  <dt>Description</dt>
-                  <dd>{item.description}</dd>
-                </div>
-                <div>
-                  <dt>Branch</dt>
-                  <dd>
-                    <BranchName data={data} branch={item.branch} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>Paid via</dt>
-                  <dd>{item.method}</dd>
-                </div>
-                <div>
-                  <dt>Payment status</dt>
-                  <dd>{item.paymentStatus}</dd>
-                </div>
-                <div>
-                  <dt>Service status</dt>
-                  <dd>{item.status}</dd>
-                </div>
-              </dl>
-              <div className="receipt-total">
-                <span>Sale price</span>
-                <strong>{money(item.amount, item.currency)}</strong>
-              </div>
-              <div className="receipt-finance-grid">
-                {item.cost !== undefined && (
-                  <div>
-                    <span>Agency cost</span>
-                    <strong>{money(item.cost, item.currency)}</strong>
-                  </div>
-                )}
-                <div>
-                  <span>Profit</span>
-                  <strong className={item.profit < 0 ? "negative" : "positive"}>
-                    {money(item.profit, item.currency)}
-                  </strong>
-                </div>
-                <div>
-                  <span>Paid</span>
-                  <strong>{money(item.amountPaid, item.currency)}</strong>
-                </div>
-                <div>
-                  <span>Balance</span>
-                  <strong>{money(item.balance, item.currency)}</strong>
-                </div>
-              </div>
-              {item.notes && <p className="receipt-notes">{item.notes}</p>}
-              <footer>
-                <p>Thank you for your business.</p>
-                <span>Served by {item.served}</span>
-              </footer>
-              <div className="receipt-actions print-hide">
-                <button
-                  className="button ghost"
-                  onClick={downloadTextCopy}
-                  title="Plain-text copy for systems that cannot open a styled PDF"
-                >
-                  <Icon name="file" /> Text copy
-                </button>
-                <button className="button primary" onClick={download}>
-                  <Icon name="receipt" /> Download PDF
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <Icon name="receipt" size={42} />
-              <h3>Your receipt will appear here</h3>
-              <p>Search for a valid transaction reference to generate it.</p>
-            </>
-          )}
-        </section>
-      </div>
-    </>
-  );
+  return <>
+    <PageHeader eyebrow="Client document" title="Receipt Builder" detail="Find a ticket, visa or cargo reference to preview and print its receipt." />
+    <div className="receipt-layout">
+      <section className="panel lookup-panel">
+        <h2>Find a transaction</h2>
+        <label className="lookup-input"><Icon name="search" /><input aria-label="Transaction reference" autoFocus value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Ticket, visa or cargo reference" /></label>
+        {ref && !item && <p className="form-error">No matching record found.</p>}
+        {item && <div className="receipt-actions print-hide">
+          <button className="button ghost" onClick={downloadTextCopy}><Icon name="file" /> Text copy</button>
+          <button className="button primary" onClick={() => generateReceipt(item)}><Icon name="receipt" /> Print / Save PDF</button>
+        </div>}
+      </section>
+      {item ? <iframe title={`${item.kind} receipt preview`} sandbox="" srcDoc={buildReceiptHtml(item)} style={{ width: "100%", height: 1180, border: 0, borderRadius: 16 }} />
+        : <section className="panel empty-receipt"><Icon name="receipt" size={42} /><h3>Your receipt will appear here</h3><p>Search for a valid transaction reference.</p></section>}
+    </div>
+  </>;
 }
 
 function Tracking({
@@ -13200,6 +12816,9 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
 
   useEffect(() => {
     let active = true;
+    queueMicrotask(() => {
+      if (active) { setLoading(true); setReport(null); }
+    });
     void fetch(
       `/api/reports/finance?branchId=${encodeURIComponent(branchId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
       { cache: "no-store" },
@@ -13217,7 +12836,7 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
     return () => {
       active = false;
     };
-  }, [branchId, from, to]);
+  }, [branchId, from, to, data]);
 
   const availableCurrencies = (
     selectedBranch

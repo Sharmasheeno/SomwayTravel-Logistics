@@ -25,6 +25,7 @@ import { randomToken } from "./utils/tokens.js";
 import { runRegisteredMigration } from "./lib/migrations.js";
 import { runServiceWorkflowMigration } from "./lib/serviceWorkflowMigration.js";
 import { removeLegacyCustomerPaymentSnapshots } from "./lib/accountsReceivableMigration.js";
+import { cleanupDeletedServiceFinance, resumeServiceDeletions } from "./lib/serviceDeletion.js";
 
 dotenv.config();
 
@@ -175,6 +176,7 @@ app.use((error, req, res, _next) => {
 
 const startServer = async () => {
   await connectDatabase();
+  await resumeServiceDeletions();
   const migration = await runRegisteredMigration(
     "2026-09-01-phase2-branches-v2",
     runPhase2Migration,
@@ -214,6 +216,8 @@ const startServer = async () => {
     runServiceWorkflowMigration,
   );
   console.log("Service workflow migration", JSON.stringify(workflowMigration));
+
+  await runRegisteredMigration("2026-09-08-service-finance-cascade-v1", cleanupDeletedServiceFinance);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Macruf API running on http://localhost:${PORT}`);

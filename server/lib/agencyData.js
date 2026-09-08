@@ -1,3 +1,4 @@
+import { hasPayableParent, serviceKeys } from "./serviceRelationships.js";
 import Ticket from "../models/Ticket.js";
 import Cargo from "../models/Cargo.js";
 import Visa from "../models/Visa.js";
@@ -118,6 +119,9 @@ export const readAgencyData = async () => {
     SupplierPayment.find({}).sort({ paymentDate: -1, createdAt: -1 }),
   ]);
 
+  const parentKeys = serviceKeys({ tickets, visas, cargo });
+  const liveBills = suppliers.filter((bill) => hasPayableParent(bill, parentKeys));
+  const liveBillIds = new Set(liveBills.map((bill) => bill.id));
   const paymentMethodIdByMongoId = new Map(
     paymentMethods.map((method) => [method._id.toString(), method.id]),
   );
@@ -170,7 +174,7 @@ export const readAgencyData = async () => {
     cargo: cargo.map((row) => withCustomerFinance("cargo", row)),
     visas: visas.map((row) => withCustomerFinance("visa", row)),
     expenses: expenses.map(toPlain),
-    suppliers: suppliers.map(toPlain),
+    suppliers: liveBills.map(toPlain),
     clients: clients.map(toPlain),
     closes: closes.map(toPlain),
     rates: rates.map(toPlain),
@@ -188,8 +192,8 @@ export const readAgencyData = async () => {
           String(plain.paymentMethodId || ""),
       };
     }),
-    payments: payments.map(toPlain),
-    supplierPayments: supplierPayments.map(toPlain),
+    payments: payments.filter((payment) => parentKeys.has(`${payment.transactionType}:${payment.transactionId}`)).map(toPlain),
+    supplierPayments: supplierPayments.filter((payment) => liveBillIds.has(payment.supplierBillId)).map(toPlain),
   };
 };
 

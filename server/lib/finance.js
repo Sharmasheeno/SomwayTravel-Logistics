@@ -1,3 +1,7 @@
+import mongoose from "mongoose";
+import { assertServiceNotDeleting } from "./serviceDeletion.js";
+import { withServiceLock } from "./serviceLock.js";
+import { payableService, hasPayableParent, serviceKeys } from "./serviceRelationships.js";
 import Branch from "../models/Branch.js";
 import BranchPaymentMethod from "../models/BranchPaymentMethod.js";
 import Cargo from "../models/Cargo.js";
@@ -41,25 +45,6 @@ const paymentBranchId = (type, record) =>
 const revenueBranchId = (type, record) =>
   type === "cargo" ? record.originBranchId : record.branchId;
 const modelFor = (type) => ({ ticket: Ticket, visa: Visa, cargo: Cargo })[type];
-const customerPaymentLocks = new Map();
-
-const withCustomerPaymentLock = async (key, work) => {
-  const previous = customerPaymentLocks.get(key) || Promise.resolve();
-  let release;
-  const current = new Promise((resolve) => {
-    release = resolve;
-  });
-  const queued = previous.then(() => current);
-  customerPaymentLocks.set(key, queued);
-  await previous;
-  try {
-    return await work();
-  } finally {
-    release();
-    if (customerPaymentLocks.get(key) === queued) customerPaymentLocks.delete(key);
-  }
-};
-
 export const canonicalPaymentCode = (value) => {
   const text = String(value || "")
     .trim()
@@ -274,9 +259,13 @@ export const createCustomerPayment = async ({
   const normalizedIdempotencyKey = String(idempotencyKey || "")
     .trim()
     .slice(0, 120);
-  return withCustomerPaymentLock(
+  return withServiceLock(
     `${transactionType}:${transactionId}`,
     async () => {
+      if (mongoose.connection.readyState !== 0)
+        await assertServiceNotDeleting(transactionType, transactionId);
+      if (!await Model.findOne({ id: transactionId }))
+        throw Object.assign(new Error("Transaction not found."), { status: 404 });
       if (normalizedIdempotencyKey) {
         const existingPayment = await Payment.findOne({
           idempotencyKey: normalizedIdempotencyKey,
@@ -393,6 +382,13 @@ export const createSupplierPayment = async ({
     error.status = 404;
     throw error;
   }
+  const parent = payableService(bill);
+  return withServiceLock(parent ? `${parent.type}:${parent.id}` : `supplier:${supplierBillId}`, async () => {
+    if (!await Supplier.findOne({ id: supplierBillId })) throw Object.assign(new Error("Supplier bill not found."), { status: 404 });
+    if (parent && mongoose.connection.readyState !== 0) {
+      await assertServiceNotDeleting(parent.type, parent.id);
+      if (!await modelFor(parent.type)?.findOne({ id: parent.id })) throw Object.assign(new Error("Parent service not found."), { status: 404 });
+    }
   const branchId = bill.branchId || null;
   if (branchId)
     await assertBranchPaymentMethod({
@@ -426,6 +422,7 @@ export const createSupplierPayment = async ({
     reference,
     notes,
     paidByUserId: user.id || user._id?.toString?.() || "",
+  });
   });
 };
 
@@ -658,6 +655,8 @@ export const buildFinanceReport = async ({
       status: { $ne: "void" },
     }),
   ]);
+  const [allTickets, allVisas, allCargo] = await Promise.all([Ticket.find({}), Visa.find({}), Cargo.find({})]);
+  const parentKeys = serviceKeys({ tickets: allTickets, visas: allVisas, cargo: allCargo });
   const branchNameById = new Map(
     branches.map((branch) => [branch._id.toString(), branch.name]),
   );
@@ -755,6 +754,7 @@ export const buildFinanceReport = async ({
   ]);
   for (const payment of payments) {
     if (payment.paymentDate < from) continue;
+    if (!parentKeys.has(`${payment.transactionType}:${payment.transactionId}`)) continue;
     const transactionKey = `${payment.transactionType}:${payment.transactionId}`;
     const transactionFlow = transactionDirection.get(transactionKey);
     const direction =
@@ -804,6 +804,7 @@ export const buildFinanceReport = async ({
     );
   }
   for (const bill of suppliers) {
+    if (!hasPayableParent(bill, parentKeys)) continue;
     if (bill.branchId && !include(bill.branchId)) continue;
     rowFor(bill.branchId, bill.currency).supplierExposure += Math.max(
       0,

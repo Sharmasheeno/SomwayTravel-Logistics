@@ -466,6 +466,31 @@ const loadSummarySource = async () => {
   };
 };
 
+// Rebuild in date order so later opening balances use corrected earlier days.
+export const rebuildStoredDailySummaries = async () => {
+  if (!await DailySummary.exists({})) return;
+  const source = await loadSummarySource();
+  // Include inactive branches when correcting their historical summaries.
+  source.branches = await Branch.find({}).lean();
+  const previous = [...source.previousSummaries].sort((a, b) => a.businessDate.localeCompare(b.businessDate));
+  source.previousSummaries = [];
+  for (const existing of previous) {
+    const next = buildDailySummaryRows({
+      ...source,
+      branches: source.branches.filter((branch) => id(branch._id) === id(existing.branchId)),
+      businessDate: existing.businessDate,
+      now: new Date(),
+    }).find((row) => row.currency === existing.currency);
+    if (!next) {
+      await DailySummary.deleteOne({ id: existing.id });
+      continue;
+    }
+    const updated = { ...next, id: existing.id, status: "corrected", version: (existing.version || 1) + 1, closedAt: existing.closedAt, correctionHistory: [] };
+    await DailySummary.updateOne({ id: existing.id }, { $set: updated });
+    source.previousSummaries.push(updated);
+  }
+};
+
 export const getDailySummary = async ({
   user,
   businessDate,

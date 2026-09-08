@@ -5,6 +5,8 @@ const supplierSchema = new mongoose.Schema(
     id: { type: String, required: true, unique: true },
     date: { type: String, default: "" },
     supplierId: { type: String, default: "" },
+    transactionType: { type: String, enum: ["", "ticket", "visa", "cargo"], default: "", index: true },
+    transactionId: { type: String, default: "", index: true },
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null },
     reference: { type: String, default: "" },
     supplier: { type: String, default: "" },

@@ -1,4 +1,6 @@
+import { withServiceLock } from "./serviceLock.js";
 import mongoose from "mongoose";
+import { deleteServiceRecords, assertServiceNotDeleting } from "./serviceDeletion.js";
 import Activity from "../models/Activity.js";
 import Cargo from "../models/Cargo.js";
 import DailyClose from "../models/DailyClose.js";
@@ -56,6 +58,8 @@ export const servicePayableRecord = (collection, service) => {
   if (!billed) return null;
   return {
     id: `payable_${kind}_${service.id}`,
+    transactionType: kind,
+    transactionId: service.id,
     date:
       collection === "tickets"
         ? service.saleDate || ""
@@ -442,7 +446,13 @@ const createActivity = async (action, user) => {
   });
 };
 
-export const writeEntity = async ({ collection, id, record, user, action }) => {
+export const writeEntity = (args) => {
+  const type = { tickets: "ticket", visas: "visa", cargo: "cargo" }[args.collection];
+  const id = args.id || args.record?.id;
+  return type && id ? withServiceLock(`${type}:${id}`, () => persistEntity(args)) : persistEntity(args);
+};
+
+const persistEntity = async ({ collection, id, record, user, action }) => {
   assertEntityName(collection);
   if (!record || typeof record !== "object") {
     const error = new Error("Entity payload is required.");
@@ -453,6 +463,16 @@ export const writeEntity = async ({ collection, id, record, user, action }) => {
   const Model = ENTITY_MODELS[collection];
   const lookupId = id || record.id;
   const existing = lookupId ? await Model.findOne({ id: lookupId }) : null;
+  const serviceType = { tickets: "ticket", visas: "visa", cargo: "cargo" }[collection];
+  if (id && !existing)
+    throw Object.assign(new Error("Record not found. Refresh the workspace."), { status: 404 });
+  if (serviceType && lookupId && mongoose.connection.readyState !== 0)
+    await assertServiceNotDeleting(serviceType, lookupId);
+  if (collection === "suppliers" && existing) {
+    throw Object.assign(new Error("Payables cannot be changed directly. Record a payment to settle this bill."), { status: 409 });
+  }
+  if (collection === "suppliers" && (record.transactionType || record.transactionId || /^payable_(ticket|visa|cargo)_/.test(record.id || "")))
+    throw Object.assign(new Error("Service payables are created automatically from their parent service."), { status: 409 });
   let candidate = await withServerFields(
     collection,
     { ...record, ...(lookupId ? { id: lookupId } : {}) },
@@ -544,7 +564,7 @@ export const writeCargoWithInitialPayment = async ({
         action: nextAction,
       }),
     createPayment: createCustomerPayment,
-    deleteCargo: (id) => Cargo.deleteOne({ id }),
+    deleteCargo: (id) => deleteServiceRecords("cargo", id),
   });
 };
 
@@ -581,18 +601,10 @@ export const deleteEntity = async ({ collection, id, user, action }) => {
   // removed with the parent, and client references on service records are
   // unlinked so nothing is left pointing at a deleted client. (Only the owner
   // reaches this point — the role check above blocks everyone else.)
-  if (collection === "cargo") {
-    await Payment.deleteMany({ transactionType: "cargo", transactionId: id });
-    await Model.deleteOne({ id });
-  } else if (collection === "tickets") {
-    await Payment.deleteMany({ transactionType: "ticket", transactionId: id });
-    await Model.deleteOne({ id });
-  } else if (collection === "visas") {
-    await Payment.deleteMany({ transactionType: "visa", transactionId: id });
-    await Model.deleteOne({ id });
+  if (["cargo", "tickets", "visas"].includes(collection)) {
+    await deleteServiceRecords({ cargo: "cargo", tickets: "ticket", visas: "visa" }[collection], id);
   } else if (collection === "suppliers") {
-    await SupplierPayment.deleteMany({ supplierBillId: id });
-    await Model.deleteOne({ id });
+    throw Object.assign(new Error("Payables cannot be deleted directly. Mark the bill as paid, or delete its parent service."), { status: 409 });
   } else if (collection === "clients") {
     // Unlink this client from every service record before removing it so no
     // ticket/visa/cargo is left referencing a deleted id. The records keep the
