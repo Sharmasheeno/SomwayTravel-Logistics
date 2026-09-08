@@ -248,12 +248,6 @@ export const transitionCargoStatus = async ({
   if (nextStatus === "cancelled") {
     fields.cancelledAt = entry.at;
     fields.cancelledByUserId = entry.userId;
-    // Cancelling reverses the shipment's finance: remove the auto-generated
-    // payable and any recorded payments so it drops out of the reports,
-    // receivables and daily summary. The record itself is kept for audit.
-    if (mongoose.connection.readyState !== 0) {
-      await purgeServiceFinance("cargo", id);
-    }
     fields.cancellationReason = cancellationReason || note;
   }
   const updated = await Cargo.findOneAndUpdate(
@@ -275,6 +269,12 @@ export const transitionCargoStatus = async ({
     );
     error.status = 409;
     throw error;
+  }
+  // Cancelling reverses the shipment's finance after the status update wins.
+  // That blocks any later payment attempt and lets the purge remove payments
+  // created just before the cancellation was saved.
+  if (nextStatus === "cancelled" && mongoose.connection.readyState !== 0) {
+    await purgeServiceFinance("cargo", id);
   }
   return updated;
 };

@@ -239,6 +239,11 @@ export const createCustomerPayment = async ({
     error.status = 404;
     throw error;
   }
+  if (isCancelledService(transaction)) {
+    const error = new Error("Cancelled services cannot receive payments.");
+    error.status = 409;
+    throw error;
+  }
   const branchId =
     transactionType === "cargo" && requestedBranchId
       ? requestedBranchId

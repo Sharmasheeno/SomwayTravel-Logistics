@@ -226,10 +226,10 @@ const assertCanWriteEntity = async (collection, record, user) => {
     throw error;
   }
 
-  if (
-    ["tickets", "visas", "expenses", "closes", "clients"].includes(collection)
-  )
+  if (["tickets", "visas", "expenses", "closes"].includes(collection))
     await assertBranchAccess(user, record.branchId);
+  if (collection === "clients")
+    await assertBranchAccess(user, record.homeBranchId);
   if (collection === "cargo") {
     await assertBranchAccess(user, record.originBranchId);
     await assertActiveBranch(record.destinationBranchId);

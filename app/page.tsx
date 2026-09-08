@@ -1157,7 +1157,7 @@ function cargoReceiptData(
       cargo.paymentResponsibility === "receiver"
         ? cargo.receiver
         : cargo.sender,
-    description: `Cargo ${cargo.origin} ? ${cargo.destination} ? ${cargo.weight} kg`,
+    description: `Cargo ${cargo.origin} → ${cargo.destination} · ${cargo.weight} kg`,
     branch: cargo.paidByOffice || cargo.origin,
     method: method ?? cargo.paymentMethod ?? "—",
     paymentStatus: cargo.paymentStatus || (cargo.paid ? "paid" : "unpaid"),
@@ -12981,13 +12981,13 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
   );
   const [to, setTo] = useState(today());
   const [branchId, setBranchId] = useState("");
+  const [currency, setCurrency] = useState<"" | Currency>("");
+  const [trendCurrency, setTrendCurrency] = useState<"" | Currency>("");
   // Follow the global branch scope chosen in the top bar.
   useBranchScope(scopeBranchId, (id) => {
     setBranchId(id);
     setCurrency("");
   });
-  const [currency, setCurrency] = useState<"" | Currency>("");
-  const [trendCurrency, setTrendCurrency] = useState<"" | Currency>("");
   const [report, setReport] = useState<FinanceReport | null>(null);
   const [loading, setLoading] = useState(true);
   const branches = activeBranches(data);

@@ -154,6 +154,35 @@ test("customer payment ledger derives partial and paid states and blocks overpay
   });
 });
 
+test("customer payments are rejected for cancelled services", async () => {
+  await withFinanceMocks({
+    branchPaymentMethods: config,
+    tickets: [
+      doc({
+        id: "cancelled-ticket",
+        branchId: nbo,
+        currency: "KES",
+        amount: 20000,
+        status: "cancelled",
+      }),
+    ],
+  }, async ({ payments }) => {
+    await assert.rejects(
+      () =>
+        createCustomerPayment({
+          transactionType: "ticket",
+          transactionId: "cancelled-ticket",
+          amount: 1000,
+          paymentMethod: "Cash",
+          paymentDate: "2026-08-31",
+          user: nboOperator,
+        }),
+      /cancelled services cannot receive payments/i,
+    );
+    assert.equal(payments.length, 0);
+  });
+});
+
 test("refund payments are stored as outbound cash movements", async () => {
   await withFinanceMocks({
     branchPaymentMethods: config,
