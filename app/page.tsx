@@ -2971,6 +2971,7 @@ export default function Home() {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [portalPath, setPortalPath] = useState("/");
+  const [routeUnavailable, setRouteUnavailable] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState<Page>("overview");
   const [mobileNav, setMobileNav] = useState(false);
@@ -3016,6 +3017,8 @@ export default function Home() {
         return;
       }
       try {
+        const routeResponse = await fetch(`/api/operator-access/validate?path=${encodeURIComponent(path)}`, { cache: "no-store" });
+        if (!routeResponse.ok) { setRouteUnavailable(true); return; }
         const statusResponse = await fetch("/api/auth/status", {
           cache: "no-store",
         });
@@ -3041,30 +3044,9 @@ export default function Home() {
             me.error || "The current session could not be checked.",
           );
         const sessionUser = me.user as User;
-        if (path === "/admin" && sessionUser.role !== "owner") {
-          await fetch("/api/auth/logout", { method: "POST" });
-              clearTabSession();
+        if ((path === "/admin") !== (sessionUser.role === "owner")) {
+          setRouteUnavailable(true);
           return;
-        }
-        if (path.startsWith("/portal/")) {
-          const token = path.split("/").filter(Boolean)[1] || "";
-          const linkResponse = await fetch(
-            `/api/auth/link?token=${encodeURIComponent(token)}`,
-            { cache: "no-store" },
-          );
-          const link = await linkResponse.json();
-          if (!linkResponse.ok)
-            throw new Error(
-              link.error || "This staff access link is unavailable.",
-            );
-          if (
-            String(link.user.username).toLowerCase() !==
-            sessionUser.username.toLowerCase()
-          ) {
-            await fetch("/api/auth/logout", { method: "POST" });
-              clearTabSession();
-            return;
-          }
         }
         const dataResponse = await fetch("/api/data", { cache: "no-store" });
         const payload = await dataResponse.json();
@@ -3207,6 +3189,20 @@ export default function Home() {
     setToastTone("success");
     setToast(message);
   };
+  useEffect(() => {
+    if (portalPath === "/") return;
+    let active = true;
+    const check = async () => {
+      try {
+        const response = await fetch(`/api/operator-access/validate?path=${encodeURIComponent(portalPath)}`, { cache: "no-store" });
+        if (active && response.status === 404) setRouteUnavailable(true);
+      } catch { /* Preserve the session during a temporary network outage. */ }
+    };
+    const timer = window.setInterval(check, 10000);
+    window.addEventListener("focus", check);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", check); };
+  }, [portalPath]);
+  if (routeUnavailable) return <AuthMessage title="Access link unavailable" detail="This operator link is no longer active. Ask the Owner for the current login URL." />;
   if (!ready)
     return (
       <main className="loading-screen">
@@ -3220,11 +3216,7 @@ export default function Home() {
   if (!user)
     return (
       <Login
-        linkToken={
-          portalPath.startsWith("/portal/")
-            ? portalPath.split("/").filter(Boolean)[1]
-            : ""
-        }
+        linkToken=""
         onLogin={loadWorkspace}
       />
     );
@@ -3264,7 +3256,7 @@ export default function Home() {
     },
     { page: "activity", label: "Activity Log", icon: "shield", finance: true },
     { page: "team", label: "Team & Roles", icon: "users", owner: true },
-    { page: "settings", label: "Settings", icon: "settings", owner: true },
+    { page: "settings", label: "Settings", icon: "settings" },
   ];
   const nav = navItems.filter(
     (item) =>
@@ -4318,6 +4310,7 @@ function Login({
           username,
           password,
           linkToken: linkToken || undefined,
+          accessPath: window.location.pathname,
         }),
       });
       const payload = await response.json();
@@ -14260,6 +14253,75 @@ function BackupPanel({
   );
 }
 
+function OperatorAccessPanel({ owner }: { owner: boolean }) {
+  const [access, setAccess] = useState({ route: "", url: "" });
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/operator-access", { cache: "no-store" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Could not load operator URL.");
+        if (active) { setAccess(payload); setDraft(current => current || payload.route); }
+      } catch (e) { if (active) setError(e instanceof Error ? e.message : "Could not load operator URL."); }
+    };
+    void load();
+    window.addEventListener("focus", load);
+    return () => { active = false; window.removeEventListener("focus", load); };
+  }, []);
+  const save = async (regenerate: boolean) => {
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await fetch("/api/operator-access", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(regenerate ? { regenerate: true } : { route: draft }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Could not update operator route.");
+      setAccess(payload); setDraft(payload.route); setMessage("Operator route updated. Share the new URL with your operators.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not update operator route."); }
+    finally { setBusy(false); }
+  };
+  const copy = async () => {
+    setError(""); setMessage("");
+    try {
+      // Re-read before copying so another Owner tab cannot leave a stale link.
+      const response = await fetch("/api/operator-access", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Could not load operator URL.");
+      setAccess(payload);
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(payload.url);
+      else {
+        const area = document.createElement("textarea");
+        area.value = payload.url; area.style.position = "fixed"; area.style.opacity = "0";
+        document.body.appendChild(area);
+        try { area.select(); if (!document.execCommand("copy")) throw new Error("Select and copy the URL manually."); }
+        finally { area.remove(); }
+      }
+      setMessage("Operator URL copied.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Select and copy the URL manually."); }
+  };
+  return <article className="panel">
+    <div className="panel-head"><h2>Operator Access Route</h2></div>
+    <p>{owner ? "Set the login URL for all operators. Changing it disables the previous URL. Owner access remains at /admin." : "Your current login URL. Only the Owner can change this address."}</p>
+    <Field label="Active operator URL"><input readOnly value={access.url} /></Field>
+    <div className="button-row"><button className="button secondary" disabled={!access.url || busy} onClick={() => void copy()}>Copy operator URL</button></div>
+    {owner && <>
+      <Field label="Operator route"><input value={draft} maxLength={65} placeholder="/operator-access" onChange={e => setDraft(e.target.value)} /></Field>
+      <div className="button-row">
+        <button className="button primary" disabled={busy || !access.url || draft === access.route} onClick={() => void save(false)}>Save route</button>
+        <button className="button secondary" disabled={busy || !access.url} onClick={() => void save(true)}>Regenerate route</button>
+      </div>
+    </>}
+    {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
+    {message && <p role="status">{message}</p>}
+  </article>;
+}
+
 function LoginLinkPanel({ notify }: { notify: (message: string) => void }) {
   const [value, setValue] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -14443,7 +14505,7 @@ function BusinessHoursPanel({ notify }: { notify: (message: string) => void }) {
   );
 }
 
-function Settings({ data, save, notify, replaceData }: ModuleProps) {
+function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
   const [agency, setAgency] = useState(data.agencyName);
   const settingsBranches = activeBranches(data);
   const initialSettingsBranch = settingsBranches[0];
@@ -14467,6 +14529,7 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
     currency: initialSettingsCurrency,
     amount: "",
   });
+  if (user.role !== "owner") return <><PageHeader eyebrow="Operator workspace" title="Settings" detail="Your operator access URL." /><OperatorAccessPanel owner={false} /></>;
   return (
     <>
       <PageHeader
@@ -14515,6 +14578,7 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
           </div>
         </article>
         <OwnerSecurity notify={notify} />
+        <OperatorAccessPanel owner />
         <LoginLinkPanel notify={notify} />
         <BusinessHoursPanel notify={notify} />
         <BranchManager data={data} notify={notify} />

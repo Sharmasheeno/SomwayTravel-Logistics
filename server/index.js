@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import express from "express";
 import connectDatabase from "./config/db.js";
 import authRoutes from "./routes/auth.js";
+import operatorAccessRoutes from "./routes/operatorAccess.js";
 import adminRoutes from "./routes/admin.js";
 import dataRoutes from "./routes/data.js";
 import entityRoutes from "./routes/entities.js";
@@ -129,6 +130,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/operator-access", operatorAccessRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/data", dataRoutes);
 app.use("/api/entities", entityRoutes);

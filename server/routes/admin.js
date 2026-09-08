@@ -1,4 +1,5 @@
 import express from "express";
+import { operatorSettings } from "../lib/operatorAccess.js";
 import User, { STAFF_ROLES } from "../models/User.js";
 import { requireOwner } from "../middleware/auth.js";
 import { assertActiveBranch } from "../lib/branches.js";
@@ -45,7 +46,7 @@ const resolveLoginOrigin = (req, settings) => {
   );
 };
 
-const withLoginUrl = (req, user, origin) => {
+const withLoginUrl = (req, user, origin, operatorRoute) => {
   const base = (origin || `${req.protocol}://${req.get("host")}`).replace(
     /\/+$/,
     "",
@@ -55,17 +56,17 @@ const withLoginUrl = (req, user, origin) => {
     loginUrl:
       user.role === "owner"
         ? `${base}/admin`
-        : `${base}/portal/${user.loginToken}`,
+        : `${base}${operatorRoute}`,
   };
 };
 
 router.get("/users", requireOwner, async (req, res) => {
   const [rows, settings] = await Promise.all([
     User.find({}),
-    AgencySettings.findOne({ key: "singleton" }).lean(),
+    operatorSettings(),
   ]);
   const origin = resolveLoginOrigin(req, settings);
-  return res.json({ users: rows.map((row) => withLoginUrl(req, row, origin)) });
+  return res.json({ users: rows.map((row) => withLoginUrl(req, row, origin, settings.operatorAccessRoute)) });
 });
 
 router.get("/settings", requireOwner, async (_req, res) => {
@@ -194,9 +195,9 @@ router.post("/users", requireOwner, async (req, res) => {
     active: true,
   });
 
-  const settings = await AgencySettings.findOne({ key: "singleton" }).lean();
+  const settings = await operatorSettings();
   return res.status(201).json({
-    user: withLoginUrl(req, user, resolveLoginOrigin(req, settings)),
+    user: withLoginUrl(req, user, resolveLoginOrigin(req, settings), settings.operatorAccessRoute),
     temporaryPassword: finalPassword,
   });
 });
@@ -255,11 +256,9 @@ router.patch("/users", requireOwner, async (req, res) => {
     detail: `Updated ${target.name} (${target.role}, ${target.active ? "active" : "suspended"})`,
   });
 
-  const settingsForLink = await AgencySettings.findOne({
-    key: "singleton",
-  }).lean();
+  const settingsForLink = await operatorSettings();
   return res.json({
-    user: withLoginUrl(req, target, resolveLoginOrigin(req, settingsForLink)),
+    user: withLoginUrl(req, target, resolveLoginOrigin(req, settingsForLink), settingsForLink.operatorAccessRoute),
     ...(password ? { temporaryPassword: password } : {}),
   });
 });

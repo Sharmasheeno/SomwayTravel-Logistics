@@ -8,6 +8,7 @@ const agencySettingsSchema = new mongoose.Schema(
     // e.g. http://169.58.173.197:8080. Owner-editable so it can change without
     // a redeploy. Empty means "derive from the incoming request / env var".
     publicBaseUrl: { type: String, default: "" },
+    operatorAccessRoute: { type: String, default: "" },
     timezone: { type: String, default: "Africa/Mogadishu" },
     businessDayStart: { type: String, default: "07:00" },
     businessDayEnd: { type: String, default: "18:00" },

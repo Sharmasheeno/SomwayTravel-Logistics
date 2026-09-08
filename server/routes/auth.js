@@ -7,6 +7,7 @@ import { readCookie, setSessionCookie, clearSessionCookie, SESSION_COOKIE } from
 import { randomToken, hashToken } from "../utils/tokens.js";
 import { createFixedWindowRateLimiter, rateLimitKeyForRequest } from "../lib/rateLimit.js";
 import { passwordProblem } from "../utils/password.js";
+import { operatorSettings, canLoginAt } from "../lib/operatorAccess.js";
 
 const router = express.Router();
 
@@ -85,6 +86,11 @@ router.post("/login", async (req, res) => {
 
   const isValid = await user.comparePassword(String(password));
   if (!isValid) return res.status(401).json({ error: "Username or password is incorrect." });
+
+  const settings = await operatorSettings();
+  if (!canLoginAt(user.role, req.body?.accessPath, settings.operatorAccessRoute)) {
+    return res.status(403).json({ error: "This login route is no longer available for your account. Ask the Owner for the current operator URL." });
+  }
 
   const token = await createSession(user._id);
   setSessionCookie(res, token);
