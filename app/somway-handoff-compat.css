@@ -2640,6 +2640,13 @@ button.refund-action:hover {
   color: #fff;
   box-shadow: 0 8px 16px rgba(157, 92, 14, 0.2);
 }
+.refund-value {
+  color: #a45f10;
+  font-weight: 700;
+}
+.cargo-details-actions .refund-action {
+  min-height: 46px;
+}
 @media (max-width: 520px) {
   .refund-modal-actions {
     grid-template-columns: 1fr;

@@ -2618,6 +2618,11 @@ function refundAvailable(data: AgencyData, type: "ticket" | "visa" | "cargo", re
     : Number((record as { amount?: number }).amount || 0);
   return Math.max(0, Math.round(charge * 100) / 100);
 }
+function refundedAmount(data: AgencyData, type: "ticket" | "visa" | "cargo", record: { id: string }) {
+  return Math.max(0, Math.round(data.payments
+    .filter((payment) => payment.transactionType === type && payment.transactionId === record.id && payment.status !== "void" && payment.flow === "outbound")
+    .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0) * 100) / 100);
+}
 function CancellationRefundAction({ type, record, data, onSaved }: {
   type: "ticket" | "visa" | "cargo";
   record: { id: string; status?: string; paid?: boolean; currency: Currency; amount?: number; weight?: number; rate?: number; branchId?: string | null; paidByBranchId?: string | null; originBranchId?: string | null; ref?: string; tracking?: string };
@@ -5839,6 +5844,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
           {rows.map((x) => {
             const profit =
               x.type === "Refund" ? -x.amount : x.paymentStatus === "paid" ? x.amount - x.cost : 0;
+            const refunded = refundedAmount(data, "ticket", x);
             const payStatusTone =
               x.type === "Refund"
                 ? x.paid
@@ -5884,6 +5890,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                 badges={
                   <>
                     <Badge tone={payStatusTone}>{payStatusLabel}</Badge>
+                    {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
                     <Badge tone={x.status === "cancelled" ? "danger" : "blue"}>
                       {serviceStatusLabel(x.status || "issued")}
                     </Badge>
@@ -5929,6 +5936,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                     ),
                     hide: !financial,
                   },
+                  ...(refunded > 0 ? [{ label: "Refunded to customer", value: money(refunded, x.currency) }] : []),
                   { label: "Agency cost", value: money(x.cost, x.currency), hide: !financial },
                   {
                     label: "Profit",
@@ -6543,6 +6551,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
         <RecordList>
           {rows.map((x) => {
             const amount = x.customerCharge ?? x.weight * x.rate;
+            const refunded = refundedAmount(data, "cargo", x);
             const actions = cargoNextActions(x, user);
             const canTakePayment =
               user.role === "owner" ||
@@ -6609,6 +6618,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                 badges={
                   <>
                     <Badge tone={paymentTone}>{paymentLabel}</Badge>
+                    {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
                     <Badge tone={cargoStatusTone(x.status)}>
                       {cargoStatusLabel(x.status)}
                     </Badge>
@@ -6820,6 +6830,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
           cargo={data.cargo.find((item) => item.id === details.id) || details}
           data={data}
           onClose={() => setDetails(null)}
+          onSaved={(next) => { setDetails(null); replaceData?.(next); }}
           onReceive={() => {
             const current = data.cargo.find((item) => item.id === details.id) || details;
             setDetails(null);
@@ -6872,11 +6883,13 @@ function CargoDetails({
   data,
   onClose,
   onReceive,
+  onSaved,
 }: {
   cargo: Cargo;
   data: AgencyData;
   onClose: () => void;
   onReceive: () => void;
+  onSaved: (data: AgencyData) => void;
 }) {
   const charge = cargo.customerCharge ?? cargo.weight * cargo.rate;
   const payments = data.payments
@@ -6886,6 +6899,8 @@ function CargoDetails({
         payment.transactionId === cargo.id,
     )
     .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate));
+  const refunded = refundedAmount(data, "cargo", cargo);
+  const refundable = refundAvailable(data, "cargo", cargo);
   return (
     <Modal title={`Cargo ${cargo.tracking}`} subtitle="Shipment and payment details." onClose={onClose}>
       <div className="details-sections">
@@ -6909,6 +6924,7 @@ function CargoDetails({
             <div><dt>Balance due</dt><dd>{money(cargo.balance ?? charge, cargo.currency)}</dd></div>
             <div><dt>Accounts receivable</dt><dd>{money(cargo.balance ?? charge, cargo.currency)}</dd></div>
             <div><dt>Payment status</dt><dd>{cargo.paymentStatus || "unpaid"}</dd></div>
+            {refunded > 0 && <div><dt>Refunded to customer</dt><dd className="refund-value">{money(refunded, cargo.currency)}</dd></div>}
           </dl>
         </section>
         <section className="panel details-history">
@@ -6922,8 +6938,9 @@ function CargoDetails({
           )) : <p>No payments recorded.</p>}
         </section>
       </div>
-      <div className="modal-actions">
+      <div className="modal-actions cargo-details-actions">
         <button type="button" className="button ghost" onClick={onClose}>Close</button>
+        {refundable > 0 && <CancellationRefundAction type="cargo" record={cargo} data={data} onSaved={onSaved} />}
         {(cargo.balance ?? charge) > 0 ? (
           <button type="button" className="button primary" onClick={onReceive}>Receive Payment</button>
         ) : <span className="readonly-value">Paid in full</span>}
@@ -8048,6 +8065,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
           {rows.map((x) => {
             const profit =
               x.type === "Refund" ? -x.amount : x.paymentStatus === "paid" ? x.amount - x.cost : 0;
+            const refunded = refundedAmount(data, "visa", x);
             const payStatusTone =
               x.type === "Refund"
                 ? x.paymentStatus === "paid"
@@ -8093,6 +8111,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                 badges={
                   <>
                     <Badge tone={payStatusTone}>{payStatusLabel}</Badge>
+                    {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
                     {canWrite ? (
                       <select
                         className={`inline-status ${x.status}`}
@@ -8162,6 +8181,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                     ),
                     hide: !financial,
                   },
+                  ...(refunded > 0 ? [{ label: "Refunded to customer", value: money(refunded, x.currency) }] : []),
                   {
                     label: "Profit / loss",
                     value: money(profit, x.currency),
