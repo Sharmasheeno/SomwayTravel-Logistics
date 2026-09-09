@@ -779,9 +779,9 @@ const cargoStatusTone = (status: CargoStatus | string) => {
 const serviceStatusLabel = (status: string) =>
   status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown";
 const ticketNextStatuses: Record<string, TicketStatus[]> = {
-  booked: ["issued", "cancelled"],
-  issued: ["changed", "cancelled"],
-  changed: ["issued", "cancelled"],
+  booked: ["cancelled"],
+  issued: ["cancelled"],
+  changed: ["cancelled"],
   cancelled: [],
 };
 const visaNextStatuses: Record<string, VisaStatus[]> = {
@@ -5884,22 +5884,15 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                         }
                       >
                         {[
-                          x.status || "booked",
-                          ...(user.role === "owner"
-                            ? ([
-                                "booked",
-                                "issued",
-                                "changed",
-                                "cancelled",
-                              ] as const)
-                            : ticketNextStatuses[x.status || "booked"] || []),
+                          x.status || "issued",
+                          ...(ticketNextStatuses[x.status || "issued"] || []),
                         ]
                           .filter(
                             (status, index, list) =>
                               list.indexOf(status) === index,
                           )
                           .map((status) => (
-                            <option key={status} value={status}>
+                            <option key={status} value={status} disabled={status === (x.status || "issued")}>
                               {serviceStatusLabel(status)}
                             </option>
                           ))}

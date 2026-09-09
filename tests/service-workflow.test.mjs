@@ -82,7 +82,7 @@ test("new service records start with canonical status and audit history", () => 
     { id: "v-new", branchId: nbo, status: "Submitted" },
     nairobi,
   );
-  assert.equal(ticket.status, "booked");
+  assert.equal(ticket.status, "issued");
   assert.equal(visa.status, "submitted");
   assert.equal(ticket.workflowVersion, 0);
   assert.equal(visa.statusHistory[0].userId, "op-nbo");
@@ -107,7 +107,7 @@ test("ticket and visa transitions follow their canonical workflows", async () =>
     await transitionServiceStatus({
       kind: "ticket",
       id: ticket.id,
-      toStatus: "issued",
+      toStatus: "cancelled",
       user: nairobi,
     });
     await transitionServiceStatus({
@@ -123,7 +123,7 @@ test("ticket and visa transitions follow their canonical workflows", async () =>
       user: nairobi,
     });
   });
-  assert.equal(ticket.status, "issued");
+  assert.equal(ticket.status, "cancelled");
   assert.deepEqual(
     visa.statusHistory.map((entry) => entry.toStatus),
     ["approved", "delivered"],
@@ -230,7 +230,7 @@ test("stale service transition is rejected instead of overwriting history", asyn
         transitionServiceStatus({
           kind: "ticket",
           id: ticket.id,
-          toStatus: "issued",
+          toStatus: "cancelled",
           user: nairobi,
         }),
         /another session/i,

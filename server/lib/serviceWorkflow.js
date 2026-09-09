@@ -10,9 +10,9 @@ export const VISA_STATUSES = ["submitted", "approved", "refused", "delivered", "
 
 const TRANSITIONS = {
   ticket: {
-    booked: ["issued", "cancelled"],
-    issued: ["changed", "cancelled"],
-    changed: ["issued", "cancelled"],
+    booked: ["cancelled"],
+    issued: ["cancelled"],
+    changed: ["cancelled"],
     cancelled: [],
   },
   visa: {
@@ -52,7 +52,7 @@ export const normalizeServiceStatus = (kind, value) => {
 };
 
 export const prepareNewServiceWorkflow = (kind, record, user) => {
-  const status = normalizeServiceStatus(kind, record.status);
+  const status = kind === "ticket" ? "issued" : normalizeServiceStatus(kind, record.status);
   const at = new Date().toISOString();
   return {
     ...record,
@@ -96,6 +96,9 @@ export const transitionServiceStatus = async ({
   if (user.role !== "owner") await assertBranchAccess(user, record.branchId);
   const fromStatus = normalizeServiceStatus(kind, record.status);
   const nextStatus = normalizeServiceStatus(kind, toStatus);
+  if (kind === "ticket" && nextStatus === "changed") {
+    throw Object.assign(new Error("Ticket status can only be cancelled after issuance."), { status: 409 });
+  }
   if (!STATUSES[kind].includes(nextStatus) || nextStatus === fromStatus) {
     throw Object.assign(new Error("Choose a valid next status."), {
       status: 400,

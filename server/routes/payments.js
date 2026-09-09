@@ -1,8 +1,7 @@
 import express from "express";
 import { requireUser } from "../middleware/auth.js";
-import { createCustomerPayment, createSupplierPayment, voidCustomerPayment, voidSupplierPayment } from "../lib/finance.js";
+import { createCustomerPayment, createCancellationRefund, createSupplierPayment, voidCustomerPayment, voidSupplierPayment } from "../lib/finance.js";
 import { readVisibleAgencyData } from "../lib/entityPersistence.js";
-import { createCancellationRefund } from "../lib/finance.js";
 import { refreshCloseSnapshots } from "../lib/serviceDeletion.js";
 import { rebuildStoredDailySummaries } from "../lib/dailySummary.js";
 
