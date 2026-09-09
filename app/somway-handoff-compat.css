@@ -2235,6 +2235,44 @@ h6,
 .account-signout {
   color: #d9363e;
 }
+.workspace-preferences {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.top-preference {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--white);
+}
+.top-preference button,
+.theme-button {
+  min-width: 28px;
+  height: 30px;
+  padding: 0 7px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.top-preference button.selected { background: var(--blue); color: var(--green); }
+.theme-button {
+  width: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--white);
+  font-size: 17px;
+}
+.top-preference button:hover,
+.theme-button:hover { color: var(--green); background: var(--mint); }
+html[data-theme="dark"] .top-preference,
+html[data-theme="dark"] .theme-button { background: var(--white); }
 .account-preference {
   padding: 9px 10px 8px;
   border-top: 1px solid var(--line);

@@ -3470,6 +3470,15 @@ export default function Home() {
                 />
               </label>
             )}
+            <div className="workspace-preferences" aria-label="Workspace preferences">
+              <div className="top-preference" role="group" aria-label="Language">
+                <button type="button" className={locale === "en" ? "selected" : ""} onClick={() => setLocale("en")} aria-label="Use English">EN</button>
+                <button type="button" className={locale === "so" ? "selected" : ""} onClick={() => setLocale("so")} aria-label="Use Somali">SO</button>
+              </div>
+              <button type="button" className="theme-button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}>
+                {theme === "light" ? "☾" : "☀"}
+              </button>
+            </div>
             <div className="notif-anchor">
               <button
                 className="icon-btn"
