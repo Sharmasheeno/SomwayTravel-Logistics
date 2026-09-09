@@ -5836,6 +5836,30 @@ th {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(28, 160, 160, 0.12);
 }
+.inline-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #f0c2c2;
+  border-radius: 8px;
+  background: #fdecec;
+  color: #b42318;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.inline-cancel:hover {
+  background: #fbdada;
+  border-color: #e79b9b;
+}
+.inline-cancel svg {
+  width: 13px;
+  height: 13px;
+}
 
 .overview-branch-select {
   min-width: 210px;

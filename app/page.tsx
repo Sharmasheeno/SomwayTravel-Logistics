@@ -5727,7 +5727,14 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
     ticket: Ticket,
     status: NonNullable<Ticket["status"]>,
   ) => {
-    const currentStatus = ticket.status || "booked";
+    const currentStatus = ticket.status || "issued";
+    if (
+      status === "cancelled" &&
+      !window.confirm(
+        `Cancel ${ticket.ref}? Its payable to the airline is reversed. Any customer payment already collected stays available to refund.`,
+      )
+    )
+      return;
     const normallyAllowed = (ticketNextStatuses[currentStatus] || []).includes(
       status,
     );
@@ -5871,37 +5878,19 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                 badges={
                   <>
                     <Badge tone={payStatusTone}>{payStatusLabel}</Badge>
-                    {canWrite ? (
-                      <select
-                        className={`inline-status ${x.status || "booked"}`}
-                        aria-label={`Ticket status for ${x.ref}`}
-                        value={x.status || "booked"}
-                        onChange={(event) =>
-                          void updateTicketStatus(
-                            x,
-                            event.target.value as NonNullable<Ticket["status"]>,
-                          )
-                        }
+                    <Badge tone={x.status === "cancelled" ? "danger" : "blue"}>
+                      {serviceStatusLabel(x.status || "issued")}
+                    </Badge>
+                    {canWrite && x.status !== "cancelled" ? (
+                      <button
+                        type="button"
+                        className="inline-cancel"
+                        aria-label={`Cancel ticket ${x.ref}`}
+                        onClick={() => void updateTicketStatus(x, "cancelled")}
                       >
-                        {[
-                          x.status || "issued",
-                          ...(ticketNextStatuses[x.status || "issued"] || []),
-                        ]
-                          .filter(
-                            (status, index, list) =>
-                              list.indexOf(status) === index,
-                          )
-                          .map((status) => (
-                            <option key={status} value={status} disabled={status === (x.status || "issued")}>
-                              {serviceStatusLabel(status)}
-                            </option>
-                          ))}
-                      </select>
-                    ) : (
-                      <Badge tone={x.status === "cancelled" ? "danger" : "blue"}>
-                        {serviceStatusLabel(x.status || "booked")}
-                      </Badge>
-                    )}
+                        <Icon name="x" /> Cancel
+                      </button>
+                    ) : null}
                   </>
                 }
                 details={[
