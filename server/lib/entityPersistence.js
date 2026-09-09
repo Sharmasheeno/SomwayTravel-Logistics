@@ -578,6 +578,29 @@ export const writeCargoWithInitialPayment = async ({
   });
 };
 
+export const writeTicketWithInitialPayment = async ({ record, initialPayment, user, action }) => {
+  const existing = record?.id ? await Ticket.findOne({ id: record.id }) : null;
+  const key = String(initialPayment?.idempotencyKey || "").trim();
+  if (key) {
+    const previous = await Payment.findOne({ idempotencyKey: key });
+    if (previous && existing) return existing;
+  }
+  const saved = await writeEntity({ collection: "tickets", record, user, action });
+  try {
+    await createCustomerPayment({
+      transactionType: "ticket",
+      transactionId: saved.id,
+      ...initialPayment,
+      idempotencyKey: key,
+      user,
+    });
+  } catch (error) {
+    if (!existing) await deleteServiceRecords("ticket", saved.id);
+    throw error;
+  }
+  return saved;
+};
+
 export const deleteEntity = async ({ collection, id, user, action }) => {
   assertEntityName(collection);
   const Model = ENTITY_MODELS[collection];

@@ -560,7 +560,8 @@ type InitialCustomerPayment = {
   branchId: string;
   paymentDate: string;
   paymentMethod: PaymentMethod;
-  reference: string;
+  reference?: string;
+  notes?: string;
   idempotencyKey?: string;
 };
 type ModuleProps = {
@@ -5989,8 +5990,21 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
           branches={branches}
           data={data}
           onClose={() => setEditing(undefined)}
-          onSave={async (record) => {
-            const saved = await save(
+          onSave={async (record, initialPayment) => {
+            if (initialPayment) {
+              try {
+                const payload = await apiRequest<{ data?: AgencyData }>("/api/entities/tickets/with-payment", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "Idempotency-Key": initialPayment.idempotencyKey || uid("ticket-payment") },
+                  body: JSON.stringify({ record, initialPayment, action: { entity: "Ticket", detail: `Created and paid ${record.ref}` } }),
+                });
+                if (payload.data) replaceData?.(payload.data);
+              } catch (caught) {
+                notify(caught instanceof Error ? caught.message : "Ticket and payment could not be recorded");
+                return;
+              }
+            } else {
+              const saved = await save(
               (d) => ({
                 ...d,
                 tickets: editing
@@ -6001,8 +6015,9 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                 entity: "Ticket",
                 detail: `${editing ? "Updated" : "Created"} ${record.ref}`,
               },
-            );
-            if (!saved) return;
+              );
+              if (!saved) return;
+            }
             setEditing(undefined);
             notify(
               `Ticket ${record.ref} ${editing ? "updated" : "created"} for ${record.passenger || "passenger"}`,
@@ -6065,7 +6080,7 @@ function TicketForm({
   branches: Branch[];
   data: AgencyData;
   onClose: () => void;
-  onSave: (r: Ticket) => void | Promise<void>;
+  onSave: (r: Ticket, initialPayment?: InitialCustomerPayment) => void | Promise<void>;
 }) {
   const initialBranch = current?.branchId || branches[0]?.id || "";
   const selectedBranch = branchById(data, initialBranch);
@@ -6094,13 +6109,14 @@ function TicketForm({
     amount: String(current?.amount || ""),
     cost: String(current?.cost || ""),
     paymentMethod: initialPaymentMethod,
+    paymentChoice: current?.paid ? "paid" : "later",
     notes: current?.notes || "",
   });
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!f.passenger || !f.phone || !f.route || !f.amount || !f.paymentMethod)
       return;
-    await onSave({
+    const record = {
       id: current?.id || uid("tkt"),
       ref: current?.ref || "",
       office: branchName(data, f.branchId, f.office),
@@ -6116,13 +6132,21 @@ function TicketForm({
       amount: Number(f.amount),
       cost: f.type === "Refund" ? 0 : Number(f.cost) || 0,
       paymentMethod: f.paymentMethod as PaymentMethod,
-      paid: false,
-      paymentDate: "",
+      paid: f.paymentChoice === "paid",
+      paymentDate: f.paymentChoice === "paid" ? f.saleDate : "",
       servedBy: user.name,
       notes: f.notes,
       createdBy: current?.createdBy || user.id,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    await onSave(record, !current && f.paymentChoice === "paid" ? {
+      branchId: f.branchId,
+      amount: Number(f.amount),
+      paymentDate: f.saleDate,
+      paymentMethod: f.paymentMethod,
+      notes: `Initial ticket payment for ${record.passenger}`,
+      idempotencyKey: uid("ticket-payment"),
+    } : undefined);
   };
   return (
     <Modal
@@ -6296,6 +6320,14 @@ function TicketForm({
               ))}
             </select>
           </Field>
+          {!current && f.type !== "Refund" && (
+            <Field label="Customer payment" icon="check" iconTone="green">
+              <select value={f.paymentChoice} onChange={(e) => setF({ ...f, paymentChoice: e.target.value as "paid" | "later" })}>
+                <option value="paid">Paid now</option>
+                <option value="later">Pay later (Accounts Receivable)</option>
+              </select>
+            </Field>
+          )}
           <Field label="Notes" wide icon="edit" iconTone="gray">
             <textarea
               placeholder="Add any notes (optional)"
