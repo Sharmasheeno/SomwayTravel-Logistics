@@ -6721,8 +6721,8 @@ th {
   backdrop-filter: blur(4px);
 }
 .record-modal {
-  width: min(720px, 100%);
-  max-height: min(760px, calc(100vh - 48px));
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   overflow-y: auto;
   border: 1px solid #d6e3f2;
   border-radius: 22px;
@@ -6757,8 +6757,8 @@ th {
 .record-modal .record-detail-grid { padding-top: 18px; }
 .record-modal .record-actions { padding-top: 20px; }
 @media (max-width: 560px) {
-  .record-modal-backdrop { align-items: flex-end; padding: 12px; }
-  .record-modal { max-height: calc(100vh - 24px); border-radius: 18px; padding: 18px; }
+  .record-modal-backdrop { align-items: center; padding: 12px; }
+  .record-modal { width: 100%; max-height: calc(100vh - 24px); border-radius: 18px; padding: 18px; }
 }
 .record-detail-grid {
   display: grid;

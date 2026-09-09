@@ -5900,7 +5900,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                 ]}
                 badges={
                   <>
-                    <Badge tone={payStatusTone}>{payStatusLabel}</Badge>
+                    {refunded <= 0 && <Badge tone={payStatusTone}>{payStatusLabel}</Badge>}
                     {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
                     <Badge tone={x.status === "cancelled" ? "danger" : "blue"}>
                       {serviceStatusLabel(x.status || "issued")}
@@ -5929,7 +5929,9 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                   {
                     label: "Payment method",
                     value:
-                      x.paymentStatus === "partial"
+                      refunded > 0
+                        ? `Refunded ${money(refunded, x.currency)}`
+                        : x.paymentStatus === "partial"
                         ? `${x.paymentMethod} · ${money(x.amountPaid || 0, x.currency)} paid`
                         : `${x.paymentMethod}${
                             x.paid
@@ -6628,7 +6630,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                 ]}
                 badges={
                   <>
-                    <Badge tone={paymentTone}>{paymentLabel}</Badge>
+                    {refunded <= 0 && <Badge tone={paymentTone}>{paymentLabel}</Badge>}
                     {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
                     <Badge tone={cargoStatusTone(x.status)}>
                       {cargoStatusLabel(x.status)}
@@ -6663,7 +6665,9 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                   {
                     label: "Payment",
                     value:
-                      x.paymentStatus === "partial"
+                      refunded > 0
+                        ? `Refunded ${money(refunded, x.currency)}`
+                        : x.paymentStatus === "partial"
                         ? `${money(x.amountPaid || 0, x.currency)} paid · ${money(x.balance || 0, x.currency)} due`
                         : x.paymentStatus === "unpaid"
                           ? `${money(x.balance ?? amount, x.currency)} due`
@@ -8121,7 +8125,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                 ]}
                 badges={
                   <>
-                    <Badge tone={payStatusTone}>{payStatusLabel}</Badge>
+                    {refunded <= 0 && <Badge tone={payStatusTone}>{payStatusLabel}</Badge>}
                     {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
                     {canWrite ? (
                       <select
@@ -8180,7 +8184,9 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                   {
                     label: "Payment method",
                     value:
-                      x.paymentStatus === "partial"
+                      refunded > 0
+                        ? `Refunded ${money(refunded, x.currency)}`
+                        : x.paymentStatus === "partial"
                         ? `${x.paymentMethod} · ${money(x.amountPaid || 0, x.currency)} paid`
                         : x.paymentMethod,
                   },
