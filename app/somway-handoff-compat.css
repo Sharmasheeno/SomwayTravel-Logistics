@@ -2345,6 +2345,34 @@ html[data-theme="dark"] .account-action:hover { background: var(--mint); }
   --ui-danger: #d9363e;
   --ui-surface: #fff;
 }
+html[data-theme="dark"] {
+  --ui-border: #2b3d57;
+  --ui-ink: #e7eef8;
+  --ui-muted: #9fb0c8;
+  --ui-surface: #142238;
+  --ui-brand: #4f9aff;
+}
+html[data-theme="dark"] .metric-card,
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .overview-panel,
+html[data-theme="dark"] .service-panel,
+html[data-theme="dark"] .branch-panel,
+html[data-theme="dark"] .cargo-status-panel,
+html[data-theme="dark"] .transactions-panel,
+html[data-theme="dark"] .actions-panel,
+html[data-theme="dark"] .report-summary-card,
+html[data-theme="dark"] .service-group-summary,
+html[data-theme="dark"] .lookup-panel { background: var(--ui-surface) !important; color: var(--ui-ink); }
+html[data-theme="dark"] .metric-card .metric-main > strong,
+html[data-theme="dark"] .metric-card .metric-values strong,
+html[data-theme="dark"] .report-summary-card strong,
+html[data-theme="dark"] .service-group-summary > div > strong,
+html[data-theme="dark"] .donut strong { color: var(--ui-ink) !important; }
+html[data-theme="dark"] .panel-head h2,
+html[data-theme="dark"] .panel-head h3,
+html[data-theme="dark"] .panel-head p,
+html[data-theme="dark"] .metric-card .eyebrow,
+html[data-theme="dark"] .metric-card .metric-foot { color: var(--ui-muted); }
 
 /* --- Buttons ------------------------------------------------------- */
 button.primary,

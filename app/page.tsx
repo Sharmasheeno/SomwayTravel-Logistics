@@ -96,6 +96,7 @@ type User = {
 type TicketStatus = "booked" | "issued" | "changed" | "cancelled";
 type Locale = "en" | "so";
 type ThemeMode = "light" | "dark";
+const translate = (locale: Locale, english: string, somali: string) => locale === "so" ? somali : english;
 type VisaStatus = "submitted" | "approved" | "refused" | "delivered" | "cancelled";
 type Ticket = {
   id: string;
@@ -3231,6 +3232,7 @@ export default function Home() {
           <Overview
             data={data}
             user={user}
+            locale={locale}
             onNavigate={setPage}
             branchId={overviewBranchId}
             from={overviewFrom}
@@ -5041,6 +5043,7 @@ function PreviousOverview({
 function Overview({
   data,
   user,
+  locale = "en",
   onNavigate,
   branchId,
   from,
@@ -5048,6 +5051,7 @@ function Overview({
 }: {
   data: AgencyData;
   user: User;
+  locale?: Locale;
   onNavigate: (p: Page) => void;
   branchId: string;
   from: string;
@@ -5360,6 +5364,7 @@ function Overview({
   return <LiveOverviewDashboard
     data={data}
     user={user}
+    locale={locale}
     financial={financial}
     financialCharts={financialCharts}
     branches={branches}
@@ -5393,6 +5398,7 @@ function Overview({
 type LiveOverviewDashboardProps = {
   data: AgencyData;
   user: User;
+  locale: Locale;
   financial: boolean;
   financialCharts: boolean;
   branches: Branch[];
@@ -5448,6 +5454,7 @@ type LiveOverviewDashboardProps = {
 function LiveOverviewDashboard({
   data,
   user,
+  locale,
   financial,
   financialCharts,
   branches,
@@ -5475,6 +5482,7 @@ function LiveOverviewDashboard({
   onNavigate,
   trends,
 }: LiveOverviewDashboardProps) {
+  const t = (en: string, so: string) => translate(locale, en, so);
   const selectedBranch = branches.find((branch) => branch.id === branchId);
   const serviceTotal = serviceSummary.reduce((sum, item) => sum + item.revenue, 0);
   const serviceColors = ["#0b66e3", "#00a9c7", "#3bbf63"];
@@ -5597,12 +5605,12 @@ function LiveOverviewDashboard({
       </div>
 
       <div className="metrics-grid six">
-        <MetricCard icon="money" label="Payments Received" value={revenueValue.split("\n")[0]} tone="cyan" delta={trends.payments} foot="Selected period" />
-        <MetricCard icon="box" label="Cargo Shipments" value={scopedCargo.length} tone="blue" delta={trends.cargo} foot={`${activeCargo.length} currently active`} />
-        <MetricCard icon="wallet" label="Accounts Receivable" value={receivableValue.split("\n")[0]} tone="green" foot={`${receivableRecords} outstanding record${receivableRecords === 1 ? "" : "s"}`} />
-        <MetricCard icon="users" label="Total Clients" value={scopedClients.filter((client) => client.isActive !== false).length} tone="violet" foot={selectedBranch?.name || "All active relationships"} />
-        <MetricCard icon="passport" label="Visa Applications" value={scopedVisas.length} tone="cyan" delta={trends.visas} foot={`${pendingVisas.length} in progress`} />
-        <MetricCard icon="ticket" label="Tickets Issued" value={scopedTickets.filter((ticket) => ticket.status !== "cancelled").length} tone="blue" delta={trends.tickets} foot={`${scopedTickets.length} total record${scopedTickets.length === 1 ? "" : "s"}`} />
+        <MetricCard icon="money" label={translate(locale, "Payments Received", "Lacag la helay")} value={revenueValue.split("\n")[0]} tone="cyan" delta={trends.payments} foot={translate(locale, "Selected period", "Muddada la doortay")} />
+        <MetricCard icon="box" label={translate(locale, "Cargo Shipments", "Shixnadaha raranka")} value={scopedCargo.length} tone="blue" delta={trends.cargo} foot={`${activeCargo.length} ${translate(locale, "currently active", "hadda firfircoon")}`} />
+        <MetricCard icon="wallet" label={translate(locale, "Accounts Receivable", "Deynta la sugayo")} value={receivableValue.split("\n")[0]} tone="green" foot={`${receivableRecords} ${translate(locale, "outstanding records", "diiwaan oo harsan")}`} />
+        <MetricCard icon="users" label={translate(locale, "Total Clients", "Wadarta macmiisha")} value={scopedClients.filter((client) => client.isActive !== false).length} tone="violet" foot={selectedBranch?.name || translate(locale, "All active relationships", "Dhammaan xiriirrada firfircoon")} />
+        <MetricCard icon="passport" label={translate(locale, "Visa Applications", "Codsiyada fiisaha")} value={scopedVisas.length} tone="cyan" delta={trends.visas} foot={`${pendingVisas.length} ${translate(locale, "in progress", "socda")}`} />
+        <MetricCard icon="ticket" label={translate(locale, "Tickets Issued", "Tigidhada la bixiyay")} value={scopedTickets.filter((ticket) => ticket.status !== "cancelled").length} tone="blue" delta={trends.tickets} foot={`${scopedTickets.length} ${translate(locale, "total records", "diiwaan guud")}`} />
       </div>
 
       {financialCharts && (
@@ -5610,7 +5618,7 @@ function LiveOverviewDashboard({
           className="split-3 dashboard-analytics-row"
           style={{ marginTop: 14, gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.25fr)" }}
         >
-          <Panel title="Monthly Payments Trend" subtitle="Money received from customers" actions={displayCurrencies.length > 1 ? <select className="trend-select" value={activeTrendCurrency} onChange={(event) => setTrendCurrency(event.target.value as Currency)} aria-label="Trend currency">{displayCurrencies.map((currency) => <option key={currency}>{currency}</option>)}</select> : undefined}>
+          <Panel title={translate(locale, "Monthly Payments Trend", "Isbeddelka lacagaha bil kasta")} subtitle={translate(locale, "Money received from customers", "Lacagta laga helay macaamiisha")} actions={displayCurrencies.length > 1 ? <select className="trend-select" value={activeTrendCurrency} onChange={(event) => setTrendCurrency(event.target.value as Currency)} aria-label="Trend currency">{displayCurrencies.map((currency) => <option key={currency}>{currency}</option>)}</select> : undefined}>
             <BarChart
               values={trendValues.map((item) => item.value)}
               labels={trendValues.map((item) => item.label)}
@@ -5618,7 +5626,7 @@ function LiveOverviewDashboard({
               axisLabel={`Monthly payments received in ${activeTrendCurrency}`}
             />
           </Panel>
-          <Panel title="Payments by Service" subtitle={`${activeTrendCurrency} service mix`}>
+          <Panel title={translate(locale, "Payments by Service", "Lacagaha adeegyada")} subtitle={`${activeTrendCurrency} ${translate(locale, "service mix", "isku-darka adeegyada")}`}>
             <Donut total={money(serviceTotal, activeTrendCurrency)} centerLabel="Total" segments={serviceSegments} />
           </Panel>
           <Panel title="Branch Performance" subtitle={`${activeTrendCurrency} revenue by branch`}>
@@ -14067,3 +14075,4 @@ function ActivityLog({ data }: { data: AgencyData }) {
     </>
   );
 }
+
