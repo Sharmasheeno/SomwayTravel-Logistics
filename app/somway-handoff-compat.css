@@ -2579,9 +2579,30 @@ button.payment-action {
   background: #eaf2ff;
   color: var(--ui-brand);
 }
+/* Refund is a money-out action on a cancelled service, so it is styled amber to
+   read distinctly from the blue "Pay" (money-in) action sitting beside it. */
+button.refund-action {
+  white-space: nowrap;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid #f5d9a8;
+  background: #fff5e6;
+  color: #b9741a;
+  cursor: pointer;
+}
 button.edit-action:hover,
 button.delete-action:hover,
-button.payment-action:hover {
+button.payment-action:hover,
+button.refund-action:hover {
   filter: brightness(0.96);
 }
 button.edit-action:disabled,

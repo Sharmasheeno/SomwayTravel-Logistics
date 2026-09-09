@@ -2627,7 +2627,15 @@ function CancellationRefundAction({ type, record, data, onSaved }: {
   const available = refundAvailable(data, type, record);
   if (available <= 0) return null;
   return <>
-    <button type="button" className="payment-action" onClick={() => setOpen(true)}>Refund</button>
+    <button
+      type="button"
+      className="refund-action"
+      title={`Refund ${money(available, record.currency)} to the customer`}
+      onClick={() => setOpen(true)}
+    >
+      <Icon name="wallet" size={14} />
+      <span>Refund {money(available, record.currency)}</span>
+    </button>
     {open && <CustomerPaymentForm transactionType={type} transactionId={record.id}
       label={record.ref || record.tracking || record.id} branchId={String(record.paidByBranchId || record.branchId || record.originBranchId || "")}
       currency={record.currency} balance={available} isRefund cancellationRefund data={data}
