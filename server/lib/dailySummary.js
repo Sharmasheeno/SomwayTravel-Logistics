@@ -206,9 +206,23 @@ export const buildDailySummaryRows = ({
               return sum + summary.accountsReceivable;
             }, 0),
           );
-          const revenue = round(rows.reduce((sum, row) => sum + row.charge, 0));
+          const revenue = round(rows.reduce((sum, row) => {
+            const summary = deriveCustomerFinanceSummary({
+              totalCharge: row.receivableCharge,
+              payments: paymentsByTransaction.get(`${row.transactionType}:${row.transactionId}`) || [],
+              asOf: businessDate,
+            });
+            return sum + (row.charge < 0 || summary.paymentStatus === "paid" ? row.charge : 0);
+          }, 0));
           const directCost = round(
-            rows.reduce((sum, row) => sum + row.directCost, 0),
+            rows.reduce((sum, row) => {
+              const summary = deriveCustomerFinanceSummary({
+                totalCharge: row.receivableCharge,
+                payments: paymentsByTransaction.get(`${row.transactionType}:${row.transactionId}`) || [],
+                asOf: businessDate,
+              });
+              return sum + (summary.paymentStatus === "paid" ? row.directCost : 0);
+            }, 0),
           );
           return {
             service: serviceName,

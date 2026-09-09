@@ -4357,17 +4357,17 @@ export function LegacyOverview({
       ...data.tickets.map((x) => ({
         d: x.saleDate,
         c: x.currency,
-        a: x.type === "Refund" ? -x.amount : x.amount,
+        a: x.type === "Refund" ? -x.amount : x.paymentStatus === "paid" ? x.amount : 0,
       })),
       ...data.visas.map((x) => ({
         d: x.appDate,
         c: x.currency,
-        a: x.type === "Refund" ? -x.amount : x.amount,
+        a: x.type === "Refund" ? -x.amount : x.paymentStatus === "paid" ? x.amount : 0,
       })),
       ...data.cargo.map((x) => ({
         d: x.dateIn,
         c: x.currency,
-        a: x.customerCharge ?? x.weight * x.rate,
+        a: x.paymentStatus === "paid" ? (x.customerCharge ?? x.weight * x.rate) : 0,
       })),
     ]
       .filter((x) => x.c === currency && monthKey(x.d) === thisMonth)
@@ -5716,14 +5716,14 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
   const ticketRevenue = moneyByCurrency(
     financeRows,
     (ticket) => ticket.currency,
-    (ticket) => (ticket.type === "Refund" ? -ticket.amount : ticket.amount),
+    (ticket) => ticket.type === "Refund" ? -ticket.amount : ticket.paymentStatus === "paid" ? ticket.amount : 0,
     scopeCurrencies,
   );
   const ticketProfit = moneyByCurrency(
     financeRows,
     (ticket) => ticket.currency,
     (ticket) =>
-      ticket.type === "Refund" ? -ticket.amount : ticket.amount - ticket.cost,
+      ticket.type === "Refund" ? -ticket.amount : ticket.paymentStatus === "paid" ? ticket.amount - ticket.cost : 0,
     scopeCurrencies,
   );
   const pendingRefunds = scopedRows.filter(
@@ -5838,7 +5838,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
         <RecordList>
           {rows.map((x) => {
             const profit =
-              x.type === "Refund" ? -x.amount : x.amount - x.cost;
+              x.type === "Refund" ? -x.amount : x.paymentStatus === "paid" ? x.amount - x.cost : 0;
             const payStatusTone =
               x.type === "Refund"
                 ? x.paid
@@ -6497,7 +6497,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
           <MetricCard
             icon="money"
             label="Cargo Revenue"
-            value={moneyByCurrency(rows, (cargo) => cargo.currency, (cargo) => cargo.customerCharge ?? cargo.weight * cargo.rate, cargoScopeCurrencies)}
+            value={moneyByCurrency(rows, (cargo) => cargo.currency, (cargo) => cargo.paymentStatus === "paid" ? (cargo.customerCharge ?? cargo.weight * cargo.rate) : 0, cargoScopeCurrencies)}
             tone="cyan"
             foot="Customer charges"
           />
@@ -8047,7 +8047,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
         <RecordList>
           {rows.map((x) => {
             const profit =
-              x.type === "Refund" ? -x.amount : x.amount - x.cost;
+              x.type === "Refund" ? -x.amount : x.paymentStatus === "paid" ? x.amount - x.cost : 0;
             const payStatusTone =
               x.type === "Refund"
                 ? x.paymentStatus === "paid"

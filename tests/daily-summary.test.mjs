@@ -147,11 +147,13 @@ test("daily summary separates revenue, cash, debt, payable, expense and profit",
   });
 
   assert.equal(row.openingBalance, 100);
-  assert.equal(row.revenue, 200);
+  // The cargo charge is only partially paid, so it remains receivable and is
+  // excluded from recognized revenue and profit until the balance is settled.
+  assert.equal(row.revenue, 0);
   assert.equal(row.moneyReceived, 120);
   assert.equal(row.accountsReceivable, 80);
-  assert.equal(row.directCost, 80);
-  assert.equal(row.profit, 120);
+  assert.equal(row.directCost, 0);
+  assert.equal(row.profit, 0);
   assert.equal(row.expenses, 20);
   assert.equal(row.accountsPayable, 40);
   // Cash actually in the drawer at close: opening 100, plus the 120

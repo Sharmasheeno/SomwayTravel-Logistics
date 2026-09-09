@@ -746,6 +746,7 @@ export const buildFinanceReport = async ({
         branch: branchNameById.get(String(bid || "")) || "Unassigned",
         currency,
         customerCharges: 0,
+        recognizedRevenue: 0,
         paymentsReceived: 0,
         profit: 0,
         revenue: 0,
@@ -769,6 +770,7 @@ export const buildFinanceReport = async ({
       row.serviceDetails[type] = {
         transactions: 0,
         customerCharges: 0,
+        recognizedRevenue: 0,
         paymentsReceived: 0,
         directCost: 0,
         profit: 0,
@@ -796,6 +798,14 @@ export const buildFinanceReport = async ({
       const direction = directionFor(type, item);
       const customerCharge = total * direction;
       const directCost = direction < 0 ? 0 : item.cost || 0;
+      const paymentSummary = deriveCustomerFinanceSummary({
+        totalCharge: customerCharge,
+        payments: paymentsByTransaction.get(`${type}:${item.id}`) || [],
+        asOf: to,
+      });
+      // Revenue and profit are recognized only after the customer's full
+      // charge is settled. Refund records remain immediate negative revenue.
+      const recognized = item.type === "Refund" || paymentSummary.paymentStatus === "paid";
       const transactionDate =
         type === "ticket"
           ? item.saleDate
@@ -806,19 +816,17 @@ export const buildFinanceReport = async ({
         const row = rowFor(bid, item.currency);
         const detail = serviceDetailFor(row, type);
         row.customerCharges += customerCharge;
-        row.directCost += directCost;
-        row.services[type] += customerCharge;
-        row.serviceGrossProfit[type] += customerCharge - directCost;
+        row.recognizedRevenue += recognized ? customerCharge : 0;
+        row.directCost += recognized ? directCost : 0;
+        row.services[type] += recognized ? customerCharge : 0;
+        row.serviceGrossProfit[type] += recognized ? customerCharge - directCost : 0;
         // Unpaid portion of the charges raised in this period, so the figure
         // is scoped the same way as every other column in the row.
-        row.outstanding += deriveCustomerFinanceSummary({
-          totalCharge: customerCharge,
-          payments: paymentsByTransaction.get(`${type}:${item.id}`) || [],
-          asOf: to,
-        }).accountsReceivable;
+        row.outstanding += paymentSummary.accountsReceivable;
         detail.transactions += 1;
         detail.customerCharges += customerCharge;
-        detail.directCost += directCost;
+        detail.recognizedRevenue += recognized ? customerCharge : 0;
+        detail.directCost += recognized ? directCost : 0;
       }
     }
   }
@@ -892,15 +900,14 @@ export const buildFinanceReport = async ({
   return [...rows.values()].map((row) => ({
     ...row,
     customerCharges: moneyRound(row.customerCharges),
+    recognizedRevenue: moneyRound(row.recognizedRevenue),
     paymentsReceived: moneyRound(row.paymentsReceived),
-    // Profit is accrual based -- charges raised less the cost of delivering
-    // them -- matching the "Charges less cost" label in the report and the
-    // convention already used by the daily summary. `revenue` stays cash
-    // based, so it keeps agreeing with `collections`.
-    profit: moneyRound(row.customerCharges - row.directCost),
-    revenue: moneyRound(row.paymentsReceived),
+    // Recognize revenue and profit only after the customer's full charge is
+    // settled. Outstanding receivables remain visible separately.
+    profit: moneyRound(row.recognizedRevenue - row.directCost),
+    revenue: moneyRound(row.recognizedRevenue),
     directCost: moneyRound(row.directCost),
-    grossProfit: moneyRound(row.customerCharges - row.directCost),
+    grossProfit: moneyRound(row.recognizedRevenue - row.directCost),
     serviceGrossProfit: Object.fromEntries(
       Object.entries(row.serviceGrossProfit).map(([service, value]) => [
         service,
@@ -915,11 +922,13 @@ export const buildFinanceReport = async ({
       Object.entries(row.serviceDetails).map(([service, detail]) => [
         service,
         {
-          ...detail,
+          // Keep the internal recognition accumulator out of the public
+          // service-detail payload; callers use `profit` and `revenue`.
+          transactions: detail.transactions,
           customerCharges: moneyRound(detail.customerCharges),
           paymentsReceived: moneyRound(detail.paymentsReceived),
           directCost: moneyRound(detail.directCost),
-          profit: moneyRound(detail.customerCharges - detail.directCost),
+          profit: moneyRound(detail.recognizedRevenue - detail.directCost),
         },
       ]),
     ),
