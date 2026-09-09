@@ -2235,6 +2235,32 @@ h6,
 .account-signout {
   color: #d9363e;
 }
+.account-preference {
+  padding: 9px 10px 8px;
+  border-top: 1px solid var(--line);
+}
+.account-preference > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.preference-toggle { display: flex; gap: 4px; }
+.preference-toggle button {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 6px 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+}
+.preference-toggle button.selected { background: var(--blue); color: var(--green); font-weight: 700; }
+html[data-theme="dark"] .account-menu { background: var(--white); }
+html[data-theme="dark"] .account-identity strong { color: var(--ink); }
+html[data-theme="dark"] .account-action { color: var(--ink); }
+html[data-theme="dark"] .account-action:hover { background: var(--mint); }
 
 @media (max-width: 767px) {
   .notif-panel,

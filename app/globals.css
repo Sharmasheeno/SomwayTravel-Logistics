@@ -46,6 +46,34 @@ body {
   font-size: 14px;
   letter-spacing: 0;
 }
+html[data-theme="dark"] {
+  --ink: #e7eef8;
+  --paper: #0d1728;
+  --white: #142238;
+  --muted: #9fb0c8;
+  --line: #2b3d57;
+  --mint: #173247;
+  --mint-2: #1d4055;
+  --blue: #1b3558;
+  --cream: #3c3420;
+  --cream-2: #66572e;
+  --shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+html[data-theme="dark"] body { background: var(--paper); color: var(--ink); }
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .record-card,
+html[data-theme="dark"] .modal,
+html[data-theme="dark"] .modal-card,
+html[data-theme="dark"] .record-modal,
+html[data-theme="dark"] .account-menu,
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea { background: var(--white); color: var(--ink); }
+html[data-theme="dark"] .record-details { background: #101e32; }
+html[data-theme="dark"] .topbar { background: #101d31; border-color: var(--line); }
+html[data-theme="dark"] .record-cell-value,
+html[data-theme="dark"] .modal > header,
+html[data-theme="dark"] .modal-title { color: var(--ink); }
 h1,
 h2,
 h3,

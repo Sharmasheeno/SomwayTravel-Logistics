@@ -94,6 +94,8 @@ type User = {
   loginUrl?: string;
 };
 type TicketStatus = "booked" | "issued" | "changed" | "cancelled";
+type Locale = "en" | "so";
+type ThemeMode = "light" | "dark";
 type VisaStatus = "submitted" | "approved" | "refused" | "delivered" | "cancelled";
 type Ticket = {
   id: string;
@@ -2924,6 +2926,8 @@ export default function Home() {
   const [seenAlerts, setSeenAlerts] = useState<string[]>([]);
   const [accountOpen, setAccountOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [locale, setLocale] = useState<Locale>("en");
+  const [theme, setTheme] = useState<ThemeMode>("light");
   // Toasts carry a tone: a failed save used to render with the same green
   // tick as a success, so an error read as confirmation. Errors also stay
   // on screen longer and can be dismissed, because they need reading.
@@ -2932,6 +2936,27 @@ export default function Home() {
   const [overviewBranchId, setOverviewBranchId] = useState("");
   const [overviewFrom, setOverviewFrom] = useState(`${today().slice(0, 7)}-01`);
   const [overviewTo, setOverviewTo] = useState(today());
+  const ui = locale === "so" ? {
+    Dashboard: "Dashboard", Bookings: "Boos celin", Cargo: "Rar", "Visa Services": "Adeegyada Fiisaha",
+    "Daily Summary": "Warbixinta Maalinlaha", Expenses: "Kharashaadka", Clients: "Macmiisha",
+    "Accounts Receivable": "Deynta la sugayo", Receipts: "Rasiidhada", "Track Shipment": "Raac shixnadda",
+    "Financial Reports": "Warbixinta maaliyadeed", "Accounts Payable": "Deynta la bixinayo", "Activity Log": "Diiwaanka hawsha",
+    "Team & Roles": "Kooxda iyo doorarka", Settings: "Dejinta"
+  } : {};
+  const label = (text: string) => (ui as Record<string, string>)[text] || text;
+  useEffect(() => {
+    try {
+      const savedLocale = localStorage.getItem("somway-locale");
+      const savedTheme = localStorage.getItem("somway-theme");
+      if (savedLocale === "en" || savedLocale === "so") setLocale(savedLocale);
+      if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem("somway-locale", locale); localStorage.setItem("somway-theme", theme); } catch {}
+  }, [locale, theme]);
   const applyData = (source: Partial<AgencyData>) => {
     const next = syncClients({ ...emptyData, ...source });
     dataRef.current = next;
@@ -3165,35 +3190,35 @@ export default function Home() {
     finance?: boolean;
     owner?: boolean;
   }[] = [
-    { page: "overview", label: "Dashboard", icon: "dashboard" },
-    { page: "tickets", label: "Bookings", icon: "plane" },
-    { page: "cargo", label: "Cargo", icon: "box" },
-    { page: "visas", label: "Visa Services", icon: "passport" },
-    { page: "daily-close", label: "Daily Summary", icon: "settings" },
-    { page: "expenses", label: "Expenses", icon: "wallet" },
-    { page: "clients", label: "Clients", icon: "users" },
+    { page: "overview", label: label("Dashboard"), icon: "dashboard" },
+    { page: "tickets", label: label("Bookings"), icon: "plane" },
+    { page: "cargo", label: label("Cargo"), icon: "box" },
+    { page: "visas", label: label("Visa Services"), icon: "passport" },
+    { page: "daily-close", label: label("Daily Summary"), icon: "settings" },
+    { page: "expenses", label: label("Expenses"), icon: "wallet" },
+    { page: "clients", label: label("Clients"), icon: "users" },
     {
       page: "receivables",
-      label: "Accounts Receivable",
+      label: label("Accounts Receivable"),
       icon: "money",
     },
-    { page: "receipt", label: "Receipts", icon: "file" },
-    { page: "tracking", label: "Track Shipment", icon: "search" },
+    { page: "receipt", label: label("Receipts"), icon: "file" },
+    { page: "tracking", label: label("Track Shipment"), icon: "search" },
     {
       page: "reports",
-      label: "Financial Reports",
+      label: label("Financial Reports"),
       icon: "chart",
       finance: true,
     },
     {
       page: "suppliers",
-      label: "Accounts Payable",
+      label: label("Accounts Payable"),
       icon: "wallet",
       finance: true,
     },
-    { page: "activity", label: "Activity Log", icon: "shield", finance: true },
-    { page: "team", label: "Team & Roles", icon: "users", owner: true },
-    { page: "settings", label: "Settings", icon: "settings" },
+    { page: "activity", label: label("Activity Log"), icon: "shield", finance: true },
+    { page: "team", label: label("Team & Roles"), icon: "users", owner: true },
+    { page: "settings", label: label("Settings"), icon: "settings" },
   ];
   const nav = navItems.filter(
     (item) =>
@@ -3545,6 +3570,20 @@ export default function Home() {
             <Icon name="plane" size={15} />
             Public website
           </a>
+          <div className="account-preference">
+            <span>Language</span>
+            <div className="preference-toggle" role="group" aria-label="Language">
+              <button type="button" className={locale === "en" ? "selected" : ""} onClick={() => setLocale("en")}>English</button>
+              <button type="button" className={locale === "so" ? "selected" : ""} onClick={() => setLocale("so")}>Soomaali</button>
+            </div>
+          </div>
+          <div className="account-preference">
+            <span>Appearance</span>
+            <div className="preference-toggle" role="group" aria-label="Appearance">
+              <button type="button" className={theme === "light" ? "selected" : ""} onClick={() => setTheme("light")}>Light</button>
+              <button type="button" className={theme === "dark" ? "selected" : ""} onClick={() => setTheme("dark")}>Dark</button>
+            </div>
+          </div>
           <button
             className="account-action account-signout"
             onClick={async () => {
