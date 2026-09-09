@@ -5082,7 +5082,7 @@ function Overview({
   const revenueValue = formatTotals(
     totals.map((row) => ({
       currency: row.currency,
-      value: row.paymentsReceived ?? row.revenue,
+      value: row.revenue,
     })),
   );
   const receivableValue = formatTotals(
@@ -5141,7 +5141,7 @@ function Overview({
     value: month.rows
       .filter((row) => row.currency === activeTrendCurrency)
       .reduce(
-        (sum, row) => sum + (row.paymentsReceived ?? row.revenue),
+        (sum, row) => sum + row.revenue,
         0,
       ),
   }));
@@ -5158,8 +5158,7 @@ function Overview({
             summary.transactions +
             (row.serviceDetails?.[service]?.transactions || 0),
           revenue:
-            summary.revenue +
-            (row.serviceDetails?.[service]?.paymentsReceived || 0),
+            summary.revenue + (row.services?.[service] || 0),
         }),
         { service, transactions: 0, revenue: 0 },
       );
