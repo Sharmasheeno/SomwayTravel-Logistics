@@ -6718,11 +6718,10 @@ th {
   justify-content: center;
   padding: 24px;
   background: rgba(8, 28, 63, 0.58);
-  backdrop-filter: blur(4px);
 }
 .record-modal {
-  width: min(920px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  width: min(780px, calc(100vw - 32px));
+  max-height: min(86vh, 720px);
   overflow-y: auto;
   border: 1px solid #d6e3f2;
   border-radius: 22px;

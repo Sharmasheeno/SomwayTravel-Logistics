@@ -2557,6 +2557,19 @@ function RecordCard({
   const [open, setOpen] = useState(defaultOpen);
   const shownCells = cells.filter((cell) => !cell.hide);
   const shownDetails = details.filter((detail) => !detail.hide);
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
   return (
     <article className={`record-card${open ? " open" : ""}`}>
       <div className="record-summary">
@@ -2588,7 +2601,7 @@ function RecordCard({
           <span>View</span>
         </button>
       </div>
-      {open && (
+      {open && typeof document !== "undefined" && createPortal(
         <div className="record-modal-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
           <div className="record-modal" role="dialog" aria-modal="true" aria-label="Record details" onMouseDown={(event) => event.stopPropagation()}>
             <div className="record-modal-header">
@@ -2613,7 +2626,8 @@ function RecordCard({
             )}
             {actions && <div className="record-actions">{actions}</div>}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </article>
   );
