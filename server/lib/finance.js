@@ -208,6 +208,15 @@ export const refundableBalance = (payments) => moneyRound(Math.max(0,
   ),
 ));
 
+export const refundableAmountForRecord = (record, payments) => {
+  const ledgerBalance = refundableBalance(payments);
+  // Before cancellation refunds were introduced, some paid services kept only
+  // their `paid` flag after the payment ledger was purged. Recover that one
+  // unrefunded charge exactly once; newer records always use the ledger.
+  if (ledgerBalance > 0 || payments.length || !record?.paid) return ledgerBalance;
+  return moneyRound(Math.max(0, totalFor(record.type === "Refund" ? "ticket" : record.transactionType || "ticket", record)));
+};
+
 // Recording an outgoing refund does not initiate a bank/mobile-money transfer.
 export const createCancellationRefund = async ({ transactionType, transactionId, amount,
   paymentMethod, paymentDate, reference = "", notes = "", user }) => {
@@ -223,7 +232,7 @@ export const createCancellationRefund = async ({ transactionType, transactionId,
     if (!isCancelledService(record))
       throw Object.assign(new Error("Cancel the service before recording a refund."), { status: 409 });
     const payments = await activeCustomerPaymentsFor(transactionType, transactionId);
-    const available = refundableBalance(payments);
+    const available = refundableAmountForRecord({ ...record, transactionType }, payments);
     const value = moneyRound(amount);
     if (!Number.isFinite(Number(amount)) || value <= 0 || value !== available)
       throw Object.assign(new Error("Refund must equal the remaining refundable amount. Refresh and try again."), { status: 409 });

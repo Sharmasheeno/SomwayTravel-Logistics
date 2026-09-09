@@ -388,6 +388,7 @@ type Activity = {
 };
 type CustomerPayment = {
   flow?: "inbound" | "outbound";
+  status?: "active" | "void";
   id: string;
   branchId: string;
   transactionType: "ticket" | "visa" | "cargo";
@@ -400,7 +401,6 @@ type CustomerPayment = {
   reference?: string;
   notes?: string;
   receivedByUserId?: string;
-  status?: "active" | "void";
   voidReason?: string;
 };
 type SupplierPayment = {
@@ -2609,11 +2609,17 @@ function RecordCard({
 
 function refundAvailable(data: AgencyData, type: "ticket" | "visa" | "cargo", record: { id: string; status?: string }) {
   if (!isCancelledService(record)) return 0;
-  return Math.max(0, Math.round(data.payments.filter((p) => p.transactionType === type && p.transactionId === record.id && p.status !== "void").reduce((sum, p) => sum + (p.flow === "outbound" ? -1 : 1) * p.amount, 0) * 100) / 100);
+  const payments = data.payments.filter((p) => p.transactionType === type && p.transactionId === record.id && p.status !== "void");
+  const ledger = payments.reduce((sum, p) => sum + (p.flow === "outbound" ? -1 : 1) * p.amount, 0);
+  if (ledger > 0 || payments.length || !(record as { paid?: boolean }).paid) return Math.max(0, Math.round(ledger * 100) / 100);
+  const charge = type === "cargo"
+    ? Number((record as { weight?: number }).weight || 0) * Number((record as { rate?: number }).rate || 0)
+    : Number((record as { amount?: number }).amount || 0);
+  return Math.max(0, Math.round(charge * 100) / 100);
 }
 function CancellationRefundAction({ type, record, data, onSaved }: {
   type: "ticket" | "visa" | "cargo";
-  record: { id: string; status?: string; currency: Currency; branchId?: string | null; paidByBranchId?: string | null; originBranchId?: string | null; ref?: string; tracking?: string };
+  record: { id: string; status?: string; paid?: boolean; currency: Currency; amount?: number; weight?: number; rate?: number; branchId?: string | null; paidByBranchId?: string | null; originBranchId?: string | null; ref?: string; tracking?: string };
   data: AgencyData;
   onSaved: (data: AgencyData) => void;
 }) {
