@@ -2726,9 +2726,9 @@ function CustomerPaymentForm({
       subtitle={`${label} / Remaining ${money(balance, currency)}`}
       onClose={onClose}
     >
-      <form className="modal-form" onSubmit={submit}>
+      <form className={`modal-form ${cancellationRefund ? "refund-modal-form" : ""}`} onSubmit={submit}>
         {error && <p className="form-error">{error}</p>}
-        {cancellationRefund && <p>Record this only after returning the money to the customer. This does not transfer money automatically.</p>}
+        {cancellationRefund && <p className="refund-modal-note">Record this after returning the money to the customer. This records the outgoing refund in the agency ledger.</p>}
         {!isRefund && (
           <dl className="payment-summary">
             <div><dt>Customer</dt><dd>{customer || label}</dd></div>
@@ -2803,17 +2803,17 @@ function CustomerPaymentForm({
             />
           </Field>
         </div>
-        <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
+        <div className={`modal-actions ${cancellationRefund ? "refund-modal-actions" : ""}`}>
+          <button type="button" className="button ghost refund-cancel-button" onClick={onClose}>
+            Close
           </button>
           <button
-            className="button primary"
+            className={`button primary ${cancellationRefund ? "refund-submit-button" : ""}`}
             disabled={
               busy || Number(form.amount) <= 0 || Number(form.amount) > balance
             }
           >
-            {busy ? "Saving..." : isRefund ? "Record Refund" : "Record Payment"}
+            {busy ? "Saving..." : isRefund ? "Refund customer" : "Record Payment"}
           </button>
         </div>
       </form>

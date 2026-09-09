@@ -1,6 +1,7 @@
 import Ticket from "../models/Ticket.js";
 import Visa from "../models/Visa.js";
 import Cargo from "../models/Cargo.js";
+import Client from "../models/Client.js";
 import Payment from "../models/Payment.js";
 import Supplier from "../models/Supplier.js";
 import SupplierPayment from "../models/SupplierPayment.js";
@@ -12,6 +13,34 @@ import { withServiceLock } from "./serviceLock.js";
 import { rebuildStoredDailySummaries } from "./dailySummary.js";
 
 const models = { ticket: Ticket, visa: Visa, cargo: Cargo };
+
+const clientReferenceFields = {
+  ticket: ["clientId"],
+  visa: ["clientId"],
+  cargo: ["senderClientId", "receiverClientId", "payerClientId"],
+};
+
+// Services create clients automatically. Once a service is permanently removed,
+// remove only the clients that no longer belong to any remaining service. This
+// keeps shared clients (for example, a customer with two tickets) intact.
+const removeUnusedServiceClients = async (type, service) => {
+  const fields = clientReferenceFields[type] || [];
+  const clientIds = [...new Set(fields.map((field) => service?.[field]).filter(Boolean).map((value) => String(value)))];
+  if (!clientIds.length) return;
+  for (const clientId of clientIds) {
+    const [ticketUse, visaUse, cargoUse] = await Promise.all([
+      Ticket.exists({ clientId }),
+      Visa.exists({ clientId }),
+      Cargo.exists({ $or: [
+        { senderClientId: clientId },
+        { receiverClientId: clientId },
+        { payerClientId: clientId },
+      ] }),
+    ]);
+    if (ticketUse || visaUse || cargoUse) continue;
+    await Client.deleteOne({ $or: [{ _id: clientId }, { id: clientId }] });
+  }
+};
 
 export const refreshCloseSnapshots = async () => {
   for (const close of await DailyClose.find({})) {
@@ -33,6 +62,7 @@ export const assertServiceNotDeleting = async (type, id) => {
 
 export const deleteServiceRecords = (type, id) => withServiceLock(`${type}:${id}`, async () => {
   const key = `${type}:${id}`;
+  const service = await models[type].findOne({ id });
   await ServiceDeletion.updateOne({ _id: key }, { $setOnInsert: {
     transactionType: type, transactionId: id,
   } }, { upsert: true });
@@ -45,6 +75,7 @@ export const deleteServiceRecords = (type, id) => withServiceLock(`${type}:${id}
   await SupplierPayment.deleteMany({ supplierBillId: { $in: billIds } });
   await Supplier.deleteMany({ id: { $in: billIds } });
   await models[type].deleteOne({ id });
+  await removeUnusedServiceClients(type, service);
   await refreshCloseSnapshots();
   await rebuildStoredDailySummaries();
   await ServiceDeletion.deleteOne({ _id: key });

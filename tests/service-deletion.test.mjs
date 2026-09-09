@@ -16,13 +16,14 @@ import Expense from "../server/models/Expense.js";
 import Branch from "../server/models/Branch.js";
 import Activity from "../server/models/Activity.js";
 import ServiceDeletion from "../server/models/ServiceDeletion.js";
+import Client from "../server/models/Client.js";
 import { deleteEntity, writeEntity } from "../server/lib/entityPersistence.js";
 import { cleanupDeletedServiceFinance, deleteServiceRecords, resumeServiceDeletions, purgeServiceFinance } from "../server/lib/serviceDeletion.js";
 import { buildFinanceReport } from "../server/lib/finance.js";
 import { deriveReceivables } from "../server/lib/receivables.js";
 
 const owner = { id: "owner", role: "owner" };
-const models = { settings: AgencySettings, methods: PaymentMethod, branchMethods: BranchPaymentMethod, tickets: Ticket, visas: Visa, cargo: Cargo, payments: Payment, suppliers: Supplier, supplierPayments: SupplierPayment, closes: DailyClose, summaries: DailySummary, opening: StartingBalance, expenses: Expense, branches: Branch, jobs: ServiceDeletion, activities: Activity };
+const models = { settings: AgencySettings, methods: PaymentMethod, branchMethods: BranchPaymentMethod, tickets: Ticket, visas: Visa, cargo: Cargo, clients: Client, payments: Payment, suppliers: Supplier, supplierPayments: SupplierPayment, closes: DailyClose, summaries: DailySummary, opening: StartingBalance, expenses: Expense, branches: Branch, jobs: ServiceDeletion, activities: Activity };
 const matches = (row, query) => Object.entries(query).every(([key, value]) => {
   if (key === "$or") return value.some((part) => matches(row, part));
   if (value && typeof value === "object") return Object.entries(value).every(([op, val]) => {
@@ -78,6 +79,20 @@ for (const [collection, type] of [["tickets", "ticket"], ["visas", "visa"], ["ca
     });
   });
 }
+
+test("service deletion removes only clients with no remaining service history", async () => {
+  await withStore({
+    clients: [{ id: "client-only" }, { id: "client-shared" }],
+    tickets: [
+      { id: "target", clientId: "client-only" },
+      { id: "keep", clientId: "client-shared" },
+    ],
+  }, async (state) => {
+    await deleteServiceRecords("ticket", "target");
+    assert.deepEqual(state.clients.map((row) => row.id), ["client-shared"]);
+    assert.deepEqual(state.tickets.map((row) => row.id), ["keep"]);
+  });
+});
 
 test("payable deletion and direct edits are rejected, even for the owner", async () => {
   await withStore({ suppliers: [{ id: "bill", billed: 100 }] }, async (state) => {

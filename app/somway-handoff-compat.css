@@ -2605,6 +2605,50 @@ button.payment-action:hover,
 button.refund-action:hover {
   filter: brightness(0.96);
 }
+
+/* The refund dialog keeps the money-out action prominent and gives both
+   controls comfortable tap targets at every screen width. */
+.refund-modal-note {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #f3dfbd;
+  border-radius: 10px;
+  background: #fffaf0;
+  color: #765b2a;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.refund-modal-actions {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(180px, 1.3fr);
+  gap: 12px;
+  align-items: stretch;
+}
+.refund-modal-actions .button {
+  min-height: 46px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.refund-cancel-button {
+  background: #f7f9fc;
+  border-color: #d4e0eb;
+  color: #40516b;
+}
+.refund-submit-button {
+  background: linear-gradient(135deg, #b9741a, #9d5c0e);
+  border-color: #9d5c0e;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(157, 92, 14, 0.2);
+}
+@media (max-width: 520px) {
+  .refund-modal-actions {
+    grid-template-columns: 1fr;
+  }
+  .refund-modal-actions .button {
+    width: 100%;
+  }
+}
+
 button.edit-action:disabled,
 button.delete-action:disabled {
   opacity: 0.55;
