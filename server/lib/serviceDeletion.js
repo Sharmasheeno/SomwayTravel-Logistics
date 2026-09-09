@@ -54,7 +54,7 @@ export const purgeServiceFinanceRecords = async (type, id) => {
   const payableId = `payable_${type}_${id}`;
   const bills = await Supplier.find({ $or: [{ id: payableId }, { transactionType: type, transactionId: id }] });
   const billIds = [...new Set([payableId, ...bills.map((bill) => bill.id)])];
-  await Payment.deleteMany({ transactionType: type, transactionId: id });
+  // Customer receipts survive cancellation until their outgoing refunds settle.
   await SupplierPayment.deleteMany({ supplierBillId: { $in: billIds } });
   await Supplier.deleteMany({ id: { $in: billIds } });
   await refreshCloseSnapshots();

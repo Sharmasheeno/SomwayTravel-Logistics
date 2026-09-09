@@ -1,6 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+test("cancelled sale keeps cash until refunded and then nets to zero in reports", async () => {
+  const payments = [doc({ transactionType: "ticket", transactionId: "cancelled-paid", branchId: mog, currency: "USD", amount: 80, flow: "inbound", paymentDate: "2026-08-31", paymentMethod: "EVC Plus", status: "active" })];
+  await withFinanceMocks({ branchPaymentMethods: config,
+    tickets: [doc({ id: "cancelled-paid", status: "cancelled", branchId: mog, saleDate: "2026-08-31", currency: "USD", amount: 120, cost: 60 })], payments,
+  }, async () => {
+    let rows = await buildFinanceReport({ branchId: mog, from: "2026-08-01", to: "2026-09-30" });
+    assert.equal(rows[0].collections, 80);
+    assert.equal(rows[0].revenue, 0);
+    assert.equal(rows[0].outstanding, 0);
+    payments.push(doc({ ...payments[0], flow: "outbound", paymentDate: "2026-09-01" }));
+    rows = await buildFinanceReport({ branchId: mog, from: "2026-08-01", to: "2026-09-30" });
+    assert.equal(rows[0].collections, 0);
+    assert.equal(rows[0].grossProfit, 0);
+    const refundDay = await buildFinanceReport({ branchId: mog, from: "2026-09-01", to: "2026-09-01" });
+    assert.equal(refundDay[0].collections, -80);
+  });
+});
+
 import Branch from "../server/models/Branch.js";
 import BranchPaymentMethod from "../server/models/BranchPaymentMethod.js";
 import Cargo from "../server/models/Cargo.js";

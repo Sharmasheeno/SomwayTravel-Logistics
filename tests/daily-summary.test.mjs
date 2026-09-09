@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+test("cancelled service refund reduces closing cash without creating revenue or debt", () => {
+  const receipt = { transactionType: "ticket", transactionId: "cancelled", branchId, currency: "USD", paymentMethodId: methodId, amount: 80, paymentDate: "2026-09-09", flow: "inbound" };
+  const input = { ...source, businessDate: "2026-09-09", startingBalances: [], tickets: [{ id: "cancelled", status: "cancelled", branchId, currency: "USD", amount: 120, saleDate: "2026-09-09" }], payments: [receipt] };
+  const before = buildDailySummaryRows(input)[0];
+  assert.equal(before.closedAmount, 80);
+  const after = buildDailySummaryRows({ ...input, payments: [receipt, { ...receipt, flow: "outbound" }] })[0];
+  assert.equal(after.closedAmount, 0);
+  assert.equal(after.revenue, 0);
+  assert.equal(after.accountsReceivable, 0);
+  assert.equal(after.paymentsByMethod[0].refunds, 80);
+});
+
 import {
   buildDailySummaryRows,
   businessDayState,

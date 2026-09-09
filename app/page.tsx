@@ -387,6 +387,7 @@ type Activity = {
   detail: string;
 };
 type CustomerPayment = {
+  flow?: "inbound" | "outbound";
   id: string;
   branchId: string;
   transactionType: "ticket" | "visa" | "cargo";
@@ -2467,14 +2468,17 @@ function Actions({
   onDelete,
   onPayment,
   paymentLabel = "Record payment",
+  refundAction,
 }: {
   onEdit: () => void;
   onDelete?: () => void;
   onPayment?: () => void;
   paymentLabel?: string;
+  refundAction?: ReactNode;
 }) {
   return (
     <div className="row-actions action-group">
+      {refundAction}
       {onPayment && (
         <button type="button" className="small-icon payment-action" title={paymentLabel} onClick={onPayment}>
           Pay
@@ -2602,6 +2606,29 @@ function RecordCard({
   );
 }
 
+
+function refundAvailable(data: AgencyData, type: "ticket" | "visa" | "cargo", record: { id: string; status?: string }) {
+  if (!isCancelledService(record)) return 0;
+  return Math.max(0, Math.round(data.payments.filter((p) => p.transactionType === type && p.transactionId === record.id && p.status !== "void").reduce((sum, p) => sum + (p.flow === "outbound" ? -1 : 1) * p.amount, 0) * 100) / 100);
+}
+function CancellationRefundAction({ type, record, data, onSaved }: {
+  type: "ticket" | "visa" | "cargo";
+  record: { id: string; status?: string; currency: Currency; branchId?: string | null; paidByBranchId?: string | null; originBranchId?: string | null; ref?: string; tracking?: string };
+  data: AgencyData;
+  onSaved: (data: AgencyData) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const available = refundAvailable(data, type, record);
+  if (available <= 0) return null;
+  return <>
+    <button type="button" className="payment-action" onClick={() => setOpen(true)}>Refund</button>
+    {open && <CustomerPaymentForm transactionType={type} transactionId={record.id}
+      label={record.ref || record.tracking || record.id} branchId={String(record.paidByBranchId || record.branchId || record.originBranchId || "")}
+      currency={record.currency} balance={available} isRefund cancellationRefund data={data}
+      onClose={() => setOpen(false)} onSaved={(next) => { setOpen(false); onSaved(next); }} />}
+  </>;
+}
+
 function CustomerPaymentForm({
   transactionType,
   transactionId,
@@ -2614,6 +2641,7 @@ function CustomerPaymentForm({
   totalCharge,
   amountPaid,
   isRefund = false,
+  cancellationRefund = false,
   data,
   onClose,
   onSaved,
@@ -2629,6 +2657,7 @@ function CustomerPaymentForm({
   totalCharge?: number;
   amountPaid?: number;
   isRefund?: boolean;
+  cancellationRefund?: boolean;
   data: AgencyData;
   onClose: () => void;
   onSaved: (data: AgencyData) => void;
@@ -2648,7 +2677,7 @@ function CustomerPaymentForm({
     setBusy(true);
     setError("");
     try {
-      const payload = await apiRequest<{ data: AgencyData }>("/api/payments", {
+      const payload = await apiRequest<{ data: AgencyData }>(cancellationRefund ? "/api/payments/refund" : "/api/payments", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -2684,6 +2713,7 @@ function CustomerPaymentForm({
     >
       <form className="modal-form" onSubmit={submit}>
         {error && <p className="form-error">{error}</p>}
+        {cancellationRefund && <p>Record this only after returning the money to the customer. This does not transfer money automatically.</p>}
         {!isRefund && (
           <dl className="payment-summary">
             <div><dt>Customer</dt><dd>{customer || label}</dd></div>
@@ -2701,6 +2731,7 @@ function CustomerPaymentForm({
               required
               min="0.01"
               max={balance}
+              readOnly={cancellationRefund}
               step="0.01"
               type="number"
               value={form.amount}
@@ -5646,9 +5677,9 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
   const rows = scopedRows.filter((ticket) => {
     if (ticketView === "issued") return ticket.status === "issued";
     if (ticketView === "pending")
-      return ticket.type !== "Refund" && ticket.paymentStatus !== "paid";
+      return !isCancelledService(ticket) && ticket.type !== "Refund" && ticket.paymentStatus !== "paid";
     if (ticketView === "refund")
-      return ticket.type === "Refund" && ticket.paymentStatus !== "paid";
+      return refundAvailable(data, "ticket", ticket) > 0 || (ticket.type === "Refund" && ticket.paymentStatus !== "paid");
     if (ticketView === "cancelled") return ticket.status === "cancelled";
     return true;
   });
@@ -5675,8 +5706,8 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
       ticket.type === "Refund" ? -ticket.amount : ticket.amount - ticket.cost,
     scopeCurrencies,
   );
-  const pendingRefunds = financeRows.filter(
-    (ticket) => ticket.type === "Refund" && ticket.paymentStatus !== "paid",
+  const pendingRefunds = scopedRows.filter(
+    (ticket) => refundAvailable(data, "ticket", ticket) > 0 || (!isCancelledService(ticket) && ticket.type === "Refund" && ticket.paymentStatus !== "paid"),
   );
   const updateTicketStatus = async (
     ticket: Ticket,
@@ -5770,7 +5801,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
         <MetricCard
           icon="wallet"
           label="Pending Refunds"
-          value={moneyByCurrency(pendingRefunds, (ticket) => ticket.currency, (ticket) => ticket.amount, scopeCurrencies)}
+          value={moneyByCurrency(pendingRefunds, (ticket) => ticket.currency, (ticket) => isCancelledService(ticket) ? refundAvailable(data, "ticket", ticket) : (ticket.balance ?? ticket.amount), scopeCurrencies)}
           tone="orange"
           foot={`${pendingRefunds.length} open record${pendingRefunds.length === 1 ? "" : "s"}`}
         />
@@ -5927,6 +5958,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                     )}
                     {canWrite && (
                       <Actions
+                        refundAction={<CancellationRefundAction type="ticket" record={x} data={data} onSaved={(next) => replaceData?.(next)} />}
                         onEdit={() => setEditing(x)}
                         onDelete={canDelete ? () => setDeleting(x) : undefined}
                         onPayment={
@@ -6624,6 +6656,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                     </button>
                     {canWrite && (
                       <div className="row-actions">
+                        <CancellationRefundAction type="cargo" record={x} data={data} onSaved={(next) => replaceData?.(next)} />
                         {canTakePayment && !isCancelledService(x) && (x.balance ?? amount) > 0 && (
                           <button
                             type="button"
@@ -8126,6 +8159,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                     )}
                     {canWrite && (
                       <Actions
+                        refundAction={<CancellationRefundAction type="visa" record={x} data={data} onSaved={(next) => replaceData?.(next)} />}
                         onEdit={() => setEditing(x)}
                         onDelete={canDelete ? () => setDeleting(x) : undefined}
                         onPayment={

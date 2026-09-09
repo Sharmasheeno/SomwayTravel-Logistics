@@ -146,7 +146,7 @@ export const transitionServiceStatus = async ({
     );
   }
   // Cancelling a service reverses its finance: remove the auto-generated
-  // payable and any recorded payments so the cancellation is reflected in the
+  // payable while retaining customer receipts for refunds, reflected in the
   // daily summary, receivables and reports. The record itself is kept (with its
   // status history) so the cancellation remains auditable.
   if (nextStatus === "cancelled" && mongoose.connection.readyState !== 0) {

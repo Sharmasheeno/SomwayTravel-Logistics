@@ -1,3 +1,4 @@
+import { isCancelledService } from "./serviceRelationships.js";
 import { hasPayableParent, serviceKeys } from "./serviceRelationships.js";
 import Ticket from "../models/Ticket.js";
 import Cargo from "../models/Cargo.js";
@@ -155,7 +156,7 @@ export const readAgencyData = async () => {
     const transactionPayments =
       paymentsByTransaction.get(`${transactionType}:${plain.id}`) || [];
     const summary = deriveCustomerFinanceSummary({
-      totalCharge: total,
+      totalCharge: isCancelledService(plain) ? 0 : total,
       payments: transactionPayments,
     });
     const latestPaymentDate = transactionPayments

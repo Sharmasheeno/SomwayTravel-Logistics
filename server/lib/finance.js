@@ -189,7 +189,7 @@ export const deriveCustomerPaymentSummary = ({ total, payments = [], asOf }) => 
 
 export const customerFinanceSummary = async (type, record) => {
   const payments = await activeCustomerPaymentsFor(type, record.id);
-  const total = totalFor(type, record);
+  const total = isCancelledService(record) ? 0 : totalFor(type, record);
   const summary = deriveCustomerFinanceSummary({
     totalCharge: total,
     payments,
@@ -200,6 +200,47 @@ export const customerFinanceSummary = async (type, record) => {
     amountPaid: summary.totalPaid,
     balance: summary.balanceDue,
   };
+};
+
+export const refundableBalance = (payments) => moneyRound(Math.max(0,
+  payments.filter((payment) => isValidCustomerPayment(payment)).reduce(
+    (sum, payment) => sum + (payment.flow === "outbound" ? -1 : 1) * payment.amount, 0,
+  ),
+));
+
+// Recording an outgoing refund does not initiate a bank/mobile-money transfer.
+export const createCancellationRefund = async ({ transactionType, transactionId, amount,
+  paymentMethod, paymentDate, reference = "", notes = "", user }) => {
+  if (!["owner", "operator"].includes(user.role))
+    throw Object.assign(new Error("You cannot record refunds."), { status: 403 });
+  const Model = modelFor(transactionType);
+  if (!Model) throw Object.assign(new Error("Unknown service."), { status: 400 });
+  return withServiceLock(`${transactionType}:${transactionId}`, async () => {
+    const record = await Model.findOne({ id: transactionId });
+    if (!record) throw Object.assign(new Error("Service not found."), { status: 404 });
+    const branchId = paymentBranchId(transactionType, record);
+    await assertBranchAccess(user, branchId);
+    if (!isCancelledService(record))
+      throw Object.assign(new Error("Cancel the service before recording a refund."), { status: 409 });
+    const payments = await activeCustomerPaymentsFor(transactionType, transactionId);
+    const available = refundableBalance(payments);
+    const value = moneyRound(amount);
+    if (!Number.isFinite(Number(amount)) || value <= 0 || value !== available)
+      throw Object.assign(new Error("Refund must equal the remaining refundable amount. Refresh and try again."), { status: 409 });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate || "") || Number.isNaN(Date.parse(paymentDate)))
+      throw Object.assign(new Error("Choose a valid refund date."), { status: 400 });
+    if (payments.some((payment) => payment.paymentDate > paymentDate))
+      throw Object.assign(new Error("Refund date cannot be before the recorded payments."), { status: 400 });
+    const { method } = await assertBranchPaymentMethod({ branchId, currency: record.currency, paymentMethod });
+    return Payment.create({
+      id: `refund_${randomToken(10)}`, branchId, transactionType, transactionId,
+      idempotencyKey: `cancellation-refund:${transactionType}:${transactionId}`,
+      clientId: record.clientId || record.payerClientId || record.senderClientId || null,
+      amount: value, flow: "outbound", currency: record.currency,
+      paymentMethodId: method._id, paymentMethod: method.name, paymentDate,
+      reference, notes, receivedByUserId: user.id || String(user._id || ""),
+    });
+  });
 };
 
 export const decorateCustomerRecord = async (type, record) => {
@@ -677,12 +718,12 @@ export const buildFinanceReport = async ({
     }),
   ]);
   const [allTickets, allVisas, allCargo] = await Promise.all([Ticket.find({}), Visa.find({}), Cargo.find({})]);
-  // Cancelled services raise no charge and settle no payable, so their payments
-  // and bills must not be attributed to any branch either.
+  // Cancelled services raise no charge, but their actual receipts and refunds
+  // remain cash movements attributed to the collecting/paying branch.
   const parentKeys = serviceKeys({
-    tickets: allTickets.filter((row) => !isCancelledService(row)),
-    visas: allVisas.filter((row) => !isCancelledService(row)),
-    cargo: allCargo.filter((row) => !isCancelledService(row)),
+    tickets: allTickets,
+    visas: allVisas,
+    cargo: allCargo,
   });
   const branchNameById = new Map(
     branches.map((branch) => [branch._id.toString(), branch.name]),
@@ -738,6 +779,7 @@ export const buildFinanceReport = async ({
     ["cargo", cargo],
   ]) {
     for (const item of list) {
+      if (isCancelledService(item)) continue;
       const bid = revenueBranchId(type, item);
       transactionsByKey.set(`${type}:${item.id}`, { type, item, branchId: bid });
       if (!include(bid)) continue;

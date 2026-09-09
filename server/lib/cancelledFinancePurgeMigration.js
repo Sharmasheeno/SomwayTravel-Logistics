@@ -7,7 +7,8 @@ import { isCancelledService } from "./serviceRelationships.js";
 // One-time repair: services cancelled BEFORE cancellation reversed finance may
 // still have an auto-generated payable and recorded payments attached, which
 // kept them counting in reports, receivables and the daily summary. Purge the
-// finance of every already-cancelled service. The service records themselves
+// payables of every already-cancelled service. Customer receipts are retained
+// for refunds. The service records themselves
 // (and their status history) are preserved for audit.
 export const runCancelledFinancePurgeMigration = async () => {
   const result = { ticket: 0, visa: 0, cargo: 0 };

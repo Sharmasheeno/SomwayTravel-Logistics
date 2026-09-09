@@ -17,7 +17,7 @@ import Branch from "../server/models/Branch.js";
 import Activity from "../server/models/Activity.js";
 import ServiceDeletion from "../server/models/ServiceDeletion.js";
 import { deleteEntity, writeEntity } from "../server/lib/entityPersistence.js";
-import { cleanupDeletedServiceFinance, deleteServiceRecords, resumeServiceDeletions } from "../server/lib/serviceDeletion.js";
+import { cleanupDeletedServiceFinance, deleteServiceRecords, resumeServiceDeletions, purgeServiceFinance } from "../server/lib/serviceDeletion.js";
 import { buildFinanceReport } from "../server/lib/finance.js";
 import { deriveReceivables } from "../server/lib/receivables.js";
 
@@ -159,3 +159,13 @@ test("saved historical summary no longer retains deleted-service revenue", async
     assert.deepEqual(state.summaries[0].correctionHistory, []);
   });
 });
+
+for (const type of ["ticket", "visa", "cargo"]) {
+  test(type + " cancellation cleanup preserves receipts and refunds", async () => {
+    await withStore({ payments: [{ id: "receipt", transactionType: type, transactionId: "paid", amount: 80 }, { id: "refund", transactionType: type, transactionId: "paid", amount: 80, flow: "outbound" }], suppliers: [{ id: "payable_" + type + "_paid" }] }, async (state) => {
+      await purgeServiceFinance(type, "paid");
+      assert.equal(state.payments.length, 2);
+      assert.equal(state.suppliers.length, 0);
+    });
+  });
+}
