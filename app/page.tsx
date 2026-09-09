@@ -2624,7 +2624,11 @@ function RecordCard({
                 ))}
               </div>
             )}
-            {actions && <div className="record-actions">{actions}</div>}
+            {actions && (
+              <div className="record-actions" onClick={() => setOpen(false)}>
+                {actions}
+              </div>
+            )}
           </div>
         </div>,
         document.body,
