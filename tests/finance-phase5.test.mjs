@@ -269,3 +269,16 @@ test("refunds reduce revenue, profit and collections without creating customer d
     assert.equal(usd.outstanding, 0);
   });
 });
+
+test("partial customer payment leaves the exact remaining receivable", async () => {
+  await withFinanceMocks({
+    branchPaymentMethods: config,
+    tickets: [doc({ id: "partial-300", branchId: mog, saleDate: "2026-08-31", currency: "USD", amount: 300, cost: 220 })],
+    payments: [doc({ transactionType: "ticket", transactionId: "partial-300", branchId: mog, currency: "USD", amount: 200, paymentDate: "2026-08-31", paymentMethod: "EVC Plus", status: "active" })],
+  }, async () => {
+    const summary = await customerFinanceSummary("ticket", { id: "partial-300", amount: 300 });
+    assert.equal(summary.amountPaid, 200);
+    assert.equal(summary.balance, 100);
+    assert.equal(summary.paymentStatus, "partial");
+  });
+});

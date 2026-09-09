@@ -2754,6 +2754,11 @@ function CustomerPaymentForm({
                 setForm({ ...form, amount: event.target.value })
               }
             />
+            {!isRefund && (
+              <small className="field-hint">
+                Remaining after this payment: {money(Math.max(0, balance - (Number(form.amount) || 0)), currency)}
+              </small>
+            )}
           </Field>
           <Field label={isRefund ? "Refund date" : "Payment date"}>
             <input
