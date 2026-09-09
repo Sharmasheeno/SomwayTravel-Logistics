@@ -2581,26 +2581,38 @@ function RecordCard({
         <button
           type="button"
           className="record-view"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
+          aria-haspopup="dialog"
+          onClick={() => setOpen(true)}
         >
           <Icon name="eye" size={15} />
-          <span>{open ? "Hide" : "View"}</span>
+          <span>View</span>
         </button>
       </div>
       {open && (
-        <div className="record-details">
-          {shownDetails.length > 0 && (
-            <div className="record-detail-grid">
-              {shownDetails.map((detail, index) => (
-                <div className="record-detail" key={`${detail.label}-${index}`}>
-                  <span className="record-detail-label">{detail.label}</span>
-                  <span className="record-detail-value">{detail.value}</span>
-                </div>
-              ))}
+        <div className="record-modal-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
+          <div className="record-modal" role="dialog" aria-modal="true" aria-label="Record details" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="record-modal-header">
+              <div>
+                <div className="record-modal-title">{title}</div>
+                {subtitle && <small className="record-subtitle">{subtitle}</small>}
+              </div>
+              <button type="button" className="record-modal-close" aria-label="Close details" onClick={() => setOpen(false)}>
+                <Icon name="x" size={18} />
+              </button>
             </div>
-          )}
-          {actions && <div className="record-actions">{actions}</div>}
+            {chips && <div className="record-modal-chips">{chips}</div>}
+            {shownDetails.length > 0 && (
+              <div className="record-detail-grid">
+                {shownDetails.map((detail, index) => (
+                  <div className="record-detail" key={`${detail.label}-${index}`}>
+                    <span className="record-detail-label">{detail.label}</span>
+                    <span className="record-detail-value">{detail.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {actions && <div className="record-actions">{actions}</div>}
+          </div>
         </div>
       )}
     </article>

@@ -6708,6 +6708,58 @@ th {
   padding: 13px 14px 15px;
   background: #f8fbfd;
 }
+/* Record details open in a focused popup instead of expanding the register row. */
+.record-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 28, 63, 0.58);
+  backdrop-filter: blur(4px);
+}
+.record-modal {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow-y: auto;
+  border: 1px solid #d6e3f2;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(8, 28, 63, 0.28);
+  padding: 24px;
+}
+.record-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e5edf6;
+}
+.record-modal-title { color: #073d73; font-size: 1.2rem; font-weight: 750; }
+.record-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 1px solid #d6e3f2;
+  border-radius: 10px;
+  color: #31577f;
+  background: #f7fbff;
+  cursor: pointer;
+}
+.record-modal-close:hover { background: #edf5fd; color: #075fbd; }
+.record-modal-chips { padding-top: 16px; }
+.record-modal .record-detail-grid { padding-top: 18px; }
+.record-modal .record-actions { padding-top: 20px; }
+@media (max-width: 560px) {
+  .record-modal-backdrop { align-items: flex-end; padding: 12px; }
+  .record-modal { max-height: calc(100vh - 24px); border-radius: 18px; padding: 18px; }
+}
 .record-detail-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
