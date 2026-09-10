@@ -2980,8 +2980,11 @@ export default function Home() {
       setPortalPath(path);
       try {
         const routeResponse = await fetch(`/api/operator-access/validate?path=${encodeURIComponent(path)}`, { cache: "no-store" });
-        if (routeResponse.status === 404 && path === "/") { setPublicLanding(true); return; }
-        if (!routeResponse.ok && path !== "/admin") { setRouteUnavailable(true); return; }
+        const routePayload = await routeResponse.json().catch(() => ({ valid: false }));
+        if (!routePayload.valid) {
+          if (path === "/") { setPublicLanding(true); return; }
+          if (path !== "/admin") { setRouteUnavailable(true); return; }
+        }
         const statusResponse = await fetch("/api/auth/status", {
           cache: "no-store",
         });
