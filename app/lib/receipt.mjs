@@ -1,3 +1,4 @@
+import { translateCopy } from "./somali.mjs";
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
   .replaceAll('"', "&quot;").replaceAll("'", "&#39;");
@@ -9,9 +10,11 @@ export const receiptTitles = {
 };
 
 // Only customer-facing fields are rendered. Never serialize the source record.
-export function buildReceiptHtml(receipt, logoUrl = "/Som-way2.png", autoPrint = false) {
+export function buildReceiptHtml(receipt, logoUrl = "/Som-way2.png", autoPrint = false, preferences = {}) {
+  const locale = preferences.locale === "so" ? "so" : "en";
+  const tr = text => translateCopy(text, locale);
   const kind = Object.hasOwn(receiptTitles, receipt.kind) ? receipt.kind : "cargo";
-  const title = receiptTitles[kind];
+  const title = tr(receiptTitles[kind]);
   const esc = escapeHtml;
   const tagline = { ticket: "Fly further. Travel easier.", visa: "Your journey. Our support.", cargo: "Your cargo. Our commitment." }[kind];
   // Meaningful, print-safe line icons so each receipt is instantly recognisable:
@@ -40,7 +43,7 @@ export function buildReceiptHtml(receipt, logoUrl = "/Som-way2.png", autoPrint =
     ["Payment method", receipt.method || "—"],
   ];
   const amount = `${receipt.currency} ${Number(receipt.amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+  return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>receipt-${esc(receipt.ref)}</title><style>
   *{box-sizing:border-box}body{margin:0;background:#edf4fa;color:#07265a;font-family:Arial,sans-serif;font-size:16px;line-height:1.4}
@@ -58,13 +61,13 @@ export function buildReceiptHtml(receipt, logoUrl = "/Som-way2.png", autoPrint =
   .toolbar{max-width:680px;margin:16px auto;text-align:center}button{padding:12px 22px;background:#07539d;color:white;border:0;border-radius:8px;font:inherit;cursor:pointer}
   @media(max-width:540px){.sheet{margin:0;border-radius:0}.ticket dl{display:block}main{padding:18px}.total strong{font-size:26px}h1{font-size:20px}h1 strong{font-size:28px}}
   @page{size:A4;margin:10mm}@media print{body{background:white;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet{margin:0 auto;box-shadow:none;border:0}.toolbar{display:none}main{padding-top:18px;padding-bottom:18px}dl div{padding-top:7px;padding-bottom:7px}footer{padding:16px 24px}}
-  </style></head><body><article class="sheet ${kind}">
-  <header class="brand"><img src="${esc(logoUrl)}" alt="${esc(receipt.agencyName)}"><span>PEOPLE<br>PLACES<br>POSSIBILITIES</span></header>
-  <main><div class="heading"><span class="symbol" aria-hidden="true">${icon}</span><div><h1>${title}<strong>Receipt</strong></h1><p class="tagline">${tagline}</p></div></div>
-  <div class="reference"><div><span>Receipt number</span><strong>${esc(receipt.ref)}</strong></div>${kind === "cargo" ? `<div><span>Tracking number</span><strong>${esc(receipt.ref)}</strong></div>` : ""}</div>
-  <dl>${details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || "—")}</dd></div>`).join("")}</dl>
-  <div class="total"><div><small>Total amount</small><strong>${esc(amount)}</strong></div><span class="status">${paid ? "✓ " : ""}${esc(status)}</span></div>
-  <div class="thanks"><strong>Thank you for choosing SomWay</strong>${tagline}</div><p class="served">Served by ${esc(receipt.served || "Agency team")}</p></main>
-  <footer><div><p><strong>Mogadishu Branch</strong><br>Fathi Taleh, Mogadishu Somalia<br>+252615633609 / 0617888038 / 0613471566</p><p><strong>Nairobi Branch</strong><br>+254729690965</p><p>somwaytravel@gmail.com<br>@Somwaytravel</p></div><div class="motto">PEOPLE<br>PLACES<br>POSSIBILITIES</div></footer>
-  </article>${autoPrint ? `<div class="toolbar"><button onclick="window.print()">Print / Save PDF</button></div><script>window.addEventListener('load',()=>{window.focus();window.print()})</script>` : ""}</body></html>`;
+  ${preferences.theme === "dark" && !autoPrint ? `@media screen {body{background:#0d1728;color:#e7eef8;color-scheme:dark}.sheet{background:#142238;border-color:#34465e}.reference,.total,.thanks{background:#1d304b}.total strong,h1 strong{color:#9ac5ff}dl div{border-color:#34465e}}` : ""}</style></head><body><article class="sheet ${kind}">
+  <header class="brand"><img src="${esc(logoUrl)}" alt="${esc(receipt.agencyName)}"><span>${esc(tr("PEOPLE"))}<br>${esc(tr("PLACES"))}<br>${esc(tr("POSSIBILITIES"))}</span></header>
+  <main><div class="heading"><span class="symbol" aria-hidden="true">${icon}</span><div><h1>${title}<strong>${esc(tr("Receipt"))}</strong></h1><p class="tagline">${esc(tr(tagline))}</p></div></div>
+  <div class="reference"><div><span>${esc(tr("Receipt number"))}</span><strong>${esc(receipt.ref)}</strong></div>${kind === "cargo" ? `<div><span>${esc(tr("Tracking number"))}</span><strong>${esc(receipt.ref)}</strong></div>` : ""}</div>
+  <dl>${details.map(([label, value]) => `<div><dt>${esc(tr(label))}</dt><dd>${esc(value || "—")}</dd></div>`).join("")}</dl>
+  <div class="total"><div><small>${esc(tr("Total amount"))}</small><strong>${esc(amount)}</strong></div><span class="status">${paid ? "✓ " : ""}${esc(tr(status))}</span></div>
+  <div class="thanks"><strong>${esc(tr("Thank you for choosing SomWay"))}</strong>${esc(tr(tagline))}</div><p class="served">${esc(tr("Served by"))} ${esc(receipt.served || tr("Agency team"))}</p></main>
+  <footer><div><p><strong>${esc(tr("Mogadishu Branch"))}</strong><br>Fathi Taleh, Mogadishu Somalia<br>+252615633609 / 0617888038 / 0613471566</p><p><strong>${esc(tr("Nairobi Branch"))}</strong><br>+254729690965</p><p>somwaytravel@gmail.com<br>@Somwaytravel</p></div><div class="motto">${esc(tr("PEOPLE"))}<br>${esc(tr("PLACES"))}<br>${esc(tr("POSSIBILITIES"))}</div></footer>
+  </article>${autoPrint ? `<div class="toolbar"><button onclick="window.print()">${esc(tr("Print / Save PDF"))}</button></div><script>window.addEventListener('load',()=>{window.focus();window.print()})</script>` : ""}</body></html>`;
 }

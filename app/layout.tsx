@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { PreferencesProvider } from "./preferences";
 import "@fontsource/poppins/300.css";
 import "@fontsource/poppins/400.css";
 import "@fontsource/poppins/500.css";
@@ -8,6 +9,7 @@ import "./somway.css";
 import "../somway_ui_handoff/src/styles.css";
 import "./somway-handoff-compat.css";
 import "./theme-overrides.css";
+import "./theme-components.css";
 
 // Without this the page has no viewport meta tag at all, so phones lay the
 // site out at ~980px and scale it down: every breakpoint below 980px never
@@ -47,7 +49,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><PreferencesProvider>{children}</PreferencesProvider></body>
     </html>
   );
 }

@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { apiFetch, apiRequest, SESSION_EXPIRED_EVENT } from "./lib/api";
+import { usePreferences, useTranslation, PreferenceControls } from "./preferences";
 import { createPortal } from "react-dom";
 
 // A signed-in session belongs to the tab that established it. Opening the
@@ -901,7 +902,7 @@ type ReceiptData = {
   details: Array<[string, string]>;
 };
 function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
-  const html = buildReceiptHtml(receipt, new URL(logoUrl || "/Som-way2.png", window.location.origin).href, true);
+  const html = buildReceiptHtml(receipt, new URL(logoUrl || "/Som-way2.png", window.location.origin).href, true, { locale: document.documentElement.lang });
   const win = window.open("", "_blank", "width=760,height=900");
   if (win && win.document) {
     // Direct document write: works in the common case and keeps the tab under
@@ -1170,6 +1171,7 @@ function cargoReceiptData(
   };
 }
 function Icon({ name, size = 18 }: { name: string; size?: number }) {
+  const tr = useTranslation();
   return <SomwayIcon name={name} size={size} />;
 
   const paths: Record<string, ReactNode> = {
@@ -1355,6 +1357,7 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
 }
 
 function BrandMark({ className = "" }: { className?: string }) {
+  const tr = useTranslation();
   return (
     <img
       className={`brand-mark ${className}`.trim()}
@@ -1370,6 +1373,7 @@ function BrandLogo({
   className?: string;
   src?: string;
 }) {
+  const tr = useTranslation();
   return (
     <img
       className={`brand-master-logo ${className}`.trim()}
@@ -1397,9 +1401,10 @@ function Field({
   /** Optional helper text shown beneath the control. */
   hint?: string;
 }) {
+  const tr = useTranslation();
   return (
     <label className={`field ${wide ? "wide" : ""}`}>
-      <span>{label}</span>
+      <span>{tr(label)}</span>
       <div className={`field-control${icon ? " has-icon" : ""}`}>
         {icon && (
           <span className={`field-icon tone-${iconTone}`} aria-hidden="true">
@@ -1408,7 +1413,7 @@ function Field({
         )}
         {children}
       </div>
-      {hint && <small className="field-hint">{hint}</small>}
+      {hint && <small className="field-hint">{tr(hint)}</small>}
     </label>
   );
 }
@@ -1429,13 +1434,14 @@ function FormSection({
   tone?: string;
   className?: string;
 }) {
+  const tr = useTranslation();
   return (
     <section className={`form-section ${className}`.trim()}>
       <header className="form-section-head">
         <span className={`form-section-icon tone-${tone}`} aria-hidden="true">
           <Icon name={icon} size={15} />
         </span>
-        <h4>{title}</h4>
+        <h4>{tr(title)}</h4>
       </header>
       <div className="form-grid">{children}</div>
     </section>
@@ -1458,6 +1464,7 @@ function PasswordInput({
   minLength?: number;
   placeholder?: string;
 }) {
+  const tr = useTranslation();
   const [visible, setVisible] = useState(false);
   return (
     <div className="password-field">
@@ -1474,7 +1481,7 @@ function PasswordInput({
       <button
         type="button"
         className="password-toggle"
-        aria-label={visible ? "Hide password" : "Show password"}
+        aria-label={visible ? tr("Hide password") : tr("Show password")}
         onClick={() => setVisible((v) => !v)}
       >
         <Icon name={visible ? "eye-off" : "eye"} size={16} />
@@ -1489,16 +1496,18 @@ function Badge({
   children: ReactNode;
   tone?: "success" | "warning" | "danger" | "blue" | "neutral";
 }) {
-  return <span className={`badge ${tone}`}>{children}</span>;
+  const tr = useTranslation();
+  return <span className={`badge ${tone}`}>{typeof children === "string" ? tr(children) : children}</span>;
 }
 function Empty({ title, detail }: { title: string; detail: string }) {
+  const tr = useTranslation();
   return (
     <div className="empty empty-state">
       <span>
         <Icon name="cargo" size={26} />
       </span>
-      <h3>{title}</h3>
-      <p>{detail}</p>
+      <h3>{tr(title)}</h3>
+      <p>{tr(detail)}</p>
     </div>
   );
 }
@@ -1612,6 +1621,7 @@ function BranchName({
   country?: string;
   className?: string;
 }) {
+  const tr = useTranslation();
   const resolved =
     country || (data ? branchByOffice(data, branch)?.country : undefined);
   return (
@@ -1654,6 +1664,7 @@ function BranchSelect({
    *  to enforce, but dropping the prop silently would be worse. */
   required?: boolean;
 }) {
+  const tr = useTranslation();
   const [open, setOpen] = useState(false);
   const selected = options.find((branch) => branch.id === value);
   const showingAll = Boolean(allLabel) && !selected;
@@ -1678,7 +1689,7 @@ function BranchSelect({
             <span>{allLabel}</span>
           </>
         ) : (
-          <span className="branch-select-placeholder">{placeholder}</span>
+          <span className="branch-select-placeholder">{tr(placeholder)}</span>
         )}
         <Icon name="chevron" size={14} />
       </button>
@@ -1687,7 +1698,7 @@ function BranchSelect({
           <button
             type="button"
             className="notif-scrim"
-            aria-label="Close branch list"
+            aria-label={tr("Close branch list")}
             onClick={() => setOpen(false)}
           />
           <ul className="branch-select-list" role="listbox">
@@ -1706,7 +1717,7 @@ function BranchSelect({
                   <Icon name="building" size={16} />
                   <span>
                     <strong>{allLabel}</strong>
-                    <small>Every branch</small>
+                    <small>{tr("Every branch")}</small>
                   </span>
                 </button>
               </li>
@@ -1742,6 +1753,7 @@ function BranchSelect({
 
 /** The office chip used across registers, receipts and client records. */
 function BranchBadge({ data, office }: { data: AgencyData; office?: string }) {
+  const tr = useTranslation();
   const branch = branchByOffice(data, office);
   return (
     <Badge tone={branch?.country === "Kenya" ? "blue" : "success"}>
@@ -1752,6 +1764,7 @@ function BranchBadge({ data, office }: { data: AgencyData; office?: string }) {
 }
 
 function BranchFlag({ country }: { country?: string }) {
+  const tr = useTranslation();
   const code = COUNTRY_CODES[String(country || "").trim().toLowerCase()];
   if (!code) return null;
   const art = FLAG_ART[code];
@@ -1778,6 +1791,7 @@ function Avatar({
   user: { name: string; avatarUrl?: string };
   className?: string;
 }) {
+  const tr = useTranslation();
   if (user.avatarUrl) {
     return (
       <img
@@ -1839,6 +1853,7 @@ function ProfileModal({
   onSaved: (user: User) => void;
   onClose: () => void;
 }) {
+  const tr = useTranslation();
   const [name, setName] = useState(user.name);
   const [phone, setPhone] = useState(user.phone || "");
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl || "");
@@ -1896,69 +1911,63 @@ function ProfileModal({
   };
 
   return (
-    <Modal title="Your profile" subtitle={`${roleLabel}${branchName ? ` · ${branchName}` : ""}`} onClose={onClose}>
+    <Modal title={tr("Your profile")} subtitle={`${roleLabel}${branchName ? ` · ${branchName}` : ""}`} onClose={onClose}>
       <form className="modal-form" onSubmit={submit}>
-        {error && <p className="form-error">{error}</p>}
+        {error && <p className="form-error">{tr(error)}</p>}
         {notice && <p className="form-notice">{notice}</p>}
         <div className="profile-photo-row">
           <Avatar user={{ name, avatarUrl }} className="profile-photo" />
           <div className="profile-photo-actions">
             <label className="button secondary">
-              {avatarUrl ? "Change photo" : "Upload photo"}
+              {avatarUrl ? tr("Change photo") : tr("Upload photo")}
               <input type="file" accept="image/*" onChange={pickPhoto} hidden />
             </label>
             {avatarUrl && (
-              <button type="button" className="ghost" onClick={() => setAvatarUrl("")}>
-                Remove
-              </button>
+              <button type="button" className="ghost" onClick={() => setAvatarUrl("")}>{tr("Remove")}</button>
             )}
-            <small className="muted">Square images work best.</small>
+            <small className="muted">{tr("Square images work best.")}</small>
           </div>
         </div>
         <div className="form-grid">
-          <Field label="Full name">
+          <Field label={tr("Full name")}>
             <input value={name} onChange={(event) => setName(event.target.value)} required />
           </Field>
-          <Field label="Phone">
+          <Field label={tr("Phone")}>
             <input
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
               placeholder="+252 61 563 3609"
             />
           </Field>
-          <Field label="Username">
+          <Field label={tr("Username")}>
             <input value={user.username} readOnly disabled />
           </Field>
-          <Field label="Role">
+          <Field label={tr("Role")}>
             <input value={roleLabel} readOnly disabled />
           </Field>
         </div>
-        <p className="form-intro">
-          Leave the password fields empty unless you want to change your password.
-        </p>
+        <p className="form-intro">{tr("Leave the password fields empty unless you want to change your password.")}</p>
         <div className="form-grid">
-          <Field label="Current password">
+          <Field label={tr("Current password")}>
             <PasswordInput
               autoComplete="current-password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
             />
           </Field>
-          <Field label="New password">
+          <Field label={tr("New password")}>
             <PasswordInput
               autoComplete="new-password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
-              placeholder="At least 10 characters"
+              placeholder={tr("At least 10 characters")}
             />
           </Field>
         </div>
         <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onClose}>
-            Close
-          </button>
+          <button type="button" className="ghost" onClick={onClose}>{tr("Close")}</button>
           <button type="submit" className="primary" disabled={saving}>
-            {saving ? "Saving…" : "Save profile"}
+            {saving ? tr("Saving…") : tr("Save profile")}
           </button>
         </div>
       </form>
@@ -1991,19 +2000,20 @@ function NotificationsPanel({
   onOpen: (item: Notification) => void;
   onClose: () => void;
 }) {
+  const tr = useTranslation();
   return (
-    <div className="notif-panel" role="dialog" aria-label="Notifications">
+    <div className="notif-panel" role="dialog" aria-label={tr("Notifications")}>
       <div className="notif-head">
-        <strong>Notifications</strong>
-        <button className="text-button" onClick={onClose} aria-label="Close notifications">
+        <strong>{tr("Notifications")}</strong>
+        <button className="text-button" onClick={onClose} aria-label={tr("Close notifications")}>
           <Icon name="x" size={14} />
         </button>
       </div>
       <div className="notif-list">
-        {loading && <p className="notif-empty">Checking your records…</p>}
-        {!loading && error && <p className="notif-empty">{error}</p>}
+        {loading && <p className="notif-empty">{tr("Checking your records…")}</p>}
+        {!loading && error && <p className="notif-empty">{tr(error)}</p>}
         {!loading && !error && !items.length && (
-          <p className="notif-empty">Nothing needs attention right now.</p>
+          <p className="notif-empty">{tr("Nothing needs attention right now.")}</p>
         )}
         {!loading &&
           !error &&
@@ -2036,20 +2046,21 @@ function Modal({
   side?: ReactNode;
   onClose: () => void;
 }) {
+  const tr = useTranslation();
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal-card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-title">
-          <span className="eyebrow">Agency Workspace</span>
-          <h2>{title}</h2>
-          {subtitle && <p>{subtitle}</p>}
+          <span className="eyebrow">{tr("Agency Workspace")}</span>
+          <h2>{tr(title)}</h2>
+          {subtitle && <p>{tr(subtitle)}</p>}
         </div>
         <div className={`modal-grid ${side ? "with-side" : ""}`}>
           <div>{children}</div>
           {side && <aside className="modal-side">{side}</aside>}
         </div>
         <div className="modal-close-wrap">
-          <button className="modal-close" aria-label="Close" onClick={onClose}>
+          <button className="modal-close" aria-label={tr("Close")} onClick={onClose}>
             <Icon name="x" />
             ×
           </button>
@@ -2071,12 +2082,11 @@ function Confirm({
   onClose: () => void;
   confirmLabel?: string;
 }) {
+  const tr = useTranslation();
   return (
     <Modal title={title} subtitle={detail} onClose={onClose}>
       <div className="modal-actions">
-        <button className="button ghost" onClick={onClose}>
-          Cancel
-        </button>
+        <button className="button ghost" onClick={onClose}>{tr("Cancel")}</button>
         <button className="button danger" onClick={onConfirm}>
           {confirmLabel}
         </button>
@@ -2098,18 +2108,19 @@ function PageHeader({
   /** Optional glyph shown beside the title, as the Daily Summary design does. */
   icon?: string;
 }) {
+  const tr = useTranslation();
   return (
     <header className="page-header" data-context={eyebrow}>
       <div>
         <h1>
-          {title}
+          {tr(title)}
           {icon && (
             <i className="page-title-icon" aria-hidden="true">
               <Icon name={icon} size={20} />
             </i>
           )}
         </h1>
-        <p>{detail}</p>
+        <p>{tr(detail)}</p>
       </div>
       {actions && <div className="page-actions">{actions}</div>}
     </header>
@@ -2130,17 +2141,18 @@ function Kpi({
   tone?: string;
   valueClassName?: string;
 }) {
+  const tr = useTranslation();
   return (
     <article className="metric-card card-hover">
       <div className={`metric-icon tone-${tone}`}>
         <Icon name={icon} />
       </div>
       <div className="metric-main">
-        <span className="eyebrow-soft">{label}</span>
+        <span className="eyebrow-soft">{tr(label)}</span>
         <strong className={valueClassName}>{value}</strong>
         <div className="metric-foot">
           <span />
-          <span>{note}</span>
+          <span>{tr(note)}</span>
         </div>
       </div>
     </article>
@@ -2161,13 +2173,14 @@ function MetricCard({
   tone?: string;
   foot?: string;
 }) {
+  const tr = useTranslation();
   return (
     <div className="metric-card card-hover">
       <div className={`metric-icon tone-${tone}`}>
         <Icon name={icon} size={22} />
       </div>
       <div className="metric-main">
-        <span className="eyebrow-soft">{label}</span>
+        <span className="eyebrow-soft">{tr(label)}</span>
         <strong>{value}</strong>
         <div className="metric-foot">
           <span
@@ -2198,13 +2211,14 @@ function Panel({
   children: ReactNode;
   className?: string;
 }) {
+  const tr = useTranslation();
   return (
     <section className={`panel ${className}`.trim()}>
       <div className="panel-head">
         {title && (
           <div>
-            <h3>{title}</h3>
-            {subtitle && <p>{subtitle}</p>}
+            <h3>{tr(title)}</h3>
+            {subtitle && <p>{tr(subtitle)}</p>}
           </div>
         )}
         {actions && <div>{actions}</div>}
@@ -2220,7 +2234,8 @@ function StatusBadge({
   children: ReactNode;
   tone?: "blue" | "green" | "orange" | "red" | "violet" | "cyan" | "gray";
 }) {
-  return <span className={`status-badge status-${tone}`}>{children}</span>;
+  const tr = useTranslation();
+  return <span className={`status-badge status-${tone}`}>{typeof children === "string" ? tr(children) : children}</span>;
 }
 // On phones the registers render as stacked cards instead of a wide table
 // (see the max-width:767px block in somway-handoff-compat.css). Each cell
@@ -2254,12 +2269,13 @@ function DataTable({
   columns: string[];
   rows: ReactNode[][];
 }) {
+  const tr = useTranslation();
   const tableRef = useStackedTableLabels();
   return (
     <div className="table-wrap" ref={tableRef}>
       <table>
         <thead>
-          <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
+          <tr>{columns.map((column) => <th key={column}>{tr(column)}</th>)}</tr>
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
@@ -2342,6 +2358,7 @@ function BarChart({
   showAxis?: boolean;
   axisLabel?: string;
 }) {
+  const tr = useTranslation();
   const max = Math.max(...values, 1);
   // Round the top of the scale up to a readable step so ticks land on whole numbers.
   const step = Math.pow(10, Math.floor(Math.log10(max)));
@@ -2355,9 +2372,9 @@ function BarChart({
         </div>
       )}
       {values.map((value, index) => (
-        <div className="bar-group" key={`${labels[index]}-${index}`}>
+        <div className="bar-group" key={`${tr(labels[index])}-${index}`}>
           <div className="bar-stack"><i style={{ height: `${Math.max(3, (value / niceMax) * 100)}%` }} /></div>
-          <span>{labels[index]}</span>
+          <span>{tr(labels[index])}</span>
         </div>
       ))}
     </div>
@@ -2366,7 +2383,7 @@ function BarChart({
   if (!showAxis) return bars;
 
   return (
-    <div className="bar-chart-wrap" role="img" aria-label={axisLabel || "Bar chart"}>
+    <div className="bar-chart-wrap" role="img" aria-label={axisLabel || tr("Bar chart")}>
       <div className="bar-chart-axis" aria-hidden="true">
         {ticks.map((tick) => <span key={tick}>{compactTick(tick)}</span>)}
       </div>
@@ -2386,6 +2403,7 @@ function Donut({
   /** Shows the share above the amount on two lines, as the reference does. */
   detailed?: boolean;
 }) {
+  const tr = useTranslation();
   const stops = segments.reduce(
     (result, segment) => {
       const start = result.accumulated;
@@ -2400,13 +2418,13 @@ function Donut({
   return (
     <div className="donut-wrap">
       <div className="donut" style={{ background: `conic-gradient(${stops})` }}>
-        <div><strong>{total}</strong><span>{centerLabel || "Total"}</span></div>
+        <div><strong>{total}</strong><span>{centerLabel || tr("Total")}</span></div>
       </div>
       <div className={detailed ? "legend legend-detailed" : "legend"}>
         {segments.map((segment) => (
           <div key={segment.label}>
             <i style={{ background: segment.color }} />
-            <span>{segment.label}</span>
+            <span>{tr(segment.label)}</span>
             {detailed ? (
               <b>
                 {segment.value.toFixed(1)}%<em>{segment.amount}</em>
@@ -2437,6 +2455,7 @@ function Toolbar({
   allowAll?: boolean;
   showBranch?: boolean;
 }) {
+  const tr = useTranslation();
   return (
     <div className="toolbar filter-row">
       <label className="search-box search-field">
@@ -2444,16 +2463,16 @@ function Toolbar({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search records…"
+          placeholder={tr("Search records…")}
         />
       </label>
       {showBranch && (
         <label className="filter-field">
-          <span>Branch</span>
+          <span>{tr("Branch")}</span>
           <div>
             <Icon name="building" size={16} />
             <select value={office} onChange={(e) => setOffice(e.target.value)}>
-              {allowAll && <option value="All">All Branches</option>}
+              {allowAll && <option value="All">{tr("All Branches")}</option>}
               {branches.map((branch) => (
                 <option key={branch.id} value={branch.name}>
                   {branch.name}
@@ -2480,17 +2499,16 @@ function Actions({
   paymentLabel?: string;
   refundAction?: ReactNode;
 }) {
+  const tr = useTranslation();
   return (
     <div className="row-actions action-group">
       {refundAction}
       {onPayment && (
-        <button type="button" className="small-icon payment-action" title={paymentLabel} onClick={onPayment}>
-          Pay
-        </button>
+        <button type="button" className="small-icon payment-action" title={paymentLabel} onClick={onPayment}>{tr("Pay")}</button>
       )}
       <button
         className="small-icon edit-action"
-        aria-label="Edit"
+        aria-label={tr("Edit")}
         onClick={onEdit}
       >
         <Icon name="edit" size={16} />
@@ -2498,7 +2516,7 @@ function Actions({
       {onDelete && (
         <button
           className="small-icon delete-action"
-          aria-label="Delete"
+          aria-label={tr("Delete")}
           onClick={onDelete}
         >
           <Icon name="trash" size={16} />
@@ -2516,6 +2534,7 @@ function TableShell({
    *  instead of one field per row. */
   className?: string;
 }) {
+  const tr = useTranslation();
   const tableRef = useStackedTableLabels();
   return (
     <div className={`table-wrap ${className}`.trim()} ref={tableRef}>
@@ -2536,6 +2555,7 @@ type RecordCell = {
   hide?: boolean;
 };
 function RecordList({ children }: { children: ReactNode }) {
+  const tr = useTranslation();
   return <div className="record-list">{children}</div>;
 }
 function RecordCard({
@@ -2557,6 +2577,7 @@ function RecordCard({
   actions?: ReactNode;
   defaultOpen?: boolean;
 }) {
+  const tr = useTranslation();
   const [open, setOpen] = useState(defaultOpen);
   const shownCells = cells.filter((cell) => !cell.hide);
   const shownDetails = details.filter((detail) => !detail.hide);
@@ -2584,7 +2605,7 @@ function RecordCard({
         <div className="record-cells">
           {shownCells.map((cell, index) => (
             <div className="record-cell" key={`${cell.label}-${index}`}>
-              <span className="record-cell-label">{cell.label}</span>
+              <span className="record-cell-label">{tr(cell.label)}</span>
               <span
                 className={`record-cell-value${cell.strong ? " strong" : ""}`}
               >
@@ -2601,18 +2622,18 @@ function RecordCard({
           onClick={() => setOpen(true)}
         >
           <Icon name="eye" size={15} />
-          <span>View</span>
+          <span>{tr("View")}</span>
         </button>
       </div>
       {open && typeof document !== "undefined" && createPortal(
         <div className="record-modal-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
-          <div className="record-modal" role="dialog" aria-modal="true" aria-label="Record details" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="record-modal" role="dialog" aria-modal="true" aria-label={tr("Record details")} onMouseDown={(event) => event.stopPropagation()}>
             <div className="record-modal-header">
               <div>
                 <div className="record-modal-title">{title}</div>
                 {subtitle && <small className="record-subtitle">{subtitle}</small>}
               </div>
-              <button type="button" className="record-modal-close" aria-label="Close details" onClick={() => setOpen(false)}>
+              <button type="button" className="record-modal-close" aria-label={tr("Close details")} onClick={() => setOpen(false)}>
                 <Icon name="x" size={18} />
               </button>
             </div>
@@ -2621,7 +2642,7 @@ function RecordCard({
               <div className="record-detail-grid">
                 {shownDetails.map((detail, index) => (
                   <div className="record-detail" key={`${detail.label}-${index}`}>
-                    <span className="record-detail-label">{detail.label}</span>
+                    <span className="record-detail-label">{tr(detail.label)}</span>
                     <span className="record-detail-value">{detail.value}</span>
                   </div>
                 ))}
@@ -2662,6 +2683,7 @@ function CancellationRefundAction({ type, record, data, onSaved }: {
   data: AgencyData;
   onSaved: (data: AgencyData) => void;
 }) {
+  const tr = useTranslation();
   const [open, setOpen] = useState(false);
   const available = refundAvailable(data, type, record);
   if (available <= 0) return null;
@@ -2669,11 +2691,11 @@ function CancellationRefundAction({ type, record, data, onSaved }: {
     <button
       type="button"
       className="refund-action"
-      title={`Refund ${money(available, record.currency)} to the customer`}
+      title={tr("Refund {0} to the customer", [money(available, record.currency)])}
       onClick={() => setOpen(true)}
     >
       <Icon name="wallet" size={14} />
-      <span>Refund {money(available, record.currency)}</span>
+      <span>{tr("Refund")}{" "}{money(available, record.currency)}</span>
     </button>
     {open && <CustomerPaymentForm transactionType={type} transactionId={record.id}
       label={record.ref || record.tracking || record.id} branchId={String(record.paidByBranchId || record.branchId || record.originBranchId || "")}
@@ -2715,6 +2737,7 @@ function CustomerPaymentForm({
   onClose: () => void;
   onSaved: (data: AgencyData) => void;
 }) {
+  const tr = useTranslation();
   const methods = paymentMethodsFor(data, branchId, currency);
   const [form, setForm] = useState({
     amount: String(balance || ""),
@@ -2760,26 +2783,26 @@ function CustomerPaymentForm({
   };
   return (
     <Modal
-      title={isRefund ? "Record Refund" : "Record Payment"}
-      subtitle={`${label} / Remaining ${money(balance, currency)}`}
+      title={isRefund ? tr("Record Refund") : tr("Record Payment")}
+      subtitle={tr("{0} / Remaining {1}", [label, money(balance, currency)])}
       onClose={onClose}
     >
       <form className={`modal-form ${cancellationRefund ? "refund-modal-form" : ""}`} onSubmit={submit}>
-        {error && <p className="form-error">{error}</p>}
-        {cancellationRefund && <p className="refund-modal-note">Record this after returning the money to the customer. This records the outgoing refund in the agency ledger.</p>}
+        {error && <p className="form-error">{tr(error)}</p>}
+        {cancellationRefund && <p className="refund-modal-note">{tr("Record this after returning the money to the customer. This records the outgoing refund in the agency ledger.")}</p>}
         {!isRefund && (
           <dl className="payment-summary">
-            <div><dt>Customer</dt><dd>{customer || label}</dd></div>
-            <div><dt>Service</dt><dd>{service || transactionType}</dd></div>
-            <div><dt>Reference</dt><dd>{label}</dd></div>
-            <div><dt>Total Charge</dt><dd>{money(totalCharge ?? balance, currency)}</dd></div>
-            <div><dt>Previously Paid</dt><dd>{money(amountPaid || 0, currency)}</dd></div>
-            <div><dt>Remaining Balance</dt><dd>{money(balance, currency)}</dd></div>
-            <div><dt>Payment Branch</dt><dd>{branchById(data, branchId)?.name || "Assigned branch"}</dd></div>
+            <div><dt>{tr("Customer")}</dt><dd>{customer || label}</dd></div>
+            <div><dt>{tr("Service")}</dt><dd>{service || transactionType}</dd></div>
+            <div><dt>{tr("Reference")}</dt><dd>{label}</dd></div>
+            <div><dt>{tr("Total Charge")}</dt><dd>{money(totalCharge ?? balance, currency)}</dd></div>
+            <div><dt>{tr("Previously Paid")}</dt><dd>{money(amountPaid || 0, currency)}</dd></div>
+            <div><dt>{tr("Remaining Balance")}</dt><dd>{money(balance, currency)}</dd></div>
+            <div><dt>{tr("Payment Branch")}</dt><dd>{branchById(data, branchId)?.name || tr("Assigned branch")}</dd></div>
           </dl>
         )}
         <div className="form-grid">
-          <Field label={isRefund ? "Refund amount" : "Amount received"}>
+          <Field label={isRefund ? tr("Refund amount") : tr("Amount received")}>
             <input
               required
               min="0.01"
@@ -2793,12 +2816,11 @@ function CustomerPaymentForm({
               }
             />
             {!isRefund && (
-              <small className="field-hint">
-                Remaining after this payment: {money(Math.max(0, balance - (Number(form.amount) || 0)), currency)}
+              <small className="field-hint">{tr("Remaining after this payment:")}{" "}{money(Math.max(0, balance - (Number(form.amount) || 0)), currency)}
               </small>
             )}
           </Field>
-          <Field label={isRefund ? "Refund date" : "Payment date"}>
+          <Field label={isRefund ? tr("Refund date") : tr("Payment date")}>
             <input
               required
               type="date"
@@ -2808,7 +2830,7 @@ function CustomerPaymentForm({
               }
             />
           </Field>
-          <Field label="Payment method">
+          <Field label={tr("Payment method")}>
             <select
               required
               value={form.paymentMethod}
@@ -2820,11 +2842,11 @@ function CustomerPaymentForm({
               }
             >
               {methods.map((method) => (
-                <option key={method}>{method}</option>
+                <option key={method} value={method}>{tr(method)}</option>
               ))}
             </select>
           </Field>
-          <Field label="Reference">
+          <Field label={tr("Reference")}>
             <input
               value={form.reference}
               onChange={(event) =>
@@ -2832,7 +2854,7 @@ function CustomerPaymentForm({
               }
             />
           </Field>
-          <Field label="Notes" wide>
+          <Field label={tr("Notes")} wide>
             <textarea
               value={form.notes}
               onChange={(event) =>
@@ -2842,16 +2864,14 @@ function CustomerPaymentForm({
           </Field>
         </div>
         <div className={`modal-actions ${cancellationRefund ? "refund-modal-actions" : ""}`}>
-          <button type="button" className="button ghost refund-cancel-button" onClick={onClose}>
-            Close
-          </button>
+          <button type="button" className="button ghost refund-cancel-button" onClick={onClose}>{tr("Close")}</button>
           <button
             className={`button primary ${cancellationRefund ? "refund-submit-button" : ""}`}
             disabled={
               busy || Number(form.amount) <= 0 || Number(form.amount) > balance
             }
           >
-            {busy ? "Saving..." : isRefund ? "Refund customer" : "Record Payment"}
+            {busy ? tr("Saving...") : isRefund ? tr("Refund customer") : tr("Record Payment")}
           </button>
         </div>
       </form>
@@ -2907,6 +2927,7 @@ function changedEntity(
 }
 
 export default function Home() {
+  const tr = useTranslation();
   const [data, setData] = useState<AgencyData>(emptyData);
   const dataRef = useRef<AgencyData>(emptyData);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -2927,8 +2948,8 @@ export default function Home() {
   const [seenAlerts, setSeenAlerts] = useState<string[]>([]);
   const [accountOpen, setAccountOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [locale, setLocale] = useState<Locale>("en");
-  const [theme, setTheme] = useState<ThemeMode>("light");
+  const { locale, setLocale, theme, setTheme } = usePreferences();
+
   // Toasts carry a tone: a failed save used to render with the same green
   // tick as a success, so an error read as confirmation. Errors also stay
   // on screen longer and can be dismissed, because they need reading.
@@ -2944,20 +2965,7 @@ export default function Home() {
     "Financial Reports": "Warbixinta maaliyadeed", "Accounts Payable": "Deynta la bixinayo", "Activity Log": "Diiwaanka hawsha",
     "Team & Roles": "Kooxda iyo doorarka", Settings: "Dejinta"
   } : {};
-  const label = (text: string) => (ui as Record<string, string>)[text] || text;
-  useEffect(() => {
-    try {
-      const savedLocale = localStorage.getItem("somway-locale");
-      const savedTheme = localStorage.getItem("somway-theme");
-      if (savedLocale === "en" || savedLocale === "so") setLocale(savedLocale);
-      if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
-    } catch {}
-  }, []);
-  useEffect(() => {
-    document.documentElement.lang = locale;
-    document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem("somway-locale", locale); localStorage.setItem("somway-theme", theme); } catch {}
-  }, [locale, theme]);
+  const label = (text: string) => tr(text);
   const applyData = (source: Partial<AgencyData>) => {
     const next = syncClients({ ...emptyData, ...source });
     dataRef.current = next;
@@ -3166,17 +3174,17 @@ export default function Home() {
     window.addEventListener("focus", check);
     return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", check); };
   }, [portalPath, publicLanding]);
-  if (routeUnavailable) return <AuthMessage title="Access link unavailable" detail="This operator link is no longer active. Ask the Owner for the current login URL." />;
+  if (routeUnavailable) return <AuthMessage title={tr("Access link unavailable")} detail={tr("This operator link is no longer active. Ask the Owner for the current login URL.")} />;
   if (!ready)
     return (
       <main className="loading-screen">
         <BrandLogo className="loading-brand-logo" src="/Som-way2.png" />
-        <p>Preparing your agency workspace…</p>
+        <p>{tr("Preparing your agency workspace…")}</p>
       </main>
     );
   if (publicLanding) return <Landing />;
   if (loadError && !user)
-    return <AuthMessage title="Access unavailable" detail={loadError} />;
+    return <AuthMessage title={tr("Access unavailable")} detail={loadError} />;
   if (!user)
     return (
       <Login
@@ -3350,21 +3358,21 @@ export default function Home() {
               }}
             >
               <Icon name={item.icon} />
-              <span>{item.label}</span>
+              <span>{tr(item.label)}</span>
               {page === item.page && <i />}
             </button>
           ))}
         </nav>
         <div className="sidebar-promo">
-          <span>Delivering journeys.</span>
-          <strong>Connecting possibilities.</strong>
+          <span>{tr("Delivering journeys.")}</span>
+          <strong>{tr("Connecting possibilities.")}</strong>
           <Icon name="plane" size={48} />
-          <a href="#top">View Company Profile</a>
+          <a href="#top">{tr("View Company Profile")}</a>
         </div>
         <div className="sidebar-user sidebar-footer">
           <button
             className="sidebar-profile"
-            aria-label="Open your profile"
+            aria-label={tr("Open your profile")}
             onClick={() => {
               setProfileOpen(true);
               setMobileNav(false);
@@ -3373,11 +3381,11 @@ export default function Home() {
             <Avatar user={user} className="user-avatar" />
             <span>
               <strong>{user.name}</strong>
-              <span>{roleLabel[user.role]}</span>
+              <span>{tr(roleLabel[user.role])}</span>
             </span>
           </button>
           <button
-            aria-label="Sign out"
+            aria-label={tr("Sign out")}
             onClick={async () => {
               await fetch("/api/auth/logout", { method: "POST" });
               clearTabSession();
@@ -3392,7 +3400,7 @@ export default function Home() {
       {mobileNav && (
         <button
           className="nav-scrim"
-          aria-label="Close navigation"
+          aria-label={tr("Close navigation")}
           onClick={() => setMobileNav(false)}
         />
       )}
@@ -3400,7 +3408,7 @@ export default function Home() {
         <header className="topbar">
           <button
             className="mobile-menu shell-menu"
-            aria-label="Toggle navigation"
+            aria-label={tr("Toggle navigation")}
             onClick={() => {
               // Below 1280px the sidebar is an overlay drawer closed by the
               // scrim; at desktop widths it is a grid column we collapse.
@@ -3416,10 +3424,10 @@ export default function Home() {
           <div className="workspace topbar-workspace workspace-context">
             <span className="office-pulse" />
             <span>
-              <strong>{roleLabel[user.role]} Workspace</strong>
+              <strong>{tr(roleLabel[user.role])}{" "}{tr("Workspace")}</strong>
               <small>
                 {page === "overview"
-                  ? "Live travel and logistics overview"
+                  ? tr("Live travel and logistics overview")
                   : nav.find((item) => item.page === page)?.label}
               </small>
             </span>
@@ -3436,9 +3444,9 @@ export default function Home() {
                 <select
                   value={overviewBranchId}
                   onChange={(event) => setOverviewBranchId(event.target.value)}
-                  aria-label="Branch scope"
+                  aria-label={tr("Branch scope")}
                 >
-                  <option value="">All Branches</option>
+                  <option value="">{tr("All Branches")}</option>
                   {branchOptions(data, user).map((branch) => (
                     <option key={branch.id} value={branch.id}>
                       {branch.name}
@@ -3450,7 +3458,7 @@ export default function Home() {
             ) : (
               <span className="topbar-filter topbar-context">
                 <Icon name="building" size={16} />
-                {branchForUser(data, user)?.name || "All Branches"}
+                {branchForUser(data, user)?.name || tr("All Branches")}
               </span>
             )}
             {/* The date range only governs the overview. Every other screen owns
@@ -3459,33 +3467,33 @@ export default function Home() {
               <label className="topbar-filter topbar-control topbar-date-control">
                 <Icon name="calendar" size={16} />
                 <input
-                  aria-label="Overview start date"
+                  aria-label={tr("Overview start date")}
                   type="date"
                   value={overviewFrom}
                   onChange={(event) => setOverviewFrom(event.target.value)}
                 />
-                <span>to</span>
+                <span>{tr("to")}</span>
                 <input
-                  aria-label="Overview end date"
+                  aria-label={tr("Overview end date")}
                   type="date"
                   value={overviewTo}
                   onChange={(event) => setOverviewTo(event.target.value)}
                 />
               </label>
             )}
-            <div className="workspace-preferences" aria-label="Workspace preferences">
-              <div className="top-preference" role="group" aria-label="Language">
-                <button type="button" className={locale === "en" ? "selected" : ""} onClick={() => setLocale("en")} aria-label="Use English">EN</button>
-                <button type="button" className={locale === "so" ? "selected" : ""} onClick={() => setLocale("so")} aria-label="Use Somali">SO</button>
+            <div className="workspace-preferences" aria-label={tr("Workspace preferences")}>
+              <div className="top-preference" role="group" aria-label={tr("Language")}>
+                <button type="button" className={locale === "en" ? "selected" : ""} onClick={() => setLocale("en")} aria-label={tr("Use English")}>{tr("EN")}</button>
+                <button type="button" className={locale === "so" ? "selected" : ""} onClick={() => setLocale("so")} aria-label={tr("Use Somali")}>{tr("SO")}</button>
               </div>
-              <button type="button" className="theme-button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}>
+              <button type="button" className="theme-button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label={tr("Switch to {0} mode", [theme === "light" ? "dark" : "light"])}>
                 {theme === "light" ? "☾" : "☀"}
               </button>
             </div>
             <div className="notif-anchor">
               <button
                 className="icon-btn"
-                aria-label={`Notifications${unseenCount ? `, ${unseenCount} needing attention` : ""}`}
+                aria-label={tr("Notifications{0}", [unseenCount ? `, ${unseenCount} needing attention` : ""])}
                 aria-expanded={notifOpen}
                 onClick={() => {
                   setAccountOpen(false);
@@ -3503,7 +3511,7 @@ export default function Home() {
             <div className="account-anchor">
               <button
                 className="account-button"
-                aria-label={`Account menu for ${user.name}`}
+                aria-label={tr("Account menu for {0}", [user.name])}
                 aria-expanded={accountOpen}
                 onClick={() => {
                   setNotifOpen(false);
@@ -3525,7 +3533,7 @@ export default function Home() {
       {(notifOpen || accountOpen) && (
         <button
           className="notif-scrim"
-          aria-label="Close menu"
+          aria-label={tr("Close menu")}
           onClick={() => {
             setNotifOpen(false);
             setAccountOpen(false);
@@ -3565,7 +3573,7 @@ export default function Home() {
             <Avatar user={user} />
             <span>
               <strong>{user.name}</strong>
-              <span>{roleLabel[user.role]}</span>
+              <span>{tr(roleLabel[user.role])}</span>
             </span>
           </button>
           <button
@@ -3575,25 +3583,21 @@ export default function Home() {
               setProfileOpen(true);
             }}
           >
-            <Icon name="user" size={15} />
-            Profile
-          </button>
+            <Icon name="user" size={15} />{tr("Profile")}</button>
           <a className="account-action" href="/">
-            <Icon name="plane" size={15} />
-            Public website
-          </a>
+            <Icon name="plane" size={15} />{tr("Public website")}</a>
           <div className="account-preference">
-            <span>Language</span>
-            <div className="preference-toggle" role="group" aria-label="Language">
-              <button type="button" className={locale === "en" ? "selected" : ""} onClick={() => setLocale("en")}>English</button>
-              <button type="button" className={locale === "so" ? "selected" : ""} onClick={() => setLocale("so")}>Soomaali</button>
+            <span>{tr("Language")}</span>
+            <div className="preference-toggle" role="group" aria-label={tr("Language")}>
+              <button type="button" className={locale === "en" ? "selected" : ""} onClick={() => setLocale("en")}>{tr("English")}</button>
+              <button type="button" className={locale === "so" ? "selected" : ""} onClick={() => setLocale("so")}>{tr("Soomaali")}</button>
             </div>
           </div>
           <div className="account-preference">
-            <span>Appearance</span>
-            <div className="preference-toggle" role="group" aria-label="Appearance">
-              <button type="button" className={theme === "light" ? "selected" : ""} onClick={() => setTheme("light")}>Light</button>
-              <button type="button" className={theme === "dark" ? "selected" : ""} onClick={() => setTheme("dark")}>Dark</button>
+            <span>{tr("Appearance")}</span>
+            <div className="preference-toggle" role="group" aria-label={tr("Appearance")}>
+              <button type="button" className={theme === "light" ? "selected" : ""} onClick={() => setTheme("light")}>{tr("Light")}</button>
+              <button type="button" className={theme === "dark" ? "selected" : ""} onClick={() => setTheme("dark")}>{tr("Dark")}</button>
             </div>
           </div>
           <button
@@ -3605,9 +3609,7 @@ export default function Home() {
                 portalPath === "/admin" ? "/admin" : portalPath;
             }}
           >
-            <Icon name="logout" size={15} />
-            Sign out
-          </button>
+            <Icon name="logout" size={15} />{tr("Sign out")}</button>
         </div>
       )}
       {profileOpen && (
@@ -3622,11 +3624,11 @@ export default function Home() {
       {toast && createPortal(
         <div className={`toast workspace-notification toast-${toastTone}`} role={toastTone === "error" ? "alert" : "status"} aria-atomic="true">
           <Icon name={toastTone === "error" ? "alert" : "check"} size={16} />
-          <span>{toast}</span>
+          <span>{tr(toast)}</span>
           <button
             type="button"
             className="toast-close"
-            aria-label="Dismiss"
+            aria-label={tr("Dismiss")}
             onClick={() => setToast("")}
           >
             <Icon name="x" size={13} />
@@ -3639,6 +3641,7 @@ export default function Home() {
 }
 
 function Landing() {
+  const tr = useTranslation();
   const [trackingKind, setTrackingKind] = useState<"cargo" | "visa">("cargo");
   const [tracking, setTracking] = useState("");
   const [found, setFound] = useState<{
@@ -3683,18 +3686,19 @@ function Landing() {
   ];
   return (
     <main className="public-page">
-      <nav className="public-nav" aria-label="Public navigation">
-        <a className="public-logo-lockup" href="#home" aria-label="SomWay home">
+      <nav className="public-nav" aria-label={tr("Public navigation")}>
+        <PreferenceControls />
+        <a className="public-logo-lockup" href="#home" aria-label={tr("SomWay home")}>
           <BrandLogo className="public-header-logo" />
         </a>
         <div className="public-links">
-          <a className="active" href="#home">Home</a>
-          <a href="#services">Services</a>
-          <a href="#tracking">Cargo Tracking</a>
-          <a href="#tracking">Visa Tracking</a>
-          <a href="#branches">Branches</a>
-          <a href="#contact">Contact</a>
-          <a className="button primary" href="#tracking"><Icon name="box" /> Track Shipment</a>
+          <a className="active" href="#home">{tr("Home")}</a>
+          <a href="#services">{tr("Services")}</a>
+          <a href="#tracking">{tr("Cargo Tracking")}</a>
+          <a href="#tracking">{tr("Visa Tracking")}</a>
+          <a href="#branches">{tr("Branches")}</a>
+          <a href="#contact">{tr("Contact")}</a>
+          <a className="button primary" href="#tracking"><Icon name="box" />{tr("Track Shipment")}</a>
         </div>
       </nav>
 
@@ -3702,21 +3706,21 @@ function Landing() {
         <img className="hero-media" src="/macruf-general-hero.png" alt="Passenger aircraft and professionally handled air cargo" />
         <div className="hero-shade" />
         <div className="hero-copy">
-          <span className="chip">Welcome to SomWay</span>
-          <h1>Your trusted partner for <span>travel, cargo and visa</span> services.</h1>
-          <p>From air ticketing to secure cargo shipping and visa processing, SomWay connects Nairobi and Mogadishu with fast, reliable and professional service.</p>
+          <span className="chip">{tr("Welcome to SomWay")}</span>
+          <h1>{tr("Your trusted partner for")}<span>{tr("travel, cargo and visa")}</span>{tr("services.")}</h1>
+          <p>{tr("From air ticketing to secure cargo shipping and visa processing, SomWay connects Nairobi and Mogadishu with fast, reliable and professional service.")}</p>
           <div className="hero-actions">
-            <a className="button primary" href="#tracking"><Icon name="box" /> Track Cargo</a>
-            <a className="button secondary" href="#tracking"><Icon name="passport" /> Track Visa</a>
+            <a className="button primary" href="#tracking"><Icon name="box" />{tr("Track Cargo")}</a>
+            <a className="button secondary" href="#tracking"><Icon name="passport" />{tr("Track Visa")}</a>
           </div>
           <div className="trust-chips">
-            <span>Fast &amp; Reliable</span><span>Secure Handling</span><span>Real-time Tracking</span><span>Customer Support</span>
+            <span>{tr("Fast & Reliable")}</span><span>{tr("Secure Handling")}</span><span>{tr("Real-time Tracking")}</span><span>{tr("Customer Support")}</span>
           </div>
         </div>
       </section>
 
       <section className="public-section" id="services">
-        <div className="section-title"><h2>Our Services</h2><p>Professional solutions for travel, cargo and visa needs.</p></div>
+        <div className="section-title"><h2>{tr("Our Services")}</h2><p>{tr("Professional solutions for travel, cargo and visa needs.")}</p></div>
         <div className="services-grid">
           {services.map(([icon, title, copy, action, href]) => (
             <article className="service-card" key={title}>
@@ -3730,43 +3734,43 @@ function Landing() {
 
       <section className="tracking-public" id="tracking">
         <div className="panel-head public-tracking-head">
-          <div><h3>Tracking Centre</h3><p>Track cargo shipments and visa applications using your SomWay reference.</p></div>
+          <div><h3>{tr("Tracking Centre")}</h3><p>{tr("Track cargo shipments and visa applications using your SomWay reference.")}</p></div>
           <div className="subtabs">
-            <button type="button" className={trackingKind === "cargo" ? "active" : ""} onClick={() => selectTrackingKind("cargo")}>Cargo Shipment</button>
-            <button type="button" className={trackingKind === "visa" ? "active" : ""} onClick={() => selectTrackingKind("visa")}>Visa Application</button>
+            <button type="button" className={trackingKind === "cargo" ? "active" : ""} onClick={() => selectTrackingKind("cargo")}>{tr("Cargo Shipment")}</button>
+            <button type="button" className={trackingKind === "visa" ? "active" : ""} onClick={() => selectTrackingKind("visa")}>{tr("Visa Application")}</button>
           </div>
         </div>
         <form className="public-tracking-form" onSubmit={lookup}>
           <label className="search-field">
             <Icon name="search" />
             <input
-              aria-label={trackingKind === "cargo" ? "Cargo tracking number" : "Visa application reference"}
+              aria-label={trackingKind === "cargo" ? tr("Cargo tracking number") : tr("Visa application reference")}
               value={tracking}
               onChange={(event) => { setTracking(event.target.value); setTrackStatus("idle"); }}
-              placeholder={trackingKind === "cargo" ? "Enter cargo tracking number" : "Enter visa application reference"}
+              placeholder={trackingKind === "cargo" ? tr("Enter cargo tracking number") : tr("Enter visa application reference")}
             />
           </label>
           <button className="button primary" disabled={trackStatus === "loading"} type="submit">
-            {trackStatus === "loading" ? "Checking..." : "Search"}
+            {trackStatus === "loading" ? tr("Checking...") : tr("Search")}
           </button>
         </form>
         <div className="public-result" aria-live="polite">
-          {trackStatus === "idle" && <p>Use the complete reference printed on your SomWay receipt.</p>}
-          {trackStatus === "not-found" && <p>No matching record was found. Check the reference and try again.</p>}
-          {trackStatus === "error" && <p>Tracking is temporarily unavailable. Please contact SomWay for assistance.</p>}
+          {trackStatus === "idle" && <p>{tr("Use the complete reference printed on your SomWay receipt.")}</p>}
+          {trackStatus === "not-found" && <p>{tr("No matching record was found. Check the reference and try again.")}</p>}
+          {trackStatus === "error" && <p>{tr("Tracking is temporarily unavailable. Please contact SomWay for assistance.")}</p>}
           {trackStatus === "ready" && found && (
             <div className="public-result-grid">
-              <div><span>Reference</span><strong>{found.reference}</strong></div>
-              <div><span>{found.kind === "cargo" ? "Route" : "Destination"}</span><strong>{found.kind === "cargo" ? `${found.origin} to ${found.destination}` : found.destination}</strong></div>
-              <div><span>Status</span><strong>{serviceStatusLabel(found.status)}</strong></div>
-              <div><span>Date</span><strong>{dateLabel(found.date)}</strong></div>
+              <div><span>{tr("Reference")}</span><strong>{found.reference}</strong></div>
+              <div><span>{found.kind === "cargo" ? tr("Route") : tr("Destination")}</span><strong>{found.kind === "cargo" ? tr("{0} to {1}", [found.origin, found.destination]) : found.destination}</strong></div>
+              <div><span>{tr("Status")}</span><strong>{tr(serviceStatusLabel(found.status))}</strong></div>
+              <div><span>{tr("Date")}</span><strong>{dateLabel(found.date)}</strong></div>
             </div>
           )}
         </div>
       </section>
 
       <section className="public-section" id="branches">
-        <div className="section-title"><h2>Our Branches</h2><p>Visit or contact SomWay in Nairobi or Mogadishu.</p></div>
+        <div className="section-title"><h2>{tr("Our Branches")}</h2><p>{tr("Visit or contact SomWay in Nairobi or Mogadishu.")}</p></div>
         <div className="public-branches">
           {/* Each branch carries its own city artwork. Replacing the file in
               /public with a photograph of the office keeps the same path. */}
@@ -3785,8 +3789,8 @@ function Landing() {
             ],
           ].map(([city, address, phone, image]) => (
             <article className="branch-card" key={city}>
-              <div><h3><BranchName country={address.split(", ")[1]} branch={city} /></h3><p>{address}</p><p>{phone}<br />support@somway.com</p>
-                <div className="subtabs"><a href={`tel:${phone.replace(/\s/g, "")}`}>Call</a><a href="#contact">WhatsApp</a><a href="mailto:support@somway.com">Email</a></div>
+              <div><h3><BranchName country={address.split(", ")[1]} branch={city} /></h3><p>{address}</p><p>{phone}<br />{tr("support@somway.com")}</p>
+                <div className="subtabs"><a href={`tel:${phone.replace(/\s/g, "")}`}>{tr("Call")}</a><a href="#contact">{tr("WhatsApp")}</a><a href="mailto:support@somway.com">{tr("Email")}</a></div>
               </div>
               <img className="image" src={image} alt={`${address} branch`} loading="lazy" />
             </article>
@@ -3796,29 +3800,24 @@ function Landing() {
 
       <section className="public-section" id="contact">
         <div className="contact-grid">
-          <div className="contact-card"><h3>Get in Touch</h3><p>Our team can help with tickets, visas and cargo.</p><div className="stack public-contact-list"><span><Icon name="phone" /> +252 61 563 3609</span><span><Icon name="mail" /> support@somway.com</span><span><Icon name="clock" /> Sat-Thu, 8:00 AM-6:00 PM</span></div></div>
-          <div className="contact-card public-contact-copy"><h3>Travel and logistics, coordinated with care.</h3><p>Tell us which service you need and the SomWay team will guide you through the next step.</p><a className="button primary" href="mailto:support@somway.com"><Icon name="mail" /> Email SomWay</a></div>
-          <div className="contact-card whatsapp"><Icon name="headset" size={52} /><div><h3>Need immediate help?</h3><p>Chat with our support team on WhatsApp.</p></div><a className="button secondary" href="https://wa.me/252615633609" target="_blank" rel="noreferrer"><Icon name="phone" /> Chat on WhatsApp</a></div>
+          <div className="contact-card"><h3>{tr("Get in Touch")}</h3><p>{tr("Our team can help with tickets, visas and cargo.")}</p><div className="stack public-contact-list"><span><Icon name="phone" /> +252 61 563 3609</span><span><Icon name="mail" />{tr("support@somway.com")}</span><span><Icon name="clock" />{tr("Sat-Thu, 8:00 AM-6:00 PM")}</span></div></div>
+          <div className="contact-card public-contact-copy"><h3>{tr("Travel and logistics, coordinated with care.")}</h3><p>{tr("Tell us which service you need and the SomWay team will guide you through the next step.")}</p><a className="button primary" href="mailto:support@somway.com"><Icon name="mail" />{tr("Email SomWay")}</a></div>
+          <div className="contact-card whatsapp"><Icon name="headset" size={52} /><div><h3>{tr("Need immediate help?")}</h3><p>{tr("Chat with our support team on WhatsApp.")}</p></div><a className="button secondary" href="https://wa.me/252615633609" target="_blank" rel="noreferrer"><Icon name="phone" />{tr("Chat on WhatsApp")}</a></div>
         </div>
       </section>
 
       <footer className="public-footer">
-        <div className="public-footer-brand"><div className="public-logo-lockup"><BrandLogo className="public-footer-logo" /></div><p>Your trusted partner for travel, cargo and visa services.</p></div>
-        <div><h4>Quick Links</h4><a href="#home">Home</a><a href="#services">Services</a><a href="#tracking">Track Shipment</a><a href="#contact">Contact</a></div>
-        <div><h4>Our Services</h4><a href="#services">Air Ticketing</a><a href="#services">Cargo Shipping</a><a href="#services">Visa Processing</a><a href="#services">Travel Assistance</a></div>
-        <div><h4>Contact Us</h4><p>Mogadishu: +252 61 563 3609</p><p>Nairobi, Kenya</p><p>support@somway.com</p></div>
+        <div className="public-footer-brand"><div className="public-logo-lockup"><BrandLogo className="public-footer-logo" /></div><p>{tr("Your trusted partner for travel, cargo and visa services.")}</p></div>
+        <div><h4>{tr("Quick Links")}</h4><a href="#home">{tr("Home")}</a><a href="#services">{tr("Services")}</a><a href="#tracking">{tr("Track Shipment")}</a><a href="#contact">{tr("Contact")}</a></div>
+        <div><h4>{tr("Our Services")}</h4><a href="#services">{tr("Air Ticketing")}</a><a href="#services">{tr("Cargo Shipping")}</a><a href="#services">{tr("Visa Processing")}</a><a href="#services">{tr("Travel Assistance")}</a></div>
+        <div><h4>{tr("Contact Us")}</h4><p>{tr("Mogadishu: +252 61 563 3609")}</p><p>{tr("Nairobi, Kenya")}</p><p>{tr("support@somway.com")}</p></div>
         {/* The Nairobi branch photo is CC BY 2.0, which requires the
             photographer to be credited wherever it is published. The
             Mogadishu photo is CC0 and needs no credit. */}
         <div className="footer-bottom">
-          <span>
-            Copyright {new Date().getFullYear()} SomWay Travel &amp; Logistics.
-          </span>
-          <span className="footer-credit">
-            Nairobi photo by Ninara (CC BY 2.0) · Mogadishu photo by AMISOM
-            Public Information (CC0)
-          </span>
-          <span>Privacy Policy &nbsp; Terms &amp; Conditions</span>
+          <span>{tr("Copyright")}{new Date().getFullYear()}{" "}{tr("SomWay Travel & Logistics.")}</span>
+          <span className="footer-credit">{tr("Nairobi photo by Ninara (CC BY 2.0) · Mogadishu photo by AMISOM Public Information (CC0)")}</span>
+          <span>{tr("Privacy Policy   Terms & Conditions")}</span>
         </div>
       </footer>
     </main>
@@ -3826,6 +3825,7 @@ function Landing() {
 }
 
 function LegacyLanding() {
+  const tr = useTranslation();
   const [trackingKind, setTrackingKind] = useState<"cargo" | "visa">("cargo");
   const [tracking, setTracking] = useState("");
   const [found, setFound] = useState<{
@@ -3890,18 +3890,19 @@ function LegacyLanding() {
   return (
     <main className="public-site">
       <header className="public-nav">
+        <PreferenceControls />
         <a
           className="public-brand"
           href="#top"
-          aria-label={`${BRAND_NAME} home`}
+          aria-label={tr("{0} home", [BRAND_NAME])}
         >
           <BrandLogo className="public-brand-logo" />
         </a>
-        <nav aria-label="Public navigation">
-          <a href="#about">About</a>
-          <a href="#services">Services</a>
-          <a href="#tracking">Track status</a>
-          <a href="#contact">Contact</a>
+        <nav aria-label={tr("Public navigation")}>
+          <a href="#about">{tr("About")}</a>
+          <a href="#services">{tr("Services")}</a>
+          <a href="#tracking">{tr("Track status")}</a>
+          <a href="#contact">{tr("Contact")}</a>
         </nav>
         <a
           className="public-whatsapp"
@@ -3909,8 +3910,7 @@ function LegacyLanding() {
           target="_blank"
           rel="noreferrer"
         >
-          <Icon name="message" size={16} /> WhatsApp us
-        </a>
+          <Icon name="message" size={16} />{tr("WhatsApp us")}</a>
       </header>
       <section className="public-hero" id="top">
         <img
@@ -3920,112 +3920,85 @@ function LegacyLanding() {
         <div className="public-hero-shade" />
         <div className="public-hero-copy">
           <p className="public-kicker">
-            <span />
-            Travel · Visa · Cargo
-          </p>
-          <h1>
-            Your way to the world.
-            <br />
-            <em>Travel without limits.</em>
+            <span />{tr("Travel · Visa · Cargo")}</p>
+          <h1>{tr("Your way to the world.")}<br />
+            <em>{tr("Travel without limits.")}</em>
           </h1>
-          <p>
-            Book flights, submit visa applications and move cargo with one
-            dependable team, supported by clear communication and online status
-            tracking.
-          </p>
+          <p>{tr("Book flights, submit visa applications and move cargo with one dependable team, supported by clear communication and online status tracking.")}</p>
           <div className="public-hero-actions">
             <a
               className="public-primary"
               href="https://wa.me/252615633609"
               target="_blank"
               rel="noreferrer"
-            >
-              Start your journey <Icon name="arrow" />
+            >{tr("Start your journey")}<Icon name="arrow" />
             </a>
           </div>
           <div className="public-trust">
             <span>
-              <b>Flight booking</b>
-              <small>Regional & international</small>
+              <b>{tr("Flight booking")}</b>
+              <small>{tr("Regional & international")}</small>
             </span>
             <span>
-              <b>Air cargo</b>
-              <small>Flexible pricing</small>
+              <b>{tr("Air cargo")}</b>
+              <small>{tr("Flexible pricing")}</small>
             </span>
             <span>
-              <b>Visa applications</b>
-              <small>Trackable progress</small>
+              <b>{tr("Visa applications")}</b>
+              <small>{tr("Trackable progress")}</small>
             </span>
           </div>
         </div>
       </section>
       <div className="public-marquee" aria-hidden="true">
         <div>
-          <span>Flight tickets</span>
-          <i /> <span>Visa applications</span>
-          <i /> <span>Air cargo</span>
-          <i /> <span>Cargo tracking</span>
-          <i /> <span>Visa tracking</span>
-          <i /> <span>Flight tickets</span>
-          <i /> <span>Visa applications</span>
-          <i /> <span>Air cargo</span>
+          <span>{tr("Flight tickets")}</span>
+          <i /> <span>{tr("Visa applications")}</span>
+          <i /> <span>{tr("Air cargo")}</span>
+          <i /> <span>{tr("Cargo tracking")}</span>
+          <i /> <span>{tr("Visa tracking")}</span>
+          <i /> <span>{tr("Flight tickets")}</span>
+          <i /> <span>{tr("Visa applications")}</span>
+          <i /> <span>{tr("Air cargo")}</span>
         </div>
       </div>
       <section className="public-about" id="about">
         <div className="about-statement">
           <p className="public-kicker">
-            <span />
-            About SomWay
-          </p>
-          <h2>Travel and cargo, coordinated with care.</h2>
+            <span />{tr("About SomWay")}</p>
+          <h2>{tr("Travel and cargo, coordinated with care.")}</h2>
         </div>
         <div className="about-copy">
-          <p>
-            SomWay Travel & Logistics helps travellers, families and
-            businesses book flights, submit visa applications and move cargo
-            with confidence.
-          </p>
-          <p>
-            Every service follows one clear process, with direct communication
-            from the first enquiry to the final confirmation or handoff.
-          </p>
-          <a href="#contact">
-            Contact SomWay <Icon name="arrow" size={15} />
+          <p>{tr("SomWay Travel & Logistics helps travellers, families and businesses book flights, submit visa applications and move cargo with confidence.")}</p>
+          <p>{tr("Every service follows one clear process, with direct communication from the first enquiry to the final confirmation or handoff.")}</p>
+          <a href="#contact">{tr("Contact SomWay")}<Icon name="arrow" size={15} />
           </a>
         </div>
         <div className="about-values">
           <article>
             <span>01</span>
-            <strong>Clear communication</strong>
-            <p>
-              Direct updates throughout your journey, application or shipment.
-            </p>
+            <strong>{tr("Clear communication")}</strong>
+            <p>{tr("Direct updates throughout your journey, application or shipment.")}</p>
           </article>
           <article>
             <span>02</span>
-            <strong>One agency</strong>
-            <p>
-              Flight, visa and cargo services coordinated through one dependable
-              experience.
-            </p>
+            <strong>{tr("One agency")}</strong>
+            <p>{tr("Flight, visa and cargo services coordinated through one dependable experience.")}</p>
           </article>
           <article>
             <span>03</span>
-            <strong>Trackable progress</strong>
-            <p>Online references for cargo and visa application status.</p>
+            <strong>{tr("Trackable progress")}</strong>
+            <p>{tr("Online references for cargo and visa application status.")}</p>
           </article>
         </div>
       </section>
       <section className="public-services" id="services">
         <div className="public-section-title">
           <div>
-            <p>Our services</p>
-            <h2>Three essential services. One clear experience.</h2>
+            <p>{tr("Our services")}</p>
+            <h2>{tr("Three essential services. One clear experience.")}</h2>
           </div>
-          <p>
-            Thoughtful travel, visa and cargo services connected by clear
-            communication and one consistent SomWay experience.
-          </p>
+          <p>{tr("Thoughtful travel, visa and cargo services connected by clear communication and one consistent SomWay experience.")}</p>
         </div>
         <div className="service-cards">
           {services.map((service, index) => (
@@ -4037,7 +4010,7 @@ function LegacyLanding() {
               <div className="service-icon">
                 <Icon name={service.icon} size={24} />
               </div>
-              <h3>{service.label}</h3>
+              <h3>{tr(service.label)}</h3>
               <p>{service.copy}</p>
               <a href={service.link}>
                 {service.action} <Icon name="arrow" size={14} />
@@ -4049,28 +4022,25 @@ function LegacyLanding() {
       <section className="public-branches" aria-labelledby="branch-heading">
         <div className="public-section-title">
           <div>
-            <p>Where we operate</p>
-            <h2 id="branch-heading">Two offices. One connected journey.</h2>
+            <p>{tr("Where we operate")}</p>
+            <h2 id="branch-heading">{tr("Two offices. One connected journey.")}</h2>
           </div>
-          <p>
-            Local support in Kenya and Somalia, with the same clear SomWay
-            experience from first request to final delivery.
-          </p>
+          <p>{tr("Local support in Kenya and Somalia, with the same clear SomWay experience from first request to final delivery.")}</p>
         </div>
         <div className="public-branch-list">
           <article>
             <BranchFlag country="Kenya" />
             <div>
-              <strong>Nairobi Office</strong>
-              <small>Nairobi, Kenya</small>
+              <strong>{tr("Nairobi Office")}</strong>
+              <small>{tr("Nairobi, Kenya")}</small>
             </div>
             <Icon name="arrow" size={17} />
           </article>
           <article>
             <BranchFlag country="Somalia" />
             <div>
-              <strong>Mogadishu Office</strong>
-              <small>Mogadishu, Somalia</small>
+              <strong>{tr("Mogadishu Office")}</strong>
+              <small>{tr("Mogadishu, Somalia")}</small>
             </div>
             <Icon name="arrow" size={17} />
           </article>
@@ -4079,20 +4049,15 @@ function LegacyLanding() {
       <section className="public-track" id="tracking">
         <div>
           <p className="public-kicker">
-            <span />
-            Status tracking
-          </p>
-          <h2>One reference. A clear status.</h2>
-          <p>
-            Select cargo or visa application, then enter the complete reference
-            issued by SomWay.
-          </p>
+            <span />{tr("Status tracking")}</p>
+          <h2>{tr("One reference. A clear status.")}</h2>
+          <p>{tr("Select cargo or visa application, then enter the complete reference issued by SomWay.")}</p>
           <div className="track-route" aria-hidden="true">
-            <span>Cargo</span>
+            <span>{tr("Cargo")}</span>
             <i>
               <b />
             </i>
-            <span>Visa</span>
+            <span>{tr("Visa")}</span>
           </div>
         </div>
         <form className="public-track-box" onSubmit={lookup}>
@@ -4102,26 +4067,24 @@ function LegacyLanding() {
               type="button"
               onClick={() => selectTrackingKind("cargo")}
             >
-              <Icon name="cargo" /> Cargo
-            </button>
+              <Icon name="cargo" />{tr("Cargo")}</button>
             <button
               className={trackingKind === "visa" ? "active" : ""}
               type="button"
               onClick={() => selectTrackingKind("visa")}
             >
-              <Icon name="visa" /> Visa application
-            </button>
+              <Icon name="visa" />{tr("Visa application")}</button>
           </div>
           <div className="track-box-heading">
             <span>
               <Icon name={trackingKind} />
             </span>
             <div>
-              <small>SomWay status desk</small>
+              <small>{tr("SomWay status desk")}</small>
               <strong>
                 {trackingKind === "cargo"
-                  ? "Track a shipment"
-                  : "Track a visa application"}
+                  ? tr("Track a shipment")
+                  : tr("Track a visa application")}
               </strong>
             </div>
           </div>
@@ -4130,8 +4093,8 @@ function LegacyLanding() {
             <input
               aria-label={
                 trackingKind === "cargo"
-                  ? "Cargo tracking number"
-                  : "Visa application reference"
+                  ? tr("Cargo tracking number")
+                  : tr("Visa application reference")
               }
               value={tracking}
               onChange={(event) => {
@@ -4140,36 +4103,31 @@ function LegacyLanding() {
               }}
               placeholder={
                 trackingKind === "cargo"
-                  ? "Enter cargo tracking number"
-                  : "Enter visa application reference"
+                  ? tr("Enter cargo tracking number")
+                  : tr("Enter visa application reference")
               }
             />
             <button disabled={trackStatus === "loading"} type="submit">
-              {trackStatus === "loading" ? "Checking…" : "Track"}
+              {trackStatus === "loading" ? tr("Checking…") : tr("Track")}
             </button>
           </label>
           <div className="track-feedback" aria-live="polite">
             {trackStatus === "idle" && (
-              <p>
-                Use the complete reference shown on your receipt or application
-                record.
-              </p>
+              <p>{tr("Use the complete reference shown on your receipt or application record.")}</p>
             )}
             {trackStatus === "loading" && (
               <p className="track-loading">
-                <i />
-                Checking the latest recorded status…
-              </p>
+                <i />{tr("Checking the latest recorded status…")}</p>
             )}
             {trackStatus === "ready" && found && (
               <div className="public-track-result">
                 <div>
-                  <small>Reference</small>
+                  <small>{tr("Reference")}</small>
                   <strong>{found.reference}</strong>
                 </div>
                 <div>
                   <small>
-                    {found.kind === "cargo" ? "Route" : "Destination"}
+                    {found.kind === "cargo" ? tr("Route") : tr("Destination")}
                   </small>
                   <strong>
                     {found.kind === "cargo"
@@ -4178,7 +4136,7 @@ function LegacyLanding() {
                   </strong>
                 </div>
                 <div>
-                  <small>Status</small>
+                  <small>{tr("Status")}</small>
                   <Badge
                     tone={
                       found.status === "Delivered" ||
@@ -4199,23 +4157,17 @@ function LegacyLanding() {
                 </div>
                 <div>
                   <small>
-                    {found.kind === "cargo" ? "Received" : "Application date"}
+                    {found.kind === "cargo" ? tr("Received") : tr("Application date")}
                   </small>
                   <strong>{dateLabel(found.date)}</strong>
                 </div>
               </div>
             )}
             {trackStatus === "not-found" && (
-              <p className="public-track-empty">
-                No {trackingKind === "cargo" ? "shipment" : "visa application"}{" "}
-                matched that reference. Check the number or contact SomWay.
-              </p>
+              <p className="public-track-empty">{tr("No")}{" "}{trackingKind === "cargo" ? tr("shipment") : tr("visa application")}{" "}{tr("matched that reference. Check the number or contact SomWay.")}</p>
             )}
             {trackStatus === "error" && (
-              <p className="public-track-empty">
-                Tracking is temporarily unavailable. Please contact us on
-                WhatsApp for help.
-              </p>
+              <p className="public-track-empty">{tr("Tracking is temporarily unavailable. Please contact us on WhatsApp for help.")}</p>
             )}
           </div>
         </form>
@@ -4224,21 +4176,16 @@ function LegacyLanding() {
         <div className="contact-lead">
           <BrandMark className="contact-mark" />
           <p className="public-kicker">
-            <span />
-            Contact SomWay
-          </p>
-          <h2>Ready when you are.</h2>
-          <p>
-            Contact SomWay for flight booking, visa applications, cargo pricing
-            or help with an existing reference.
-          </p>
+            <span />{tr("Contact SomWay")}</p>
+          <h2>{tr("Ready when you are.")}</h2>
+          <p>{tr("Contact SomWay for flight booking, visa applications, cargo pricing or help with an existing reference.")}</p>
           <a
             className="contact-main"
             href="https://wa.me/252615633609"
             target="_blank"
             rel="noreferrer"
           >
-            <Icon name="message" /> Contact us on WhatsApp <Icon name="arrow" />
+            <Icon name="message" />{tr("Contact us on WhatsApp")}<Icon name="arrow" />
           </a>
         </div>
       </section>
@@ -4246,11 +4193,9 @@ function LegacyLanding() {
         <a className="public-brand" href="#top">
           <BrandLogo className="public-brand-logo" />
         </a>
-        <p>Flight tickets · Visa applications · Air cargo</p>
+        <p>{tr("Flight tickets · Visa applications · Air cargo")}</p>
         <div>
-          <a href="https://wa.me/252615633609" target="_blank" rel="noreferrer">
-            Contact SomWay
-          </a>
+          <a href="https://wa.me/252615633609" target="_blank" rel="noreferrer">{tr("Contact SomWay")}</a>
           <span>
             © {new Date().getFullYear()} {BRAND_NAME}
           </span>
@@ -4267,6 +4212,7 @@ function Login({
   linkToken: string;
   onLogin: (user: User) => Promise<void>;
 }) {
+  const tr = useTranslation();
   const [username, setUsername] = useState("");
   const [staffName, setStaffName] = useState("");
   const [password, setPassword] = useState("");
@@ -4320,35 +4266,32 @@ function Login({
   return (
     <main className="auth-screen">
       <section className="auth-story">
-        <a className="auth-back" href="/">
-          ← Public website
-        </a>
+        <a className="auth-back" href="/">{tr("← Public website")}</a>
         <div className="brand light">
           <BrandLogo className="auth-brand-logo" src="/Som-way2.png" />
         </div>
         <div className="story-copy">
-          <p className="eyebrow">Welcome back</p>
-          <h1>Every journey, payment and handoff—accounted for.</h1>
-          <p>A secure operating surface for two offices working as one.</p>
+          <p className="eyebrow">{tr("Welcome back")}</p>
+          <h1>{tr("Every journey, payment and handoff—accounted for.")}</h1>
+          <p>{tr("A secure operating surface for two offices working as one.")}</p>
         </div>
         <div className="route-line">
-          <span>NBO</span>
+          <span>{tr("NBO")}</span>
           <i />
-          <b>Shared cargo desk</b>
+          <b>{tr("Shared cargo desk")}</b>
           <i />
-          <span>MGQ</span>
+          <span>{tr("MGQ")}</span>
         </div>
       </section>
       <section className="auth-panel">
+        <PreferenceControls />
         <form onSubmit={submit}>
-          <p className="eyebrow">Protected workspace</p>
+          <p className="eyebrow">{tr("Protected workspace")}</p>
           <h2>
-            {staffName ? `Welcome, ${staffName.split(" ")[0]}` : "Sign in"}
+            {staffName ? tr("Welcome, {0}", [staffName.split(" ")[0]]) : tr("Sign in")}
           </h2>
-          <p className="form-intro">
-            Enter your email and password to continue.
-          </p>
-          <Field label="Email">
+          <p className="form-intro">{tr("Enter your email and password to continue.")}</p>
+          <Field label={tr("Email")}>
             <input
               type="email"
               readOnly={Boolean(linkToken)}
@@ -4358,7 +4301,7 @@ function Login({
               onChange={(e) => setUsername(e.target.value)}
             />
           </Field>
-          <Field label="Password">
+          <Field label={tr("Password")}>
             <PasswordInput
               autoFocus={Boolean(linkToken)}
               autoComplete="current-password"
@@ -4366,18 +4309,16 @@ function Login({
               onChange={(e) => setPassword(e.target.value)}
             />
           </Field>
-          {error && <p className="form-error">{error}</p>}
+          {error && <p className="form-error">{tr(error)}</p>}
           <button
             disabled={submitting}
             className="button primary full"
             type="submit"
           >
-            {submitting ? "Logging in…" : "Login"} <Icon name="arrow" />
+            {submitting ? tr("Logging in…") : tr("Login")} <Icon name="arrow" />
           </button>
           <p className="storage-note">
-            <Icon name="lock" size={16} />
-            Role permissions are enforced after sign-in.
-          </p>
+            <Icon name="lock" size={16} />{tr("Role permissions are enforced after sign-in.")}</p>
         </form>
       </section>
     </main>
@@ -4385,31 +4326,27 @@ function Login({
 }
 
 function AuthMessage({ title, detail }: { title: string; detail: string }) {
+  const tr = useTranslation();
   return (
     <main className="auth-screen">
       <section className="auth-story">
-        <a className="auth-back" href="/">
-          ← Public website
-        </a>
+        <a className="auth-back" href="/">{tr("← Public website")}</a>
         <div className="brand light">
           <BrandLogo className="auth-brand-logo" src="/Som-way2.png" />
         </div>
         <div className="story-copy">
-          <p className="eyebrow">Protected workspace</p>
-          <h1>Private agency access.</h1>
-          <p>
-            The public website remains available for clients and service
-            information.
-          </p>
+          <p className="eyebrow">{tr("Protected workspace")}</p>
+          <h1>{tr("Private agency access.")}</h1>
+          <p>{tr("The public website remains available for clients and service information.")}</p>
         </div>
       </section>
       <section className="auth-panel">
+        <PreferenceControls />
         <div>
-          <p className="eyebrow">Access notice</p>
-          <h2>{title}</h2>
-          <p className="form-intro">{detail}</p>
-          <a className="button primary full" href="/">
-            Return to public website <Icon name="arrow" />
+          <p className="eyebrow">{tr("Access notice")}</p>
+          <h2>{tr(title)}</h2>
+          <p className="form-intro">{tr(detail)}</p>
+          <a className="button primary full" href="/">{tr("Return to public website")}<Icon name="arrow" />
           </a>
         </div>
       </section>
@@ -4426,6 +4363,7 @@ export function LegacyOverview({
   user: User;
   onNavigate: (p: Page) => void;
 }) {
+  const tr = useTranslation();
   const financial = user.role === "owner" || user.role === "consultant";
   const office = officeForRole(user.role);
   const myTickets = office
@@ -4487,40 +4425,39 @@ export function LegacyOverview({
   return (
     <>
       <PageHeader
-        eyebrow={`${roleLabel[user.role]} workspace`}
-        title={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${user.name.split(" ")[0]}.`}
+        eyebrow={tr("{0} workspace", [roleLabel[user.role]])}
+        title={tr("Good {0}, {1}.", [new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening", user.name.split(" ")[0]])}
         detail={
           financial
-            ? "Here’s the full agency picture across Nairobi and Mogadishu."
-            : `Your ${office} operational desk is ready. Agency-wide financials are protected.`
+            ? tr("Here’s the full agency picture across Nairobi and Mogadishu.")
+            : tr("Your {0} operational desk is ready. Agency-wide financials are protected.", [office])
         }
         actions={
           <button
             className="button primary"
             onClick={() => onNavigate("cargo")}
           >
-            <Icon name="plus" /> New Cargo
-          </button>
+            <Icon name="plus" />{tr("New Cargo")}</button>
         }
       />
       <section className="kpi-grid">
         {financial ? (
           <>
             <Kpi
-              label="Revenue this month"
+              label={tr("Revenue this month")}
               value={money(revenue("KES"), "KES")}
-              note={`${money(revenue("USD"), "USD")} in USD`}
+              note={tr("{0} in USD", [money(revenue("USD"), "USD")])}
               icon="report"
             />
             <Kpi
-              label="Open cargo"
+              label={tr("Open cargo")}
               value={openCargo.length}
               note="Across all branches"
               icon="cargo"
               tone="blue"
             />
             <Kpi
-              label="Unpaid items"
+              label={tr("Unpaid items")}
               value={
                 [...data.tickets, ...data.visas, ...data.cargo].filter(
                   (x) => !x.paid,
@@ -4531,7 +4468,7 @@ export function LegacyOverview({
               tone="cream"
             />
             <Kpi
-              label="Active clients"
+              label={tr("Active clients")}
               value={data.clients.length}
               note="Registered relationships"
               icon="users"
@@ -4541,31 +4478,31 @@ export function LegacyOverview({
         ) : (
           <>
             <Kpi
-              label="Tickets logged"
+              label={tr("Tickets logged")}
               value={myTickets.length}
-              note={`${office} office`}
+              note={tr("{0} office", [office])}
               icon="ticket"
             />
             <Kpi
-              label="Shared cargo open"
+              label={tr("Shared cargo open")}
               value={openCargo.length}
               note="Branch teams collaborate"
               icon="cargo"
               tone="blue"
             />
             <Kpi
-              label="Visas in progress"
+              label={tr("Visas in progress")}
               value={
                 myVisas.filter(
                   (v) => !["delivered", "refused"].includes(v.status),
                 ).length
               }
-              note={`${office} applications`}
+              note={tr("{0} applications", [office])}
               icon="visa"
               tone="cream"
             />
             <Kpi
-              label="Your access"
+              label={tr("Your access")}
               value="Operations"
               note="Financial reports hidden"
               icon="lock"
@@ -4578,18 +4515,17 @@ export function LegacyOverview({
         <article className="panel span-2">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Live workflow</p>
-              <h2>Cargo pipeline</h2>
+              <p className="eyebrow">{tr("Live workflow")}</p>
+              <h2>{tr("Cargo pipeline")}</h2>
             </div>
-            <button className="text-button" onClick={() => onNavigate("cargo")}>
-              Open cargo desk <Icon name="arrow" size={15} />
+            <button className="text-button" onClick={() => onNavigate("cargo")}>{tr("Open cargo desk")}<Icon name="arrow" size={15} />
             </button>
           </div>
           <div className="pipeline">
             {pipeline.map((x) => (
               <div key={x.label}>
                 <div className={`pipeline-count ${x.tone}`}>{x.count}</div>
-                <span>{x.label}</span>
+                <span>{tr(x.label)}</span>
                 <i
                   style={{
                     width: `${Math.max(6, data.cargo.length ? (x.count / data.cargo.length) * 100 : 6)}%`,
@@ -4616,23 +4552,23 @@ export function LegacyOverview({
                       </small>
                     </div>
                     <Badge tone={cargoStatusTone(c.status)}>
-                      {cargoStatusLabel(c.status)}
+                      {tr(cargoStatusLabel(c.status))}
                     </Badge>
                   </div>
                 ))}
             </div>
           ) : (
             <Empty
-              title="No cargo yet"
-              detail="Create the first shipment to start the shared handoff workflow."
+              title={tr("No cargo yet")}
+              detail={tr("Create the first shipment to start the shared handoff workflow.")}
             />
           )}
         </article>
         <article className="panel quick-panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Move quickly</p>
-              <h2>Daily actions</h2>
+              <p className="eyebrow">{tr("Move quickly")}</p>
+              <h2>{tr("Daily actions")}</h2>
             </div>
           </div>
           {[
@@ -4664,6 +4600,7 @@ function PreviousOverview({
   user: User;
   onNavigate: (p: Page) => void;
 }) {
+  const tr = useTranslation();
   const financial = user.role === "owner" || user.role === "consultant";
   const operatorBranch = branchForUser(data, user);
   const office = officeForRole(user.role) || operatorBranch?.name || "assigned";
@@ -4803,18 +4740,17 @@ function PreviousOverview({
   return (
     <>
       <PageHeader
-        eyebrow={`${roleLabel[user.role]} workspace`}
-        title={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${user.name.split(" ")[0]}.`}
+        eyebrow={tr("{0} workspace", [roleLabel[user.role]])}
+        title={tr("Good {0}, {1}.", [new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening", user.name.split(" ")[0]])}
         detail={
           financial
-            ? `Current business overview for ${selectedBranch?.name || "all branches"}. Current balances remain separate from this month's revenue.`
-            : `Your ${office} operational desk is ready. Agency-wide financials are protected.`
+            ? tr("Current business overview for {0}. Current balances remain separate from this month's revenue.", [selectedBranch?.name || "all branches"])
+            : tr("Your {0} operational desk is ready. Agency-wide financials are protected.", [office])
         }
         actions={
           !financial && (
             <button className="button primary" onClick={() => onNavigate("cargo")}>
-              <Icon name="plus" /> New Cargo
-            </button>
+              <Icon name="plus" />{tr("New Cargo")}</button>
           )
         }
       />
@@ -4822,29 +4758,29 @@ function PreviousOverview({
         {financial ? (
           <>
             <Kpi
-              label="Total Revenue"
+              label={tr("Total Revenue")}
               value={revenueValue}
               valueClassName="kpi-multi-value"
               note="This month"
               icon="report"
             />
             <Kpi
-              label="Total Cargo"
+              label={tr("Total Cargo")}
               value={activeCargo.length}
-              note={`${openCargo.length} currently open`}
+              note={tr("{0} currently open", [openCargo.length])}
               icon="cargo"
               tone="blue"
             />
             <Kpi
-              label="Accounts Receivable"
+              label={tr("Accounts Receivable")}
               value={receivableValue}
               valueClassName="kpi-multi-value"
-              note={`${receivableRecords} outstanding ${receivableRecords === 1 ? "record" : "records"}`}
+              note={tr("{0} outstanding {1}", [receivableRecords, receivableRecords === 1 ? "record" : "records"])}
               icon="expense"
               tone="cream"
             />
             <Kpi
-              label="Total Clients"
+              label={tr("Total Clients")}
               value={
                 scopedClients.filter((client) => client.isActive !== false)
                   .length
@@ -4857,31 +4793,31 @@ function PreviousOverview({
         ) : (
           <>
             <Kpi
-              label="Tickets logged"
+              label={tr("Tickets logged")}
               value={myTickets.length}
-              note={`${office} office`}
+              note={tr("{0} office", [office])}
               icon="ticket"
             />
             <Kpi
-              label="Shared cargo open"
+              label={tr("Shared cargo open")}
               value={openCargo.length}
               note="Branch teams collaborate"
               icon="cargo"
               tone="blue"
             />
             <Kpi
-              label="Visas in progress"
+              label={tr("Visas in progress")}
               value={
                 myVisas.filter(
                   (visa) => !["delivered", "refused"].includes(visa.status),
                 ).length
               }
-              note={`${office} applications`}
+              note={tr("{0} applications", [office])}
               icon="visa"
               tone="cream"
             />
             <Kpi
-              label="Your access"
+              label={tr("Your access")}
               value="Operations"
               note="Financial reports hidden"
               icon="lock"
@@ -4895,8 +4831,8 @@ function PreviousOverview({
           <article className="panel span-2">
             <div className="panel-head">
               <div>
-                <p className="eyebrow">Six-month movement</p>
-                <h2>{activeTrendCurrency} revenue trend</h2>
+                <p className="eyebrow">{tr("Six-month movement")}</p>
+                <h2>{activeTrendCurrency}{" "}{tr("revenue trend")}</h2>
               </div>
               {trendCurrencies.length > 1 && (
                 <select
@@ -4926,22 +4862,22 @@ function PreviousOverview({
                         height: `${Math.max(4, (item.value / maxTrend) * 100)}%`,
                       }}
                     />
-                    <small>{item.label}</small>
+                    <small>{tr(item.label)}</small>
                   </div>
                 ))}
               </div>
             ) : (
               <Empty
-                title="No revenue in this period"
-                detail="Recorded ticket, cargo and visa sales will appear here."
+                title={tr("No revenue in this period")}
+                detail={tr("Recorded ticket, cargo and visa sales will appear here.")}
               />
             )}
           </article>
           <article className="panel">
             <div className="panel-head">
               <div>
-                <p className="eyebrow">Current month</p>
-                <h2>Revenue by service</h2>
+                <p className="eyebrow">{tr("Current month")}</p>
+                <h2>{tr("Revenue by service")}</h2>
               </div>
             </div>
             <div className="service-snapshot">
@@ -4951,7 +4887,7 @@ function PreviousOverview({
                     {item.service[0].toUpperCase() + item.service.slice(1)}
                   </span>
                   <strong>{money(item.revenue, activeTrendCurrency)}</strong>
-                  <small>{item.transactions} transactions</small>
+                  <small>{item.transactions}{" "}{tr("transactions")}</small>
                 </div>
               ))}
             </div>
@@ -4962,11 +4898,10 @@ function PreviousOverview({
         <article className="panel span-2">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Live workflow</p>
-              <h2>Cargo pipeline</h2>
+              <p className="eyebrow">{tr("Live workflow")}</p>
+              <h2>{tr("Cargo pipeline")}</h2>
             </div>
-            <button className="text-button" onClick={() => onNavigate("cargo")}>
-              Open cargo desk <Icon name="arrow" size={15} />
+            <button className="text-button" onClick={() => onNavigate("cargo")}>{tr("Open cargo desk")}<Icon name="arrow" size={15} />
             </button>
           </div>
           <div className="pipeline">
@@ -4975,7 +4910,7 @@ function PreviousOverview({
                 <div className={`pipeline-count ${item.tone}`}>
                   {item.count}
                 </div>
-                <span>{item.label}</span>
+                <span>{tr(item.label)}</span>
                 <i
                   style={{
                     width: `${Math.max(6, scopedCargo.length ? (item.count / scopedCargo.length) * 100 : 6)}%`,
@@ -4998,27 +4933,27 @@ function PreviousOverview({
                     <div>
                       <strong>{cargo.tracking}</strong>
                       <small>
-                        {cargo.sender} to {cargo.receiver}
+                        {cargo.sender}{" "}{tr("to")}{" "}{cargo.receiver}
                       </small>
                     </div>
                     <Badge tone={cargoStatusTone(cargo.status)}>
-                      {cargoStatusLabel(cargo.status)}
+                      {tr(cargoStatusLabel(cargo.status))}
                     </Badge>
                   </div>
                 ))}
             </div>
           ) : (
             <Empty
-              title="No cargo yet"
-              detail="Create the first shipment to start the shared handoff workflow."
+              title={tr("No cargo yet")}
+              detail={tr("Create the first shipment to start the shared handoff workflow.")}
             />
           )}
         </article>
         <article className="panel quick-panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Move quickly</p>
-              <h2>Daily actions</h2>
+              <p className="eyebrow">{tr("Move quickly")}</p>
+              <h2>{tr("Daily actions")}</h2>
             </div>
           </div>
           {[
@@ -5058,6 +4993,7 @@ function Overview({
   from: string;
   to: string;
 }) {
+  const tr = useTranslation();
   // Owners/consultants see agency-wide analytics (profit, cost, per-branch
   // charts). Operators now see their OWN branch's money figures too — Payments
   // Received and Accounts Receivable are theirs to act on, so they are no longer
@@ -5483,6 +5419,7 @@ function LiveOverviewDashboard({
   onNavigate,
   trends,
 }: LiveOverviewDashboardProps) {
+  const tr = useTranslation();
   const t = (en: string, so: string) => translate(locale, en, so);
   const selectedBranch = branches.find((branch) => branch.id === branchId);
   const serviceTotal = serviceSummary.reduce((sum, item) => sum + item.revenue, 0);
@@ -5572,11 +5509,11 @@ function LiveOverviewDashboard({
       <div className="overview-greeting-row">
         <div className="overview-greeting-copy">
           <h1>
-            {locale === "so" ? (greeting === "morning" ? "Subax wanaagsan" : greeting === "afternoon" ? "Galab wanaagsan" : "Fiid wanaagsan") : `Good ${greeting}`}, {user.name.split(" ")[0]} <span aria-hidden="true">👋</span>
+            {locale === "so" ? (greeting === "morning" ? tr("Subax wanaagsan") : greeting === "afternoon" ? tr("Galab wanaagsan") : tr("Fiid wanaagsan")) : tr("Good {0}", [greeting])}, {user.name.split(" ")[0]} <span aria-hidden="true">👋</span>
           </h1>
           <p>{t("Here’s what’s happening with SomWay today.", "Waa kuwan hawlaha SomWay ee maanta.")}</p>
         </div>
-        <section className="overview-status-strip" aria-label="Today at a glance">
+        <section className="overview-status-strip" aria-label={tr("Today at a glance")}>
           {financial && (
             <div>
               <span className="status-icon cyan"><Icon name="report" /></span>
@@ -5619,7 +5556,7 @@ function LiveOverviewDashboard({
           className="split-3 dashboard-analytics-row"
           style={{ marginTop: 14, gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.25fr)" }}
         >
-          <Panel title={translate(locale, "Monthly Payments Trend", "Isbeddelka lacagaha bil kasta")} subtitle={translate(locale, "Money received from customers", "Lacagta laga helay macaamiisha")} actions={displayCurrencies.length > 1 ? <select className="trend-select" value={activeTrendCurrency} onChange={(event) => setTrendCurrency(event.target.value as Currency)} aria-label="Trend currency">{displayCurrencies.map((currency) => <option key={currency}>{currency}</option>)}</select> : undefined}>
+          <Panel title={translate(locale, "Monthly Payments Trend", "Isbeddelka lacagaha bil kasta")} subtitle={translate(locale, "Money received from customers", "Lacagta laga helay macaamiisha")} actions={displayCurrencies.length > 1 ? <select className="trend-select" value={activeTrendCurrency} onChange={(event) => setTrendCurrency(event.target.value as Currency)} aria-label={tr("Trend currency")}>{displayCurrencies.map((currency) => <option key={currency}>{currency}</option>)}</select> : undefined}>
             <BarChart
               values={trendValues.map((item) => item.value)}
               labels={trendValues.map((item) => item.label)}
@@ -5628,9 +5565,9 @@ function LiveOverviewDashboard({
             />
           </Panel>
           <Panel title={translate(locale, "Payments by Service", "Lacagaha adeegyada")} subtitle={`${activeTrendCurrency} ${translate(locale, "service mix", "isku-darka adeegyada")}`}>
-            <Donut total={money(serviceTotal, activeTrendCurrency)} centerLabel="Total" segments={serviceSegments} />
+            <Donut total={money(serviceTotal, activeTrendCurrency)} centerLabel={tr("Total")} segments={serviceSegments} />
           </Panel>
-          <Panel title="Branch Performance" subtitle={`${activeTrendCurrency} revenue by branch`}>
+          <Panel title={tr("Branch Performance")} subtitle={tr("{0} revenue by branch", [activeTrendCurrency])}>
             {branchPerformance.length ? (
               <div className="stack branch-performance">
                 {branchPerformance.map((row) => (
@@ -5638,11 +5575,11 @@ function LiveOverviewDashboard({
                     <strong className="branch-performance-name"><BranchName data={data} branch={row.branch} /></strong>
                     <div className="branch-performance-figures">
                       <div>
-                        <small>Revenue</small>
+                        <small>{tr("Revenue")}</small>
                         <b>{money(row.revenue, activeTrendCurrency)}</b>
                       </div>
                       <div>
-                        <small>Shipments</small>
+                        <small>{tr("Shipments")}</small>
                         <b>{row.shipments}</b>
                       </div>
                     </div>
@@ -5651,10 +5588,10 @@ function LiveOverviewDashboard({
                 ))}
               </div>
             ) : (
-              <Empty title="No branch revenue" detail="Branch performance appears once payments are recorded." />
+              <Empty title={tr("No branch revenue")} detail={tr("Branch performance appears once payments are recorded.")} />
             )}
           </Panel>
-          <Panel title="Cargo Tracking Status" actions={<button type="button" className="linkish" onClick={() => onNavigate("cargo")}>{t("View all", "Wada eeg")} <Icon name="arrow" size={13} /></button>}>
+          <Panel title={tr("Cargo Tracking Status")} actions={<button type="button" className="linkish" onClick={() => onNavigate("cargo")}>{t("View all", "Wada eeg")} <Icon name="arrow" size={13} /></button>}>
             <div className="stack dashboard-status-list">
               {pipeline.map((item) => {
                 const totalTracked = pipeline.reduce((sum, entry) => sum + entry.count, 0);
@@ -5662,7 +5599,7 @@ function LiveOverviewDashboard({
                 return (
                   <div className="dashboard-status-row" key={item.label}>
                     <div className={`metric-icon tone-${item.tone}`}><Icon name={item.icon} size={17} /></div>
-                    <strong>{item.label}</strong>
+                    <strong>{tr(item.label)}</strong>
                     <b>{item.count}</b>
                     <span className="status-share">{share}%</span>
                   </div>
@@ -5670,7 +5607,7 @@ function LiveOverviewDashboard({
               })}
             </div>
             <div className="dashboard-status-total">
-              <span>Total Shipments</span>
+              <span>{tr("Total Shipments")}</span>
               <b>{pipeline.reduce((sum, entry) => sum + entry.count, 0)}</b>
             </div>
           </Panel>
@@ -5679,7 +5616,7 @@ function LiveOverviewDashboard({
 
       <div className="split-2 dashboard-bottom-row" style={{ marginTop: 14 }}>
         <Panel title={t("Recent Transactions", "Dhaqdhaqaaqyadii ugu dambeeyay")} actions={<button type="button" className="linkish" onClick={() => onNavigate("receivables")}>{t("View all", "Wada eeg")} <Icon name="arrow" size={13} /></button>}>
-          {recentRows.length ? <DataTable columns={["Date", "Type", "Description", "Client", "Amount", "Status"]} rows={recentRows} /> : <Empty title={t("No transactions yet", "Weli wax dhaqdhaqaaq ah ma jiraan")} detail={t("New service records will appear here.", "Diiwaannada adeegyada cusub ayaa halkan ka muuqan doona.")} />}
+          {recentRows.length ? <DataTable columns={[tr("Date"), tr("Type"), tr("Description"), tr("Client"), tr("Amount"), tr("Status")]} rows={recentRows} /> : <Empty title={t("No transactions yet", "Weli wax dhaqdhaqaaq ah ma jiraan")} detail={t("New service records will appear here.", "Diiwaannada adeegyada cusub ayaa halkan ka muuqan doona.")} />}
         </Panel>
         {financial && (
           <Panel title={t("Top Clients", "Macaamiisha ugu sarreeya")} actions={<button type="button" className="linkish" onClick={() => onNavigate("clients")}>{t("View all", "Wada eeg")} <Icon name="arrow" size={13} /></button>}>
@@ -5690,7 +5627,7 @@ function LiveOverviewDashboard({
                   <div className="avatar">{entry.client.name.slice(0, 2).toUpperCase()}</div>
                   <div>
                     <strong>{entry.client.name}</strong>
-                    <span className="muted">{entry.client.type} client</span>
+                    <span className="muted">{entry.client.type}{" "}{tr("client")}</span>
                   </div>
                   <b className="top-client-spend">{money(entry.spend, activeTrendCurrency)}</b>
                 </div>
@@ -5714,9 +5651,9 @@ function LiveOverviewDashboard({
                     <Icon name={alert.icon} size={17} />
                   </span>
                   <span className="alert-copy">
-                    <strong>{alert.label}</strong>
+                    <strong>{tr(alert.label)}</strong>
                     <small>
-                      {alert.count} {alert.detail}
+                      {alert.count} {tr(alert.detail)}
                     </small>
                   </span>
                   <span className="alert-count">{alert.count}</span>
@@ -5740,12 +5677,13 @@ function LiveOverviewDashboard({
         </div>
       </div>
 
-      <span className="sr-only">{completedJobs} completed jobs</span>
+      <span className="sr-only">{completedJobs}{" "}{tr("completed jobs")}</span>
     </>
   );
 }
 
 function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRef }: ModuleProps) {
+  const tr = useTranslation();
   const userBranch = branchForUser(data, user);
   const roleOffice = officeForRole(user.role) || userBranch?.name || null;
   const branches = branchOptions(data, user);
@@ -5855,23 +5793,22 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
       return;
     }
     replaceData?.(payload.data);
-    notify(`${ticket.ref} changed to ${serviceStatusLabel(status)}`);
+    notify(`${ticket.ref} changed to ${tr(serviceStatusLabel(status))}`);
   };
   return (
     <>
       <PageHeader
         eyebrow="Sales operations"
-        title="Tickets"
+        title={tr("Tickets")}
         detail={
           financial
-            ? "Manage bookings, payments, cost and margin across all branches."
-            : `Manage ${roleOffice} bookings. Agency cost and profit remain hidden.`
+            ? tr("Manage bookings, payments, cost and margin across all branches.")
+            : tr("Manage {0} bookings. Agency cost and profit remain hidden.", [roleOffice])
         }
         actions={
           canWrite && (
             <button className="button primary" onClick={() => setEditing(null)}>
-              <Icon name="plus" /> New Ticket
-            </button>
+              <Icon name="plus" />{tr("New Ticket")}</button>
           )
         }
       />
@@ -5884,7 +5821,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
         allowAll={!roleOffice}
         showBranch={false}
       />
-      <div className="subtabs" aria-label="Ticket views">
+      <div className="subtabs" aria-label={tr("Ticket views")}>
         {[
           ["all", "All Tickets", scopedRows.length],
           ["issued", "Issued", scopedRows.filter((x) => x.status === "issued").length],
@@ -5898,34 +5835,34 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
             className={ticketView === key ? "active" : ""}
             onClick={() => setTicketView(key as typeof ticketView)}
           >
-            {label} {count}
+            {tr(String(label))} {count}
           </button>
         ))}
       </div>
       <div className="metrics-grid">
-        <MetricCard icon="ticket" label="Tickets Issued" value={financeRows.length} tone="blue" foot="Selected branch" />
-        <MetricCard icon="money" label="Revenue" value={ticketRevenue} tone="cyan" foot="Sales less refunds" />
+        <MetricCard icon="ticket" label={tr("Tickets Issued")} value={financeRows.length} tone="blue" foot={tr("Selected branch")} />
+        <MetricCard icon="money" label={tr("Revenue")} value={ticketRevenue} tone="cyan" foot={tr("Sales less refunds")} />
         {financial ? (
-          <MetricCard icon="trend" label="Gross Profit" value={ticketProfit} tone="green" foot="Revenue less agency cost" />
+          <MetricCard icon="trend" label={tr("Gross Profit")} value={ticketProfit} tone="green" foot={tr("Revenue less agency cost")} />
         ) : (
           <MetricCard
             icon="check"
-            label="Issued Tickets"
+            label={tr("Issued Tickets")}
             value={financeRows.filter((ticket) => ticket.status === "issued").length}
             tone="green"
-            foot="Confirmed & ticketed"
+            foot={tr("Confirmed & ticketed")}
           />
         )}
         <MetricCard
           icon="wallet"
-          label="Pending Refunds"
+          label={tr("Pending Refunds")}
           value={moneyByCurrency(pendingRefunds, (ticket) => ticket.currency, (ticket) => isCancelledService(ticket) ? refundAvailable(data, "ticket", ticket) : (ticket.balance ?? ticket.amount), scopeCurrencies)}
           tone="orange"
-          foot={`${pendingRefunds.length} open record${pendingRefunds.length === 1 ? "" : "s"}`}
+          foot={tr("{0} open record{1}", [pendingRefunds.length, pendingRefunds.length === 1 ? "" : "s"])}
         />
       </div>
       {rows.length ? (
-        <Panel title="Ticket Register" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
+        <Panel title={tr("Ticket Register")} actions={<StatusBadge tone="blue">{tr("Live")}</StatusBadge>}>
         <RecordList>
           {rows.map((x) => {
             const profit =
@@ -5976,19 +5913,18 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                 badges={
                   <>
                     {refunded <= 0 && <Badge tone={payStatusTone}>{payStatusLabel}</Badge>}
-                    {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
+                    {refunded > 0 && <Badge tone="success">{tr("Refunded")}{" "}{money(refunded, x.currency)}</Badge>}
                     <Badge tone={x.status === "cancelled" ? "danger" : "blue"}>
-                      {serviceStatusLabel(x.status || "issued")}
+                      {tr(serviceStatusLabel(x.status || "issued"))}
                     </Badge>
                     {canWrite && x.status !== "cancelled" ? (
                       <button
                         type="button"
                         className="inline-cancel"
-                        aria-label={`Cancel ticket ${x.ref}`}
+                        aria-label={tr("Cancel ticket {0}", [x.ref])}
                         onClick={() => void updateTicketStatus(x, "cancelled")}
                       >
-                        <Icon name="x" /> Cancel
-                      </button>
+                        <Icon name="x" />{tr("Cancel")}</button>
                     ) : null}
                   </>
                 }
@@ -6038,7 +5974,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                       <button
                         type="button"
                         className="receipt-chip"
-                        title={`Generate receipt for ${x.ref}`}
+                        title={tr("Generate receipt for {0}", [x.ref])}
                         onClick={() =>
                           generateReceipt(
                             ticketReceiptData(
@@ -6051,7 +5987,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                         }
                       >
                         <Icon name="receipt" size={14} />
-                        <span>Receipt</span>
+                        <span>{tr("Receipt")}</span>
                       </button>
                     )}
                     {canWrite && (
@@ -6080,8 +6016,8 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
         </Panel>
       ) : (
         <Empty
-          title="No ticket records"
-          detail="Log a sale or refund to begin the ticket register."
+          title={tr("No ticket records")}
+          detail={tr("Log a sale or refund to begin the ticket register.")}
         />
       )}
       {editing !== undefined && (
@@ -6148,8 +6084,8 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
       )}
       {deleting && (
         <Confirm
-          title="Delete ticket?"
-          detail={`${deleting.ref} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.`}
+          title={tr("Delete ticket?")}
+          detail={tr("{0} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.", [deleting.ref])}
           confirmLabel="Delete Ticket"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
@@ -6183,6 +6119,7 @@ function TicketForm({
   onClose: () => void;
   onSave: (r: Ticket, initialPayment?: InitialCustomerPayment) => void | Promise<void>;
 }) {
+  const tr = useTranslation();
   const initialBranch = current?.branchId || branches[0]?.id || "";
   const selectedBranch = branchById(data, initialBranch);
   const initialCurrency =
@@ -6251,24 +6188,24 @@ function TicketForm({
   };
   return (
     <Modal
-      title={current ? "Edit Ticket" : "Create Ticket"}
-      subtitle="Required fields are marked by their labels."
+      title={current ? tr("Edit Ticket") : tr("Create Ticket")}
+      subtitle={tr("Required fields are marked by their labels.")}
       onClose={onClose}
       side={
         <div className="form-summary-card">
-          <p className="summary-eyebrow">Profit Summary</p>
+          <p className="summary-eyebrow">{tr("Profit Summary")}</p>
           <div className="form-summary-row">
-            <span>Sale Amount</span>
+            <span>{tr("Sale Amount")}</span>
             <strong>{money(Number(f.amount) || 0, f.currency as Currency)}</strong>
           </div>
           <hr />
           <div className="form-summary-row">
-            <span>Agency Cost</span>
+            <span>{tr("Agency Cost")}</span>
             <strong>{money(Number(f.cost) || 0, f.currency as Currency)}</strong>
           </div>
           <hr />
           <div className="form-summary-total green">
-            <span>Gross Profit</span>
+            <span>{tr("Gross Profit")}</span>
             <strong>
               {money(
                 f.type === "Refund"
@@ -6278,16 +6215,13 @@ function TicketForm({
               )}
             </strong>
           </div>
-          <p className="form-summary-note">
-            Gross Profit = Sale Amount − Agency Cost. Values update
-            automatically.
-          </p>
+          <p className="form-summary-note">{tr("Gross Profit = Sale Amount − Agency Cost. Values update automatically.")}</p>
         </div>
       }
     >
       <form className="modal-form" onSubmit={submit}>
-        <FormSection icon="ticket" title="Booking Details" tone="blue">
-          <Field label="Branch">
+        <FormSection icon="ticket" title={tr("Booking Details")} tone="blue">
+          <Field label={tr("Branch")}>
             <BranchSelect
               options={branches}
               value={f.branchId}
@@ -6309,7 +6243,7 @@ function TicketForm({
               }}
             />
           </Field>
-          <Field label="Type">
+          <Field label={tr("Type")}>
             <select
               value={f.type}
               onChange={(e) => {
@@ -6317,11 +6251,11 @@ function TicketForm({
                 setF({ ...f, type, cost: type === "Refund" ? "" : f.cost });
               }}
             >
-              <option>Sale</option>
-              <option>Refund</option>
+              <option value={"Sale"}>{tr("Sale")}</option>
+              <option value={"Refund"}>{tr("Refund")}</option>
             </select>
           </Field>
-          <Field label="Sale date" icon="calendar" iconTone="violet">
+          <Field label={tr("Sale date")} icon="calendar" iconTone="violet">
             <input
               required
               type="date"
@@ -6329,7 +6263,7 @@ function TicketForm({
               onChange={(e) => setF({ ...f, saleDate: e.target.value })}
             />
           </Field>
-          <Field label="Travel date" icon="calendar" iconTone="violet">
+          <Field label={tr("Travel date")} icon="calendar" iconTone="violet">
             <input
               type="date"
               value={f.travelDate}
@@ -6337,41 +6271,41 @@ function TicketForm({
             />
           </Field>
         </FormSection>
-        <FormSection icon="user" title="Passenger & Route" tone="violet">
-          <Field label="Passenger name" icon="user" iconTone="blue">
+        <FormSection icon="user" title={tr("Passenger & Route")} tone="violet">
+          <Field label={tr("Passenger name")} icon="user" iconTone="blue">
             <input
               required
-              placeholder="Enter passenger name"
+              placeholder={tr("Enter passenger name")}
               value={f.passenger}
               onChange={(e) => setF({ ...f, passenger: e.target.value })}
             />
           </Field>
-          <Field label="Phone" icon="phone" iconTone="green">
+          <Field label={tr("Phone")} icon="phone" iconTone="green">
             <input
               required
-              placeholder="Enter phone number"
+              placeholder={tr("Enter phone number")}
               value={f.phone}
               onChange={(e) => setF({ ...f, phone: e.target.value })}
             />
           </Field>
-          <Field label="From" icon="plane" iconTone="blue">
+          <Field label={tr("From")} icon="plane" iconTone="blue">
             <input
               required
-              placeholder="NBO–DXB"
+              placeholder={tr("NBO–DXB")}
               value={f.route}
               onChange={(e) => setF({ ...f, route: e.target.value })}
             />
           </Field>
-          <Field label="To" icon="plane" iconTone="blue">
+          <Field label={tr("To")} icon="plane" iconTone="blue">
             <input
-              placeholder="Enter destination"
+              placeholder={tr("Enter destination")}
               value={f.airlinePnr}
               onChange={(e) => setF({ ...f, airlinePnr: e.target.value })}
             />
           </Field>
         </FormSection>
-        <FormSection icon="money" title="Pricing & Payment" tone="green">
-          <Field label="Currency" icon="money" iconTone="green">
+        <FormSection icon="money" title={tr("Pricing & Payment")} tone="green">
+          <Field label={tr("Currency")} icon="money" iconTone="green">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -6383,32 +6317,32 @@ function TicketForm({
               }}
             >
               {branchCurrencies(branchById(data, f.branchId)).map((x) => (
-                <option key={x}>{x}</option>
+                <option key={x} value={x}>{tr(x)}</option>
               ))}
             </select>
           </Field>
-          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"} icon="money" iconTone="green">
+          <Field label={f.type === "Refund" ? tr("Refund amount") : tr("Sale amount")} icon="money" iconTone="green">
             <input
               required
               min="0"
               type="number"
-              placeholder="Enter sale amount"
+              placeholder={tr("Enter sale amount")}
               value={f.amount}
               onChange={(e) => setF({ ...f, amount: e.target.value })}
             />
           </Field>
           {user.role === "owner" && f.type !== "Refund" && (
-            <Field label="Agency cost" icon="wallet" iconTone="orange">
+            <Field label={tr("Agency cost")} icon="wallet" iconTone="orange">
               <input
                 min="0"
                 type="number"
-                placeholder="Enter agency cost"
+                placeholder={tr("Enter agency cost")}
                 value={f.cost}
                 onChange={(e) => setF({ ...f, cost: e.target.value })}
               />
             </Field>
           )}
-          <Field label="Payment method" icon="wallet" iconTone="orange">
+          <Field label={tr("Payment method")} icon="wallet" iconTone="orange">
             <select
               required
               value={f.paymentMethod}
@@ -6417,32 +6351,30 @@ function TicketForm({
               }
             >
               {paymentMethodsFor(data, f.branchId, f.currency).map((x) => (
-                <option key={x}>{x}</option>
+                <option key={x} value={x}>{tr(x)}</option>
               ))}
             </select>
           </Field>
           {!current && f.type !== "Refund" && (
-            <Field label="Customer payment" icon="check" iconTone="green">
+            <Field label={tr("Customer payment")} icon="check" iconTone="green">
               <select value={f.paymentChoice} onChange={(e) => setF({ ...f, paymentChoice: e.target.value as "paid" | "later" })}>
-                <option value="paid">Paid now</option>
-                <option value="later">Pay later (Accounts Receivable)</option>
+                <option value="paid">{tr("Paid now")}</option>
+                <option value="later">{tr("Pay later (Accounts Receivable)")}</option>
               </select>
             </Field>
           )}
-          <Field label="Notes" wide icon="edit" iconTone="gray">
+          <Field label={tr("Notes")} wide icon="edit" iconTone="gray">
             <textarea
-              placeholder="Add any notes (optional)"
+              placeholder={tr("Add any notes (optional)")}
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
         </FormSection>
         <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="button ghost" onClick={onClose}>{tr("Cancel")}</button>
           <button className="button primary" type="submit">
-            {current ? "Save Changes" : "Create Ticket"}
+            {current ? tr("Save Changes") : tr("Create Ticket")}
           </button>
         </div>
       </form>
@@ -6479,6 +6411,7 @@ const cargoNextActions = (cargo: Cargo, user: User) => {
   );
 };
 function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focusRef }: ModuleProps) {
+  const tr = useTranslation();
   const canWrite = user.role !== "consultant";
   const financial = user.role === "owner" || user.role === "consultant";
   // Deleting is owner-only; operators create and correct, never remove.
@@ -6574,35 +6507,34 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
     <>
       <PageHeader
         eyebrow="Two-office collaboration"
-        title="Shared Cargo Desk"
-        detail="Origin branch dispatches. Destination branch records arrival, collection readiness and final delivery."
+        title={tr("Shared Cargo Desk")}
+        detail={tr("Origin branch dispatches. Destination branch records arrival, collection readiness and final delivery.")}
         actions={
           canWrite && (
             <button className="button primary" onClick={() => setEditing(null)}>
-              <Icon name="plus" /> New Cargo
-            </button>
+              <Icon name="plus" />{tr("New Cargo")}</button>
           )
         }
       />
       <div className="cargo-overview">
         <div className="metrics-grid five">
-          <MetricCard icon="box" label="Total Shipments" value={rows.length} tone="blue" foot="Selected branch" />
-          <MetricCard icon="route" label="In Transit" value={cargoStatusCounts[1].count} tone="violet" foot="Active movements" />
-          <MetricCard icon="clock" label="Ready for Collection" value={cargoStatusCounts[3].count} tone="orange" foot="Awaiting customer" />
-          <MetricCard icon="check" label="Delivered" value={cargoStatusCounts[4].count} tone="green" foot="Completed shipments" />
+          <MetricCard icon="box" label={tr("Total Shipments")} value={rows.length} tone="blue" foot={tr("Selected branch")} />
+          <MetricCard icon="route" label={tr("In Transit")} value={cargoStatusCounts[1].count} tone="violet" foot={tr("Active movements")} />
+          <MetricCard icon="clock" label={tr("Ready for Collection")} value={cargoStatusCounts[3].count} tone="orange" foot={tr("Awaiting customer")} />
+          <MetricCard icon="check" label={tr("Delivered")} value={cargoStatusCounts[4].count} tone="green" foot={tr("Completed shipments")} />
           <MetricCard
             icon="money"
-            label="Cargo Revenue"
+            label={tr("Cargo Revenue")}
             value={moneyByCurrency(rows, (cargo) => cargo.currency, (cargo) => cargo.paymentStatus === "paid" ? (cargo.customerCharge ?? cargo.weight * cargo.rate) : 0, cargoScopeCurrencies)}
             tone="cyan"
-            foot="Customer charges"
+            foot={tr("Customer charges")}
           />
         </div>
         <div className="split-even">
-          <Panel title="Shipment Status Overview">
+          <Panel title={tr("Shipment Status Overview")}>
             <Donut total={String(rows.length)} segments={cargoSegments} />
           </Panel>
-          <Panel title="Route Activity">
+          <Panel title={tr("Route Activity")}>
             <BarChart
               values={routeActivity.length ? routeActivity.map((entry) => entry[1]) : [0]}
               labels={routeActivity.length ? routeActivity.map((entry) => entry[0]) : ["No routes"]}
@@ -6615,15 +6547,12 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
           <Icon name="cargo" />
         </span>
         <div>
-          <strong>Branch-controlled cargo workflow</strong>
-          <p>
-            Every shipment follows received, in transit, arrived, ready for
-            collection and delivered milestones.
-          </p>
+          <strong>{tr("Branch-controlled cargo workflow")}</strong>
+          <p>{tr("Every shipment follows received, in transit, arrived, ready for collection and delivered milestones.")}</p>
         </div>
         <div className="avatar-stack">
-          <i>N</i>
-          <i>M</i>
+          <i>{tr("N")}</i>
+          <i>{tr("M")}</i>
         </div>
       </div>
       <Toolbar
@@ -6635,7 +6564,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
         showBranch={false}
       />
       {rows.length ? (
-        <Panel title="Shipments" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
+        <Panel title={tr("Shipments")} actions={<StatusBadge tone="blue">{tr("Live")}</StatusBadge>}>
         <RecordList>
           {rows.map((x) => {
             const amount = x.customerCharge ?? x.weight * x.rate;
@@ -6705,10 +6634,10 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                 ]}
                 badges={
                   <>
-                    {refunded <= 0 && <Badge tone={paymentTone}>{paymentLabel}</Badge>}
-                    {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
+                    {refunded <= 0 && <Badge tone={paymentTone}>{tr(paymentLabel)}</Badge>}
+                    {refunded > 0 && <Badge tone="success">{tr("Refunded")}{" "}{money(refunded, x.currency)}</Badge>}
                     <Badge tone={cargoStatusTone(x.status)}>
-                      {cargoStatusLabel(x.status)}
+                      {tr(cargoStatusLabel(x.status))}
                     </Badge>
                   </>
                 }
@@ -6764,13 +6693,11 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                       type="button"
                       className="small-icon"
                       onClick={() => setDetails(x)}
-                    >
-                      Full details
-                    </button>
+                    >{tr("Full details")}</button>
                     <button
                       type="button"
                       className="receipt-chip"
-                      title={`Generate receipt for ${x.tracking}`}
+                      title={tr("Generate receipt for {0}", [x.tracking])}
                       onClick={() =>
                         generateReceipt(
                           cargoReceiptData(
@@ -6785,7 +6712,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                       }
                     >
                       <Icon name="receipt" size={14} />
-                      <span>Receipt</span>
+                      <span>{tr("Receipt")}</span>
                     </button>
                     {canWrite && (
                       <div className="row-actions">
@@ -6794,11 +6721,9 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                           <button
                             type="button"
                             className="payment-action"
-                            title="Receive payment"
+                            title={tr("Receive payment")}
                             onClick={() => setPaying(x)}
-                          >
-                            Receive Payment
-                          </button>
+                          >{tr("Receive Payment")}</button>
                         )}
                         {actions.map((action) => (
                           <button
@@ -6808,12 +6733,12 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                               void transitionCargo(x, action.status)
                             }
                           >
-                            {action.label}
+                            {tr(action.label)}
                           </button>
                         ))}
                         <button
                           className="edit-action"
-                          aria-label="Edit"
+                          aria-label={tr("Edit")}
                           type="button"
                           onClick={() => setEditing(x)}
                         >
@@ -6822,8 +6747,8 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                         {canCancel && (
                           <button
                             className="edit-action"
-                            aria-label="Cancel shipment"
-                            title="Cancel shipment"
+                            aria-label={tr("Cancel shipment")}
+                            title={tr("Cancel shipment")}
                             type="button"
                             onClick={() => {
                               const reason = window.prompt(
@@ -6840,8 +6765,8 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                         {canDelete && (
                           <button
                             className="delete-action"
-                            aria-label="Delete"
-                            title="Delete shipment"
+                            aria-label={tr("Delete")}
+                            title={tr("Delete shipment")}
                             type="button"
                             onClick={() => setDeleting(x)}
                           >
@@ -6859,8 +6784,8 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
         </Panel>
       ) : (
         <Empty
-          title="Cargo desk is clear"
-          detail="Create the first shipment; both branch operators will see the route when they are part of the handoff."
+          title={tr("Cargo desk is clear")}
+          detail={tr("Create the first shipment; both branch operators will see the route when they are part of the handoff.")}
         />
       )}
       {editing !== undefined && (
@@ -6947,8 +6872,8 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
       )}
       {deleting && (
         <Confirm
-          title="Delete shipment?"
-          detail={`${deleting.tracking} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.`}
+          title={tr("Delete shipment?")}
+          detail={tr("{0} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.", [deleting.tracking])}
           confirmLabel="Delete Shipment"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
@@ -6981,6 +6906,7 @@ function CargoDetails({
   onReceive: () => void;
   onSaved: (data: AgencyData) => void;
 }) {
+  const tr = useTranslation();
   const charge = cargo.customerCharge ?? cargo.weight * cargo.rate;
   const payments = data.payments
     .filter(
@@ -6992,48 +6918,48 @@ function CargoDetails({
   const refunded = refundedAmount(data, "cargo", cargo);
   const refundable = refundAvailable(data, "cargo", cargo);
   return (
-    <Modal title={`Cargo ${cargo.tracking}`} subtitle="Shipment and payment details." onClose={onClose}>
+    <Modal title={tr("Cargo {0}", [cargo.tracking])} subtitle={tr("Shipment and payment details.")} onClose={onClose}>
       <div className="details-sections">
         <section className="panel">
-          <p className="eyebrow">Shipment</p>
+          <p className="eyebrow">{tr("Shipment")}</p>
           <dl className="detail-list">
-            <div><dt>Reference</dt><dd>{cargo.tracking}</dd></div>
-            <div><dt>Customer</dt><dd>{cargo.sender} to {cargo.receiver}</dd></div>
-            <div><dt>Route</dt><dd>{cargo.origin} to {cargo.destination}</dd></div>
-            <div><dt>Weight</dt><dd>{cargo.weight} kg</dd></div>
-            <div><dt>Rate</dt><dd>{money(cargo.rate, cargo.currency)} / kg</dd></div>
-            <div><dt>Cargo charge</dt><dd>{money(charge, cargo.currency)}</dd></div>
-            <div><dt>Operational status</dt><dd>{cargoStatusLabel(cargo.status)}</dd></div>
+            <div><dt>{tr("Reference")}</dt><dd>{cargo.tracking}</dd></div>
+            <div><dt>{tr("Customer")}</dt><dd>{cargo.sender}{" "}{tr("to")}{" "}{cargo.receiver}</dd></div>
+            <div><dt>{tr("Route")}</dt><dd>{cargo.origin}{" "}{tr("to")}{" "}{cargo.destination}</dd></div>
+            <div><dt>{tr("Weight")}</dt><dd>{cargo.weight}{" "}{tr("kg")}</dd></div>
+            <div><dt>{tr("Rate")}</dt><dd>{money(cargo.rate, cargo.currency)}{" "}{tr("/ kg")}</dd></div>
+            <div><dt>{tr("Cargo charge")}</dt><dd>{money(charge, cargo.currency)}</dd></div>
+            <div><dt>{tr("Operational status")}</dt><dd>{tr(cargoStatusLabel(cargo.status))}</dd></div>
           </dl>
         </section>
         <section className="panel">
-          <p className="eyebrow">Payment</p>
+          <p className="eyebrow">{tr("Payment")}</p>
           <dl className="detail-list">
-            <div><dt>Cargo charge</dt><dd>{money(charge, cargo.currency)}</dd></div>
-            <div><dt>Total paid</dt><dd>{money(cargo.amountPaid || 0, cargo.currency)}</dd></div>
-            <div><dt>Balance due</dt><dd>{money(cargo.balance ?? charge, cargo.currency)}</dd></div>
-            <div><dt>Accounts receivable</dt><dd>{money(cargo.balance ?? charge, cargo.currency)}</dd></div>
-            <div><dt>Payment status</dt><dd>{cargo.paymentStatus || "unpaid"}</dd></div>
-            {refunded > 0 && <div><dt>Refunded to customer</dt><dd className="refund-value">{money(refunded, cargo.currency)}</dd></div>}
+            <div><dt>{tr("Cargo charge")}</dt><dd>{money(charge, cargo.currency)}</dd></div>
+            <div><dt>{tr("Total paid")}</dt><dd>{money(cargo.amountPaid || 0, cargo.currency)}</dd></div>
+            <div><dt>{tr("Balance due")}</dt><dd>{money(cargo.balance ?? charge, cargo.currency)}</dd></div>
+            <div><dt>{tr("Accounts receivable")}</dt><dd>{money(cargo.balance ?? charge, cargo.currency)}</dd></div>
+            <div><dt>{tr("Payment status")}</dt><dd>{cargo.paymentStatus || tr("unpaid")}</dd></div>
+            {refunded > 0 && <div><dt>{tr("Refunded to customer")}</dt><dd className="refund-value">{money(refunded, cargo.currency)}</dd></div>}
           </dl>
         </section>
         <section className="panel details-history">
-          <p className="eyebrow">Payment history</p>
+          <p className="eyebrow">{tr("Payment history")}</p>
           {payments.length ? payments.map((payment) => (
             <div className="history-row" key={payment.id}>
               <strong>{money(payment.amount, payment.currency)}</strong>
-              <span>{payment.paymentDate} - {payment.paymentMethod} - {payment.reference || "No reference"}</span>
-              <small>{payment.status || "active"}</small>
+              <span>{payment.paymentDate} - {payment.paymentMethod} - {payment.reference || tr("No reference")}</span>
+              <small>{payment.status || tr("active")}</small>
             </div>
-          )) : <p>No payments recorded.</p>}
+          )) : <p>{tr("No payments recorded.")}</p>}
         </section>
       </div>
       <div className="modal-actions cargo-details-actions">
-        <button type="button" className="button ghost" onClick={onClose}>Close</button>
+        <button type="button" className="button ghost" onClick={onClose}>{tr("Close")}</button>
         {refundable > 0 && <CancellationRefundAction type="cargo" record={cargo} data={data} onSaved={onSaved} />}
         {(cargo.balance ?? charge) > 0 ? (
-          <button type="button" className="button primary" onClick={onReceive}>Receive Payment</button>
-        ) : <span className="readonly-value">Paid in full</span>}
+          <button type="button" className="button primary" onClick={onReceive}>{tr("Receive Payment")}</button>
+        ) : <span className="readonly-value">{tr("Paid in full")}</span>}
       </div>
     </Modal>
   );
@@ -7055,6 +6981,7 @@ function CargoForm({
     initialPayment?: InitialCustomerPayment,
   ) => Promise<void>;
 }) {
+  const tr = useTranslation();
   const originBranches = branchOptions(data, user);
   const destinationBranches = activeBranches(data);
   const initialOriginBranchId =
@@ -7239,35 +7166,33 @@ function CargoForm({
   };
   return (
     <Modal
-      title={current ? `Update ${current.tracking}` : "Create Cargo"}
-      subtitle="Record the shipment, customer charge and customer responsible for payment."
+      title={current ? tr("Update {0}", [current.tracking]) : tr("Create Cargo")}
+      subtitle={tr("Record the shipment, customer charge and customer responsible for payment.")}
       onClose={onClose}
       side={
         <div className="form-summary-card">
-          <p className="summary-eyebrow">Cargo Summary</p>
+          <p className="summary-eyebrow">{tr("Cargo Summary")}</p>
           <div className="form-summary-row">
-            <span>Weight</span>
-            <strong>{f.weight ? `${f.weight} kg` : "— kg"}</strong>
+            <span>{tr("Weight")}</span>
+            <strong>{f.weight ? tr("{0} kg", [f.weight]) : tr("— kg")}</strong>
           </div>
           <hr />
           <div className="form-summary-row">
-            <span>Rate per kg</span>
+            <span>{tr("Rate per kg")}</span>
             <strong>{f.rate ? money(Number(f.rate), f.currency as Currency) : "—"}</strong>
           </div>
           <hr />
           <div className="form-summary-total">
-            <span>Cargo Charge</span>
+            <span>{tr("Cargo Charge")}</span>
             <strong>{money(shipmentValue, f.currency as Currency)}</strong>
           </div>
-          <p className="form-summary-note">
-            Cargo Charge = Weight × Rate per kg. Values update automatically.
-          </p>
+          <p className="form-summary-note">{tr("Cargo Charge = Weight × Rate per kg. Values update automatically.")}</p>
         </div>
       }
     >
       <form className="modal-form" onSubmit={submit}>
-        <FormSection icon="box" title="Shipment Details" tone="cyan">
-          <Field label="Origin branch">
+        <FormSection icon="box" title={tr("Shipment Details")} tone="cyan">
+          <Field label={tr("Origin branch")}>
             <BranchSelect
               options={originBranches}
               disabled={user.role === "operator"}
@@ -7304,7 +7229,7 @@ function CargoForm({
               }}
             />
           </Field>
-          <Field label="Destination branch">
+          <Field label={tr("Destination branch")}>
             <BranchSelect
               options={destinationBranches.filter(
                 (branch) => branch.id !== f.originBranchId,
@@ -7325,7 +7250,7 @@ function CargoForm({
               }
             />
           </Field>
-          <Field label="Date received" icon="calendar" iconTone="violet">
+          <Field label={tr("Date received")} icon="calendar" iconTone="violet">
             <input
               required
               type="date"
@@ -7333,57 +7258,57 @@ function CargoForm({
               onChange={(e) => setF({ ...f, dateIn: e.target.value })}
             />
           </Field>
-          <Field label="Contents" icon="box" iconTone="cyan">
+          <Field label={tr("Contents")} icon="box" iconTone="cyan">
             <input
               required
-              placeholder="e.g. Documents, Electronics, Apparel"
+              placeholder={tr("e.g. Documents, Electronics, Apparel")}
               value={f.contents}
               onChange={(e) => setF({ ...f, contents: e.target.value })}
             />
           </Field>
         </FormSection>
-        <FormSection icon="user" title="Contact Details" tone="violet">
-          <Field label="Sender" icon="user" iconTone="blue">
+        <FormSection icon="user" title={tr("Contact Details")} tone="violet">
+          <Field label={tr("Sender")} icon="user" iconTone="blue">
             <input
               required
-              placeholder="Enter sender name"
+              placeholder={tr("Enter sender name")}
               value={f.sender}
               onChange={(e) => setF({ ...f, sender: e.target.value })}
             />
           </Field>
-          <Field label="Sender phone" icon="phone" iconTone="green">
+          <Field label={tr("Sender phone")} icon="phone" iconTone="green">
             <input
               required
-              placeholder="Enter phone number"
+              placeholder={tr("Enter phone number")}
               value={f.senderPhone}
               onChange={(e) => setF({ ...f, senderPhone: e.target.value })}
             />
           </Field>
-          <Field label="Sender email (optional, for status updates)" icon="mail" iconTone="cyan">
+          <Field label={tr("Sender email (optional, for status updates)")} icon="mail" iconTone="cyan">
             <input
               type="email"
               value={f.senderEmail}
               onChange={(e) => setF({ ...f, senderEmail: e.target.value })}
-              placeholder="client@example.com"
+              placeholder={tr("client@example.com")}
             />
           </Field>
-          <Field label="Receiver" icon="user" iconTone="blue">
+          <Field label={tr("Receiver")} icon="user" iconTone="blue">
             <input
               required
-              placeholder="Enter receiver name"
+              placeholder={tr("Enter receiver name")}
               value={f.receiver}
               onChange={(e) => setF({ ...f, receiver: e.target.value })}
             />
           </Field>
-          <Field label="Receiver phone" icon="phone" iconTone="green">
+          <Field label={tr("Receiver phone")} icon="phone" iconTone="green">
             <input
               required={f.paymentResponsibility === "receiver"}
-              placeholder="Enter phone number"
+              placeholder={tr("Enter phone number")}
               value={f.receiverPhone}
               onChange={(e) => setF({ ...f, receiverPhone: e.target.value })}
             />
           </Field>
-          <Field label="Customer responsible for payment" icon="user" iconTone="blue">
+          <Field label={tr("Customer responsible for payment")} icon="user" iconTone="blue">
             <select
               required
               value={f.paymentResponsibility}
@@ -7395,13 +7320,13 @@ function CargoForm({
                 })
               }
             >
-              <option value="sender">Sender</option>
-              <option value="receiver">Receiver</option>
+              <option value="sender">{tr("Sender")}</option>
+              <option value="receiver">{tr("Receiver")}</option>
             </select>
           </Field>
         </FormSection>
-        <FormSection icon="money" title="Pricing" tone="green">
-          <Field label="Weight (kg)" icon="box" iconTone="cyan">
+        <FormSection icon="money" title={tr("Pricing")} tone="green">
+          <Field label={tr("Weight (kg)")} icon="box" iconTone="cyan">
             <input
               required
               min="0"
@@ -7412,7 +7337,7 @@ function CargoForm({
               onChange={(e) => setF({ ...f, weight: e.target.value })}
             />
           </Field>
-          <Field label="Currency" icon="money" iconTone="green">
+          <Field label={tr("Currency")} icon="money" iconTone="green">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -7435,29 +7360,26 @@ function CargoForm({
               }}
             >
               {branchCurrencies(branchById(data, f.originBranchId)).map((x) => (
-                <option key={x}>{x}</option>
+                <option key={x} value={x}>{tr(x)}</option>
               ))}
             </select>
           </Field>
           <section className="cargo-rate-card wide">
             <div className="cargo-rate-head">
               <div>
-                <span>Customer rate for this shipment</span>
-                <small>
-                  Change this for a particular client or flight. Settings remain
-                  unchanged.
-                </small>
+                <span>{tr("Customer rate for this shipment")}</span>
+                <small>{tr("Change this for a particular client or flight. Settings remain unchanged.")}</small>
               </div>
               <b className={customRate ? "custom" : "default"}>
                 {customRate
-                  ? "Custom rate"
+                  ? tr("Custom rate")
                   : defaultRate !== undefined
-                    ? "Office default"
-                    : "Shipment rate"}
+                    ? tr("Office default")
+                    : tr("Shipment rate")}
               </b>
             </div>
             <div className="cargo-rate-grid">
-              <Field label={`Rate / kg (${f.currency})`}>
+              <Field label={tr("Rate / kg ({0})", [f.currency])}>
                 <input
                   required
                   min="0"
@@ -7467,7 +7389,7 @@ function CargoForm({
                   onChange={(e) => setF({ ...f, rate: e.target.value })}
                 />
               </Field>
-              <Field label="Pricing note / flight reference *">
+              <Field label={tr("Pricing note / flight reference *")}>
                 <div className="field-control">
                   <input
                     required
@@ -7484,7 +7406,7 @@ function CargoForm({
                       if (rateNoteError && rateNote.trim())
                         setRateNoteError("");
                     }}
-                    placeholder="e.g. Flight SO-201 or agreed client rate"
+                    placeholder={tr("e.g. Flight SO-201 or agreed client rate")}
                     aria-invalid={Boolean(rateNoteError)}
                     aria-describedby={
                       rateNoteError ? "cargo-rate-note-error" : undefined
@@ -7505,23 +7427,20 @@ function CargoForm({
             <div className="cargo-rate-footer">
               <span>
                 {defaultRate !== undefined
-                  ? `Default: ${money(defaultRate, f.currency as Currency)} / kg`
-                  : "No office default is set"}
+                  ? tr("Default: {0} / kg", [money(defaultRate, f.currency as Currency)])
+                  : tr("No office default is set")}
               </span>
               {defaultRate !== undefined && customRate && (
-                <button type="button" onClick={applyDefaultRate}>
-                  Use office default
-                </button>
+                <button type="button" onClick={applyDefaultRate}>{tr("Use office default")}</button>
               )}
-              <strong>
-                Cargo Charge: {money(shipmentValue, f.currency as Currency)}
+              <strong>{tr("Cargo Charge:")}{" "}{money(shipmentValue, f.currency as Currency)}
               </strong>
             </div>
           </section>
         </FormSection>
-        <FormSection icon="wallet" title="Customer Payment" tone="orange">
+        <FormSection icon="wallet" title={tr("Customer Payment")} tone="orange">
           {!current && (
-            <Field label="Payment choice" icon="wallet" iconTone="orange">
+            <Field label={tr("Payment choice")} icon="wallet" iconTone="orange">
               <select
                 value={f.paymentOption}
                 onChange={(e) =>
@@ -7532,14 +7451,14 @@ function CargoForm({
                   })
                 }
               >
-                <option value="now">Pay Now</option>
-                <option value="partial">Pay Partially</option>
-                <option value="later">Pay Later</option>
+                <option value="now">{tr("Pay Now")}</option>
+                <option value="partial">{tr("Pay Partially")}</option>
+                <option value="later">{tr("Pay Later")}</option>
               </select>
             </Field>
           )}
           {!current && f.paymentOption === "partial" && (
-            <Field label={`Amount received (${f.currency})`}>
+            <Field label={tr("Amount received ({0})", [f.currency])}>
               <input
                 required
                 min="0.01"
@@ -7552,7 +7471,7 @@ function CargoForm({
             </Field>
           )}
           {!current && f.paymentOption === "partial" && (
-            <Field label="Remaining balance">
+            <Field label={tr("Remaining balance")}>
               <div className="readonly-value">
                 {money(
                   Math.max(0, shipmentValue - (Number(f.paymentAmount) || 0)),
@@ -7562,7 +7481,7 @@ function CargoForm({
             </Field>
           )}
           {!current && f.paymentOption === "now" && (
-            <Field label="Amount">
+            <Field label={tr("Amount")}>
               <div className="readonly-value">
                 {money(shipmentValue, f.currency as Currency)}
               </div>
@@ -7570,18 +7489,18 @@ function CargoForm({
           )}
           {!current && f.paymentOption === "later" && (
             <>
-              <Field label="Amount due">
+              <Field label={tr("Amount due")}>
                 <div className="readonly-value">
                   {money(shipmentValue, f.currency as Currency)}
                 </div>
               </Field>
-              <Field label="Payment status">
-                <div className="readonly-value">Unpaid</div>
+              <Field label={tr("Payment status")}>
+                <div className="readonly-value">{tr("Unpaid")}</div>
               </Field>
             </>
           )}
           {!current && f.paymentOption !== "later" && (
-            <Field label="Payment branch">
+            <Field label={tr("Payment branch")}>
             <select
               value={f.paidByBranchId}
               onChange={(e) => {
@@ -7607,7 +7526,7 @@ function CargoForm({
             </Field>
           )}
           {!current && f.paymentOption !== "later" && (
-          <Field label="Payment method">
+          <Field label={tr("Payment method")}>
             <select
               required
               value={f.paymentMethod}
@@ -7617,30 +7536,30 @@ function CargoForm({
             >
               {paymentMethodsFor(data, f.paidByBranchId, f.currency).map(
                 (x) => (
-                  <option key={x}>{x}</option>
+                  <option key={x} value={x}>{tr(x)}</option>
                 ),
               )}
             </select>
           </Field>
           )}
           {!current && f.paymentOption !== "later" && (
-            <Field label="Payment reference" icon="receipt" iconTone="orange">
+            <Field label={tr("Payment reference")} icon="receipt" iconTone="orange">
               <input
                 value={f.paymentReference}
                 onChange={(e) =>
                   setF({ ...f, paymentReference: e.target.value })
                 }
-                placeholder="Optional bank or mobile reference"
+                placeholder={tr("Optional bank or mobile reference")}
               />
             </Field>
           )}
           {current && (
-            <Field label="Cargo status">
-              <div className="readonly-value">{cargoStatusLabel(f.status)}</div>
+            <Field label={tr("Cargo status")}>
+              <div className="readonly-value">{tr(cargoStatusLabel(f.status))}</div>
             </Field>
           )}
           {cargoStatusKey(f.status) === "delivered" && (
-            <Field label="Date delivered" icon="calendar" iconTone="violet">
+            <Field label={tr("Date delivered")} icon="calendar" iconTone="violet">
               <input
                 type="date"
                 value={f.dateDelivered}
@@ -7648,20 +7567,18 @@ function CargoForm({
               />
             </Field>
           )}
-          <Field label="Notes" wide icon="edit" iconTone="gray">
+          <Field label={tr("Notes")} wide icon="edit" iconTone="gray">
             <textarea
-              placeholder="Add any additional notes here…"
+              placeholder={tr("Add any additional notes here…")}
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
         </FormSection>
         <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="button ghost" onClick={onClose}>{tr("Cancel")}</button>
           <button className="button primary" disabled={busy}>
-            {busy ? "Saving..." : current ? "Save Changes" : "Create Cargo"}
+            {busy ? tr("Saving...") : current ? tr("Save Changes") : tr("Create Cargo")}
           </button>
         </div>
       </form>
@@ -7675,6 +7592,7 @@ function Receivables({
   notify,
   replaceData,
 }: Pick<ModuleProps, "data" | "user" | "notify" | "replaceData">) {
+  const tr = useTranslation();
   const availableBranches = branchOptions(data, user);
   const lockedBranchId =
     user.role === "operator" ? String(user.assignedBranchId || "") : "";
@@ -7787,17 +7705,17 @@ function Receivables({
     <>
       <PageHeader
         eyebrow="Customer balances"
-        title="Accounts Receivable"
-        detail="Track customer balances and money still owed to SomWay."
+        title={tr("Accounts Receivable")}
+        detail={tr("Track customer balances and money still owed to SomWay.")}
       />
       <div className="receivable-filters">
-        <Field label="Branch">
+        <Field label={tr("Branch")}>
           <select
             disabled={Boolean(lockedBranchId)}
             value={filters.branchId}
             onChange={(event) => setFilter("branchId", event.target.value)}
           >
-            {!lockedBranchId && <option value="">All branches</option>}
+            {!lockedBranchId && <option value="">{tr("All branches")}</option>}
             {availableBranches.map((branch) => (
               <option key={branch.id} value={branch.id}>
                 {branch.name}
@@ -7805,68 +7723,68 @@ function Receivables({
             ))}
           </select>
         </Field>
-        <Field label="Service">
+        <Field label={tr("Service")}>
           <select
             value={filters.service}
             onChange={(event) => setFilter("service", event.target.value)}
           >
-            <option value="">All services</option>
-            <option value="ticket">Tickets</option>
-            <option value="visa">Visas</option>
-            <option value="cargo">Cargo</option>
+            <option value="">{tr("All services")}</option>
+            <option value="ticket">{tr("Tickets")}</option>
+            <option value="visa">{tr("Visas")}</option>
+            <option value="cargo">{tr("Cargo")}</option>
           </select>
         </Field>
-        <Field label="Currency">
+        <Field label={tr("Currency")}>
           <select
             value={filters.currency}
             onChange={(event) => setFilter("currency", event.target.value)}
           >
-            <option value="">All currencies</option>
+            <option value="">{tr("All currencies")}</option>
             {currencies.map((currency) => (
               <option key={currency}>{currency}</option>
             ))}
           </select>
         </Field>
-        <Field label="Payment status">
+        <Field label={tr("Payment status")}>
           <select
             value={filters.status}
             onChange={(event) => setFilter("status", event.target.value)}
           >
-            <option value="outstanding">Outstanding</option>
-            <option value="unpaid">Unpaid</option>
-            <option value="partial">Partial</option>
-            <option value="paid">Paid</option>
-            <option value="all">All records</option>
+            <option value="outstanding">{tr("Outstanding")}</option>
+            <option value="unpaid">{tr("Unpaid")}</option>
+            <option value="partial">{tr("Partial")}</option>
+            <option value="paid">{tr("Paid")}</option>
+            <option value="all">{tr("All records")}</option>
           </select>
         </Field>
-        <Field label="Aging">
+        <Field label={tr("Aging")}>
           <select
             value={filters.aging}
             onChange={(event) => setFilter("aging", event.target.value)}
           >
-            <option value="">All ages</option>
-            <option value="current">Current</option>
-            <option value="1-30">1-30 days</option>
-            <option value="31-60">31-60 days</option>
-            <option value="61-90">61-90 days</option>
-            <option value="90+">Over 90 days</option>
+            <option value="">{tr("All ages")}</option>
+            <option value="current">{tr("Current")}</option>
+            <option value="1-30">{tr("1-30 days")}</option>
+            <option value="31-60">{tr("31-60 days")}</option>
+            <option value="61-90">{tr("61-90 days")}</option>
+            <option value="90+">{tr("Over 90 days")}</option>
           </select>
         </Field>
-        <Field label="Customer">
+        <Field label={tr("Customer")}>
           <input
             value={filters.customer}
             onChange={(event) => setFilter("customer", event.target.value)}
-            placeholder="Search customer"
+            placeholder={tr("Search customer")}
           />
         </Field>
-        <Field label="From">
+        <Field label={tr("From")}>
           <input
             type="date"
             value={filters.from}
             onChange={(event) => setFilter("from", event.target.value)}
           />
         </Field>
-        <Field label="To">
+        <Field label={tr("To")}>
           <input
             type="date"
             value={filters.to}
@@ -7888,31 +7806,31 @@ function Receivables({
                 key={total.currency}
                 icon="money"
                 tone={index === 0 ? "blue" : "cyan"}
-                label={`Outstanding (${total.currency})`}
+                label={tr("Outstanding ({0})", [total.currency])}
                 value={money(total.totalOutstanding, total.currency as Currency)}
-                foot="Money customers still owe SomWay"
+                foot={tr("Money customers still owe SomWay")}
               />
             ))}
             <MetricCard
               icon="receipt"
               tone="violet"
-              label="Outstanding Records"
+              label={tr("Outstanding Records")}
               value={outstandingRecordCount}
               foot={
                 outstandingRecordCount === 1
-                  ? "1 outstanding record"
-                  : "Outstanding customer records"
+                  ? tr("1 outstanding record")
+                  : tr("Outstanding customer records")
               }
             />
           </section>
         );
       })()}
       {error ? (
-        <Empty title="Receivables unavailable" detail={error} />
+        <Empty title={tr("Receivables unavailable")} detail={error} />
       ) : loading ? (
         <Empty
-          title="Loading receivables"
-          detail="Reading customer balances from MongoDB."
+          title={tr("Loading receivables")}
+          detail={tr("Reading customer balances from MongoDB.")}
         />
       ) : rows.length ? (
         <RecordList>
@@ -7949,7 +7867,7 @@ function Receivables({
                     {row.paymentStatus}
                   </Badge>
                   <Badge tone="neutral">
-                    {row.aging === "current" ? "Current" : `${row.aging} days`}
+                    {row.aging === "current" ? tr("Current") : tr("{0} days", [row.aging])}
                   </Badge>
                 </>
               }
@@ -7961,7 +7879,7 @@ function Receivables({
                   value: (
                     <>
                       {row.customer}
-                      {!row.payerResolved && " · Needs payer resolution"}
+                      {!row.payerResolved && tr(" · Needs payer resolution")}
                     </>
                   ),
                 },
@@ -7978,12 +7896,10 @@ function Receivables({
               actions={
                 row.balanceDue > 0 && row.payerResolved ? (
                   <div className="row-actions">
-                    <button type="button" onClick={() => setPaying(row)}>
-                      Receive Payment
-                    </button>
+                    <button type="button" onClick={() => setPaying(row)}>{tr("Receive Payment")}</button>
                   </div>
                 ) : row.balanceDue <= 0 ? (
-                  <span className="paid-in-full">Paid in Full</span>
+                  <span className="paid-in-full">{tr("Paid in Full")}</span>
                 ) : undefined
               }
             />
@@ -7993,12 +7909,12 @@ function Receivables({
         <Empty
           title={
             filters.status === "outstanding"
-              ? "No outstanding customer balances"
+              ? tr("No outstanding customer balances")
               : filters.status === "paid"
-                ? "No fully paid records match these filters"
-                : "No matching customer balances"
+                ? tr("No fully paid records match these filters")
+                : tr("No matching customer balances")
           }
-          detail="Change the filters to review a different set of customer balances."
+          detail={tr("Change the filters to review a different set of customer balances.")}
         />
       )}
       {paying && (
@@ -8028,6 +7944,7 @@ function Receivables({
 }
 
 function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef }: ModuleProps) {
+  const tr = useTranslation();
   const userBranch = branchForUser(data, user);
   const roleOffice = officeForRole(user.role) || userBranch?.name || null;
   const branches = branchOptions(data, user);
@@ -8098,34 +8015,33 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
       return;
     }
     if (payload.data) replaceData?.(payload.data);
-    notify(`${visa.ref} changed to ${serviceStatusLabel(status)}`);
+    notify(`${visa.ref} changed to ${tr(serviceStatusLabel(status))}`);
   };
   return (
     <>
       <PageHeader
         eyebrow="Client services"
-        title="Visa Applications"
+        title={tr("Visa Applications")}
         detail={
           financial
-            ? "Track every application, payment and margin."
-            : `Work on ${roleOffice} applications without access to agency cost or profit.`
+            ? tr("Track every application, payment and margin.")
+            : tr("Work on {0} applications without access to agency cost or profit.", [roleOffice])
         }
         actions={
           canWrite && (
             <button className="button primary" onClick={() => setEditing(null)}>
-              <Icon name="plus" /> New Visa
-            </button>
+              <Icon name="plus" />{tr("New Visa")}</button>
           )
         }
       />
       <div className="content-grid">
         <div className="stack">
           <div className="metrics-grid five">
-            <MetricCard icon="passport" label="Total Applications" value={rows.length} tone="blue" foot="Selected branch" />
-            <MetricCard icon="file" label="Submitted" value={visaCounts.submitted} tone="violet" foot="Awaiting decision" />
-            <MetricCard icon="check" label="Approved" value={approvedVisas} tone="green" foot="Approved or delivered" />
-            <MetricCard icon="clock" label="Pending" value={visaCounts.submitted} tone="orange" foot="In progress" />
-            <MetricCard icon="alert" label="Closed" value={visaCounts.refused + visaCounts.cancelled} tone="red" foot="Refused or cancelled" />
+            <MetricCard icon="passport" label={tr("Total Applications")} value={rows.length} tone="blue" foot={tr("Selected branch")} />
+            <MetricCard icon="file" label={tr("Submitted")} value={visaCounts.submitted} tone="violet" foot={tr("Awaiting decision")} />
+            <MetricCard icon="check" label={tr("Approved")} value={approvedVisas} tone="green" foot={tr("Approved or delivered")} />
+            <MetricCard icon="clock" label={tr("Pending")} value={visaCounts.submitted} tone="orange" foot={tr("In progress")} />
+            <MetricCard icon="alert" label={tr("Closed")} value={visaCounts.refused + visaCounts.cancelled} tone="red" foot={tr("Refused or cancelled")} />
           </div>
           <Toolbar
             query={query}
@@ -8137,10 +8053,10 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
             showBranch={false}
           />
         </div>
-        <Panel title="Approval Rate">
+        <Panel title={tr("Approval Rate")}>
           <Donut
             total={`${approvalRate}%`}
-            centerLabel="Approval Rate"
+            centerLabel={tr("Approval Rate")}
             segments={[
               { value: activeDecisionRows.length ? (approvedVisas / activeDecisionRows.length) * 100 : 0, color: "#16a34a", label: "Approved", amount: String(approvedVisas) },
               { value: activeDecisionRows.length ? (visaCounts.refused / activeDecisionRows.length) * 100 : 0, color: "#ef4444", label: "Refused", amount: String(visaCounts.refused) },
@@ -8150,7 +8066,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
         </Panel>
       </div>
       {rows.length ? (
-        <Panel title="Visa Register" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
+        <Panel title={tr("Visa Register")} actions={<StatusBadge tone="blue">{tr("Live")}</StatusBadge>}>
         <RecordList>
           {rows.map((x) => {
             const profit =
@@ -8201,11 +8117,11 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                 badges={
                   <>
                     {refunded <= 0 && <Badge tone={payStatusTone}>{payStatusLabel}</Badge>}
-                    {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
+                    {refunded > 0 && <Badge tone="success">{tr("Refunded")}{" "}{money(refunded, x.currency)}</Badge>}
                     {canWrite ? (
                       <select
                         className={`inline-status ${x.status}`}
-                        aria-label={`Progress for ${x.ref}`}
+                        aria-label={tr("Progress for {0}", [x.ref])}
                         value={x.status}
                         onChange={(e) =>
                           void updateStatus(x, e.target.value as Visa["status"])
@@ -8229,7 +8145,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                           )
                           .map((status) => (
                             <option key={status} value={status}>
-                              {serviceStatusLabel(status)}
+                              {tr(serviceStatusLabel(status))}
                             </option>
                           ))}
                       </select>
@@ -8243,7 +8159,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                               : "blue"
                         }
                       >
-                        {serviceStatusLabel(x.status)}
+                        {tr(serviceStatusLabel(x.status))}
                       </Badge>
                     )}
                   </>
@@ -8286,7 +8202,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                       <button
                         type="button"
                         className="receipt-chip"
-                        title={`Generate receipt for ${x.ref}`}
+                        title={tr("Generate receipt for {0}", [x.ref])}
                         onClick={() =>
                           generateReceipt(
                             visaReceiptData(
@@ -8299,7 +8215,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                         }
                       >
                         <Icon name="receipt" size={14} />
-                        <span>Receipt</span>
+                        <span>{tr("Receipt")}</span>
                       </button>
                     )}
                     {canWrite && (
@@ -8328,8 +8244,8 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
         </Panel>
       ) : (
         <Empty
-          title="No visa applications"
-          detail="Add the first client case to begin tracking progress."
+          title={tr("No visa applications")}
+          detail={tr("Add the first client case to begin tracking progress.")}
         />
       )}
       {editing !== undefined && (
@@ -8381,8 +8297,8 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
       )}
       {deleting && (
         <Confirm
-          title="Delete visa case?"
-          detail={`${deleting.ref} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.`}
+          title={tr("Delete visa case?")}
+          detail={tr("{0} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.", [deleting.ref])}
           confirmLabel="Delete Visa"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
@@ -8415,6 +8331,7 @@ function VisaForm({
   onClose: () => void;
   onSave: (r: Visa) => void | Promise<void>;
 }) {
+  const tr = useTranslation();
   const branches = branchOptions(data, user);
   const legacyOffice = officeForRole(user.role);
   const initialBranchId =
@@ -8454,24 +8371,24 @@ function VisaForm({
   });
   return (
     <Modal
-      title={current ? "Edit Visa" : "Create Visa"}
-      subtitle="Record the application, payment and margin details."
+      title={current ? tr("Edit Visa") : tr("Create Visa")}
+      subtitle={tr("Record the application, payment and margin details.")}
       onClose={onClose}
       side={
         <div className="form-summary-card">
-          <p className="summary-eyebrow">Profit Summary</p>
+          <p className="summary-eyebrow">{tr("Profit Summary")}</p>
           <div className="form-summary-row">
-            <span>{f.type === "Refund" ? "Refund Amount" : "Sale Amount"}</span>
+            <span>{f.type === "Refund" ? tr("Refund Amount") : tr("Sale Amount")}</span>
             <strong>{money(Number(f.amount) || 0, f.currency as Currency)}</strong>
           </div>
           <hr />
           <div className="form-summary-row">
-            <span>Agency Cost</span>
+            <span>{tr("Agency Cost")}</span>
             <strong>{money(Number(f.cost) || 0, f.currency as Currency)}</strong>
           </div>
           <hr />
           <div className="form-summary-total green">
-            <span>Gross Profit</span>
+            <span>{tr("Gross Profit")}</span>
             <strong>
               {money(
                 f.type === "Refund"
@@ -8481,10 +8398,7 @@ function VisaForm({
               )}
             </strong>
           </div>
-          <p className="form-summary-note">
-            Gross Profit = Sale Amount − Agency Cost. Values update
-            automatically.
-          </p>
+          <p className="form-summary-note">{tr("Gross Profit = Sale Amount − Agency Cost. Values update automatically.")}</p>
         </div>
       }
     >
@@ -8518,8 +8432,8 @@ function VisaForm({
           });
         }}
       >
-        <FormSection icon="passport" title="Application Details" tone="violet">
-          <Field label="Branch">
+        <FormSection icon="passport" title={tr("Application Details")} tone="violet">
+          <Field label={tr("Branch")}>
             <BranchSelect
               options={branches}
               disabled={locked}
@@ -8542,7 +8456,7 @@ function VisaForm({
               }}
             />
           </Field>
-          <Field label="Type">
+          <Field label={tr("Type")}>
             <select
               value={f.type}
               onChange={(e) => {
@@ -8550,61 +8464,61 @@ function VisaForm({
                 setF({ ...f, type, cost: type === "Refund" ? "" : f.cost });
               }}
             >
-              <option>Sale</option>
-              <option>Refund</option>
+              <option value={"Sale"}>{tr("Sale")}</option>
+              <option value={"Refund"}>{tr("Refund")}</option>
             </select>
           </Field>
-          <Field label="Application date" icon="calendar" iconTone="violet">
+          <Field label={tr("Application date")} icon="calendar" iconTone="violet">
             <input
               type="date"
               value={f.appDate}
               onChange={(e) => setF({ ...f, appDate: e.target.value })}
             />
           </Field>
-          <Field label="Destination" icon="globe" iconTone="cyan">
+          <Field label={tr("Destination")} icon="globe" iconTone="cyan">
             <input
               required
-              placeholder="Enter destination"
+              placeholder={tr("Enter destination")}
               value={f.destination}
               onChange={(e) => setF({ ...f, destination: e.target.value })}
             />
           </Field>
-          <Field label="Visa type" icon="file" iconTone="violet">
+          <Field label={tr("Visa type")} icon="file" iconTone="violet">
             <input
-              placeholder="e.g. Tourist, Work, Student"
+              placeholder={tr("e.g. Tourist, Work, Student")}
               value={f.visaType}
               onChange={(e) => setF({ ...f, visaType: e.target.value })}
             />
           </Field>
         </FormSection>
-        <FormSection icon="user" title="Applicant Details" tone="blue">
-          <Field label="Applicant" icon="user" iconTone="blue">
+        <FormSection icon="user" title={tr("Applicant Details")} tone="blue">
+          <Field label={tr("Applicant")} icon="user" iconTone="blue">
             <input
               required
-              placeholder="Enter applicant name"
+              placeholder={tr("Enter applicant name")}
               value={f.applicant}
               onChange={(e) => setF({ ...f, applicant: e.target.value })}
             />
           </Field>
-          <Field label="Phone" icon="phone" iconTone="green">
+          <Field label={tr("Phone")} icon="phone" iconTone="green">
             <input
               required
-              placeholder="Enter phone number"
+              placeholder={tr("Enter phone number")}
               value={f.phone}
               onChange={(e) => setF({ ...f, phone: e.target.value })}
             />
           </Field>
-          <Field label="Email (for status updates)" icon="mail" iconTone="cyan" wide>
+          <Field label={tr("Email (for status updates)")} icon="mail" iconTone="cyan" wide>
             <input
               type="email"
               value={f.email}
               onChange={(e) => setF({ ...f, email: e.target.value })}
-              placeholder="client@example.com"
+              placeholder={tr("client@example.com")}
             />
           </Field>
         </FormSection>
-        <FormSection icon="money" title="Pricing & Payment" tone="green">
-          <Field label="Currency" icon="money" iconTone="green">
+        <FormSection icon="money" title={tr("Pricing & Payment")} tone="green">
+          <Field label={tr("Currency")} icon="money" iconTone="green">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -8616,32 +8530,32 @@ function VisaForm({
               }}
             >
               {branchCurrencies(branchById(data, f.branchId)).map((x) => (
-                <option key={x}>{x}</option>
+                <option key={x} value={x}>{tr(x)}</option>
               ))}
             </select>
           </Field>
-          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"} icon="money" iconTone="green">
+          <Field label={f.type === "Refund" ? tr("Refund amount") : tr("Sale amount")} icon="money" iconTone="green">
             <input
               required
               type="number"
               min="0"
-              placeholder="Enter sale amount"
+              placeholder={tr("Enter sale amount")}
               value={f.amount}
               onChange={(e) => setF({ ...f, amount: e.target.value })}
             />
           </Field>
           {user.role === "owner" && f.type !== "Refund" && (
-            <Field label="Agency cost" icon="wallet" iconTone="orange">
+            <Field label={tr("Agency cost")} icon="wallet" iconTone="orange">
               <input
                 type="number"
                 min="0"
-                placeholder="Enter agency cost"
+                placeholder={tr("Enter agency cost")}
                 value={f.cost}
                 onChange={(e) => setF({ ...f, cost: e.target.value })}
               />
             </Field>
           )}
-          <Field label="Payment method" icon="wallet" iconTone="orange">
+          <Field label={tr("Payment method")} icon="wallet" iconTone="orange">
             <select
               required
               value={f.paymentMethod}
@@ -8650,24 +8564,22 @@ function VisaForm({
               }
             >
               {paymentMethodsFor(data, f.branchId, f.currency).map((x) => (
-                <option key={x}>{x}</option>
+                <option key={x} value={x}>{tr(x)}</option>
               ))}
             </select>
           </Field>
-          <Field label="Notes" wide icon="edit" iconTone="gray">
+          <Field label={tr("Notes")} wide icon="edit" iconTone="gray">
             <textarea
-              placeholder="Add any notes (optional)"
+              placeholder={tr("Add any notes (optional)")}
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
         </FormSection>
         <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="button ghost" onClick={onClose}>{tr("Cancel")}</button>
           <button className="button primary">
-            {current ? "Save Changes" : "Create Visa"}
+            {current ? tr("Save Changes") : tr("Create Visa")}
           </button>
         </div>
       </form>
@@ -8676,6 +8588,7 @@ function VisaForm({
 }
 
 function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
+  const tr = useTranslation();
   const branches = branchOptions(data, user);
   const lockedBranchId =
     user.role === "operator" ? String(user.assignedBranchId || "") : "";
@@ -8771,7 +8684,7 @@ function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
         <strong key={code}>{money(totalFor(list, field, code), code)}</strong>
       ))
     ) : (
-      <strong>No activity</strong>
+      <strong>{tr("No activity")}</strong>
     );
   };
   const metric = (field: keyof DailySummaryRow) => metricFor(rows, field);
@@ -8909,21 +8822,21 @@ function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
     <>
       <PageHeader
         eyebrow="Automatic business-day reporting"
-        title="Daily Summary"
+        title={tr("Daily Summary")}
         icon="calendar"
-        detail={`Business-day reporting and daily closing · ${settings.businessDayStart}–${settings.businessDayEnd} ${settings.timezone}`}
+        detail={tr("Business-day reporting and daily closing · {0}–{1} {2}", [settings.businessDayStart, settings.businessDayEnd, settings.timezone])}
       />
       <div className="ds-layout">
         <div className="ds-main">
           <div className="daily-summary-filters">
-            <Field label="Business Date">
+            <Field label={tr("Business Date")}>
               <input
                 type="date"
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
               />
             </Field>
-            <Field label="Branch">
+            <Field label={tr("Branch")}>
               <select
                 disabled={Boolean(lockedBranchId)}
                 value={branchId}
@@ -8932,7 +8845,7 @@ function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
                   setCurrency("");
                 }}
               >
-                {!lockedBranchId && <option value="">All branches</option>}
+                {!lockedBranchId && <option value="">{tr("All branches")}</option>}
                 {branches.map((branch) => (
                   <option key={branch.id} value={branch.id}>
                     {branch.name}
@@ -8940,12 +8853,12 @@ function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
                 ))}
               </select>
             </Field>
-            <Field label="Currency">
+            <Field label={tr("Currency")}>
               <select
                 value={currency}
                 onChange={(event) => setCurrency(event.target.value)}
               >
-                <option value="">All currencies</option>
+                <option value="">{tr("All currencies")}</option>
                 {currencies.map((code) => (
                   <option key={code}>{code}</option>
                 ))}
@@ -8956,9 +8869,7 @@ function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
                 {stateLabel}
               </Badge>
               {user.role === "owner" && rows.some((row) => row.state === "closed" && row.version) && (
-                <button type="button" className="text-button" onClick={() => void recalculateDay()}>
-                  Recalculate Day
-                </button>
+                <button type="button" className="text-button" onClick={() => void recalculateDay()}>{tr("Recalculate Day")}</button>
               )}
               <button
                 type="button"
@@ -8966,16 +8877,15 @@ function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
                 onClick={exportSummary}
                 disabled={!rows.length}
               >
-                <Icon name="download" size={16} /> Export Summary
-              </button>
+                <Icon name="download" size={16} />{tr("Export Summary")}</button>
             </div>
           </div>
           {error ? (
-            <Empty title="Daily summary unavailable" detail={error} />
+            <Empty title={tr("Daily summary unavailable")} detail={error} />
           ) : loading ? (
             <Empty
-              title="Loading daily summary"
-              detail="Calculating the selected business day from MongoDB records."
+              title={tr("Loading daily summary")}
+              detail={tr("Calculating the selected business day from MongoDB records.")}
             />
           ) : rows.length ? (
             <>
@@ -8998,7 +8908,7 @@ function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
                         </h3>
                         <div className="ds-branch-group-totals">
                           {metricFor(group.rows, "revenue", groupCurrencies)}
-                          <span>revenue today</span>
+                          <span>{tr("revenue today")}</span>
                         </div>
                       </header>
                       <div className="daily-summary-kpis metrics-grid">
@@ -9008,12 +8918,12 @@ function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
                               <Icon name={card.icon} size={20} />
                             </div>
                             <div className="metric-main">
-                              <span className="eyebrow-soft">{card.label}</span>
+                              <span className="eyebrow-soft">{tr(card.label)}</span>
                               <div className="metric-values">
                                 {metricFor(group.rows, card.field, groupCurrencies)}
                               </div>
                               <div className="metric-foot">
-                                <span>{card.foot}</span>
+                                <span>{tr(card.foot)}</span>
                               </div>
                             </div>
                           </div>
@@ -9035,10 +8945,10 @@ function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
                           <Icon name={card.icon} size={22} />
                         </div>
                         <div className="metric-main">
-                          <span className="eyebrow-soft">{card.label}</span>
+                          <span className="eyebrow-soft">{tr(card.label)}</span>
                           <div className="metric-values">{metric(card.field)}</div>
                           <div className="metric-foot">
-                            <span>{card.foot}</span>
+                            <span>{tr(card.foot)}</span>
                           </div>
                         </div>
 
@@ -9051,8 +8961,8 @@ function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
             </>
           ) : (
             <Empty
-              title="No daily summary"
-              detail="No active branch and currency configuration matches this selection."
+              title={tr("No daily summary")}
+              detail={tr("No active branch and currency configuration matches this selection.")}
             />
           )}
         </div>
@@ -9070,6 +8980,7 @@ export function LegacyDailyClose({
   notify,
   replaceData,
 }: ModuleProps) {
+  const tr = useTranslation();
   const userBranch = branchForUser(data, user);
   const roleOffice = officeForRole(user.role) || userBranch?.name || null;
   const canCreate =
@@ -9085,17 +8996,16 @@ export function LegacyDailyClose({
     <>
       <PageHeader
         eyebrow="Reconciliation"
-        title="Daily close"
+        title={tr("Daily close")}
         detail={
           roleOffice
-            ? `Reconcile ${roleOffice} money by method and currency. You cannot see the other office.`
-            : "Review reconciliations across all branches."
+            ? tr("Reconcile {0} money by method and currency. You cannot see the other office.", [roleOffice])
+            : tr("Review reconciliations across all branches.")
         }
         actions={
           canCreate && (
             <button className="button primary" onClick={() => setEditing(null)}>
-              <Icon name="plus" /> New Daily Close
-            </button>
+              <Icon name="plus" />{tr("New Daily Close")}</button>
           )
         }
       />
@@ -9118,23 +9028,23 @@ export function LegacyDailyClose({
                     className={`difference ${Math.abs(diff) < 0.01 ? "balanced" : "off"}`}
                   >
                     {Math.abs(diff) < 0.01
-                      ? "Balanced"
+                      ? tr("Balanced")
                       : `${diff > 0 ? "+" : ""}${money(diff, x.currency)}`}
                   </span>
                 </header>
                 <div className="close-numbers">
                   <div>
-                    <span>Opening</span>
+                    <span>{tr("Opening")}</span>
                     <strong>{money(x.openingBalance || 0, x.currency)}</strong>
                   </div>
                   <div>
-                    <span>Money in</span>
+                    <span>{tr("Money in")}</span>
                     <strong>
                       {money(x.totalCollections || 0, x.currency)}
                     </strong>
                   </div>
                   <div>
-                    <span>Expenses + refunds</span>
+                    <span>{tr("Expenses + refunds")}</span>
                     <strong>
                       {money(
                         (x.totalExpenses || 0) + (x.totalRefunds || 0),
@@ -9143,7 +9053,7 @@ export function LegacyDailyClose({
                     </strong>
                   </div>
                   <div>
-                    <span>Counted</span>
+                    <span>{tr("Counted")}</span>
                     <strong>{money(x.actuallyCounted, x.currency)}</strong>
                   </div>
                 </div>
@@ -9151,10 +9061,10 @@ export function LegacyDailyClose({
                   <span>
                     {x.reviewed ? (
                       <>
-                        <b>✓</b> Reviewed by {x.reviewedBy}
+                        <b>✓</b>{tr("Reviewed by")}{" "}{x.reviewedBy}
                       </>
                     ) : (
-                      "Awaiting review"
+                      tr("Awaiting review")
                     )}
                   </span>
                   <div>
@@ -9184,15 +9094,13 @@ export function LegacyDailyClose({
                             );
                           }
                         }}
-                      >
-                        Mark reviewed
-                      </button>
+                      >{tr("Mark reviewed")}</button>
                     )}
                     {canCreate && x.status === "reopened" && (
                       <button
                         className="icon-button"
                         onClick={() => setEditing(x)}
-                        title="Edit reopened close"
+                        title={tr("Edit reopened close")}
                       >
                         <Icon name="edit" size={16} />
                       </button>
@@ -9231,9 +9139,7 @@ export function LegacyDailyClose({
                             );
                           }
                         }}
-                      >
-                        Reopen
-                      </button>
+                      >{tr("Reopen")}</button>
                     )}
                   </div>
                 </footer>
@@ -9243,8 +9149,8 @@ export function LegacyDailyClose({
         </div>
       ) : (
         <Empty
-          title="No daily closes"
-          detail="Create the first reconciliation for a payment method and currency."
+          title={tr("No daily closes")}
+          detail={tr("Create the first reconciliation for a payment method and currency.")}
         />
       )}
       {editing !== undefined && (
@@ -9287,6 +9193,7 @@ function CloseForm({
   onClose: () => void;
   onSave: (r: DailyClose) => void;
 }) {
+  const tr = useTranslation();
   const branches = branchOptions(data, user);
   const initialBranchId = current?.branchId || branches[0]?.id || "";
   const initialBranch = branchById(data, initialBranchId);
@@ -9353,8 +9260,8 @@ function CloseForm({
   const diff = (Number(f.actuallyCounted) || 0) - metrics.expectedBalance;
   return (
     <Modal
-      title={current ? "Edit Daily Close" : "Create Daily Close"}
-      subtitle="Payments, refunds, and expenses are calculated by the secure ledger."
+      title={current ? tr("Edit Daily Close") : tr("Create Daily Close")}
+      subtitle={tr("Payments, refunds, and expenses are calculated by the secure ledger.")}
       onClose={onClose}
     >
       <form
@@ -9378,14 +9285,14 @@ function CloseForm({
         }}
       >
         <div className="form-grid">
-          <Field label="Date">
+          <Field label={tr("Date")}>
             <input
               type="date"
               value={f.date}
               onChange={(e) => setF({ ...f, date: e.target.value })}
             />
           </Field>
-          <Field label="Branch">
+          <Field label={tr("Branch")}>
             <BranchSelect
               options={branches}
               disabled={locked}
@@ -9407,7 +9314,7 @@ function CloseForm({
               }}
             />
           </Field>
-          <Field label="Payment method">
+          <Field label={tr("Payment method")}>
             <select
               value={f.paymentMethod}
               onChange={(e) =>
@@ -9415,11 +9322,11 @@ function CloseForm({
               }
             >
               {paymentMethodsFor(data, f.branchId, f.currency).map((x) => (
-                <option key={x}>{x}</option>
+                <option key={x} value={x}>{tr(x)}</option>
               ))}
             </select>
           </Field>
-          <Field label="Currency">
+          <Field label={tr("Currency")}>
             <select
               value={f.currency}
               onChange={(e) =>
@@ -9427,39 +9334,39 @@ function CloseForm({
               }
             >
               {branchCurrencies(branchById(data, f.branchId)).map((x) => (
-                <option key={x}>{x}</option>
+                <option key={x} value={x}>{tr(x)}</option>
               ))}
             </select>
           </Field>
         </div>
-        {metricsError && <p className="form-error">{metricsError}</p>}
+        {metricsError && <p className="form-error">{tr(metricsError)}</p>}
         <div className="reconcile-panel">
           <div>
-            <span>Opening balance</span>
+            <span>{tr("Opening balance")}</span>
             <strong>
               {money(metrics.openingBalance, f.currency as Currency)}
             </strong>
           </div>
           <div>
-            <span>Collections</span>
+            <span>{tr("Collections")}</span>
             <strong>
               {money(metrics.totalCollections, f.currency as Currency)}
             </strong>
           </div>
           <div>
-            <span>Refunds</span>
+            <span>{tr("Refunds")}</span>
             <strong>
               - {money(metrics.totalRefunds, f.currency as Currency)}
             </strong>
           </div>
           <div>
-            <span>Paid expenses</span>
+            <span>{tr("Paid expenses")}</span>
             <strong>
               - {money(metrics.totalExpenses, f.currency as Currency)}
             </strong>
           </div>
           <div>
-            <span>Net movement</span>
+            <span>{tr("Net movement")}</span>
             <strong>
               {money(
                 metrics.totalCollections -
@@ -9470,14 +9377,14 @@ function CloseForm({
             </strong>
           </div>
           <div className="should">
-            <span>Expected balance</span>
+            <span>{tr("Expected balance")}</span>
             <strong>
               {money(metrics.expectedBalance, f.currency as Currency)}
             </strong>
           </div>
         </div>
         <div className="form-grid">
-          <Field label="Actually counted">
+          <Field label={tr("Actually counted")}>
             <input
               required
               type="number"
@@ -9486,14 +9393,14 @@ function CloseForm({
               onChange={(e) => setF({ ...f, actuallyCounted: e.target.value })}
             />
           </Field>
-          <Field label="Difference">
+          <Field label={tr("Difference")}>
             <div
               className={`readonly-value ${Math.abs(diff) < 0.01 ? "good" : "bad"}`}
             >
               {money(diff, f.currency as Currency)}
             </div>
           </Field>
-          <Field label="Notes" wide>
+          <Field label={tr("Notes")} wide>
             <textarea
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
@@ -9501,11 +9408,9 @@ function CloseForm({
           </Field>
         </div>
         <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="button ghost" onClick={onClose}>{tr("Cancel")}</button>
           <button className="button primary" disabled={!!metricsError}>
-            {current ? "Save Changes" : "Create Daily Close"}
+            {current ? tr("Save Changes") : tr("Create Daily Close")}
           </button>
         </div>
       </form>
@@ -9514,6 +9419,7 @@ function CloseForm({
 }
 
 function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
+  const tr = useTranslation();
   const userBranch = branchForUser(data, user);
   const roleOffice = officeForRole(user.role) || userBranch?.name || null;
   const branches = branchOptions(data, user);
@@ -9591,30 +9497,29 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
     <>
       <PageHeader
         eyebrow="Money out"
-        title="Expenses"
+        title={tr("Expenses")}
         detail={
           financial
-            ? "Review payments out of all branches and their profit-and-loss treatment."
-            : `Log and review ${roleOffice} till payments only.`
+            ? tr("Review payments out of all branches and their profit-and-loss treatment.")
+            : tr("Log and review {0} till payments only.", [roleOffice])
         }
         actions={
           canWrite && (
             <button className="button primary" onClick={() => setEditing(null)}>
-              <Icon name="plus" /> New Expense
-            </button>
+              <Icon name="plus" />{tr("New Expense")}</button>
           )
         }
       />
       <div className="metrics-grid">
-        <MetricCard icon="wallet" label="Total Expenses" value={moneyByCurrency(activeExpenseRows, (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="blue" foot="Selected filters" />
-        <MetricCard icon="check" label="Paid Expenses" value={moneyByCurrency(activeExpenseRows.filter((expense) => expense.paid), (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="green" foot="Payment completed" />
-        <MetricCard icon="clock" label="Pending Payment" value={moneyByCurrency(activeExpenseRows.filter((expense) => !expense.paid), (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="orange" foot="Still outstanding" />
-        <MetricCard icon="briefcase" label="Most Used Category" value={categoryTotals[0]?.[0] || "No expenses"} tone="violet" foot={categoryTotals[0] ? new Intl.NumberFormat("en-KE").format(categoryTotals[0][1]) : "No recorded amount"} />
+        <MetricCard icon="wallet" label={tr("Total Expenses")} value={moneyByCurrency(activeExpenseRows, (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="blue" foot={tr("Selected filters")} />
+        <MetricCard icon="check" label={tr("Paid Expenses")} value={moneyByCurrency(activeExpenseRows.filter((expense) => expense.paid), (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="green" foot={tr("Payment completed")} />
+        <MetricCard icon="clock" label={tr("Pending Payment")} value={moneyByCurrency(activeExpenseRows.filter((expense) => !expense.paid), (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="orange" foot={tr("Still outstanding")} />
+        <MetricCard icon="briefcase" label={tr("Most Used Category")} value={categoryTotals[0]?.[0] || tr("No expenses")} tone="violet" foot={categoryTotals[0] ? new Intl.NumberFormat("en-KE").format(categoryTotals[0][1]) : tr("No recorded amount")} />
       </div>
       <div className="split-3" style={{ marginTop: 14 }}>
-        <Panel title="Expenses by Category"><Donut total={String(activeExpenseRows.length)} centerLabel="Records" segments={expenseSegments} /></Panel>
-        <Panel title="Monthly Expense Trend"><BarChart values={expenseMonths.map((item) => item.value)} labels={expenseMonths.map((item) => item.label)} /></Panel>
-        <Panel title="Expenses by Branch"><div className="stack">{expenseByBranch.map((branch) => <div key={branch.name}><div className="branch-expense-label"><strong><BranchName data={data} branch={branch.name} /></strong><span>{new Intl.NumberFormat("en-KE").format(branch.value)}</span></div><div className="progress"><i style={{ width: `${(branch.value / largestBranchExpense) * 100}%` }} /></div></div>)}</div></Panel>
+        <Panel title={tr("Expenses by Category")}><Donut total={String(activeExpenseRows.length)} centerLabel={tr("Records")} segments={expenseSegments} /></Panel>
+        <Panel title={tr("Monthly Expense Trend")}><BarChart values={expenseMonths.map((item) => item.value)} labels={expenseMonths.map((item) => item.label)} /></Panel>
+        <Panel title={tr("Expenses by Branch")}><div className="stack">{expenseByBranch.map((branch) => <div key={branch.name}><div className="branch-expense-label"><strong><BranchName data={data} branch={branch.name} /></strong><span>{new Intl.NumberFormat("en-KE").format(branch.value)}</span></div><div className="progress"><i style={{ width: `${(branch.value / largestBranchExpense) * 100}%` }} /></div></div>)}</div></Panel>
       </div>
       <Toolbar
         query={query}
@@ -9629,9 +9534,9 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          aria-label="Expense category"
+          aria-label={tr("Expense category")}
         >
-          <option value="">All categories</option>
+          <option value="">{tr("All categories")}</option>
           {Array.from(new Set(data.expenses.map((x) => x.category)))
             .filter(Boolean)
             .sort()
@@ -9642,9 +9547,9 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         <select
           value={paymentMethod}
           onChange={(e) => setPaymentMethod(e.target.value)}
-          aria-label="Payment method"
+          aria-label={tr("Payment method")}
         >
-          <option value="">All payment methods</option>
+          <option value="">{tr("All payment methods")}</option>
           {data.paymentMethods
             .filter((method) => method.isActive)
             .map((method) => (
@@ -9654,39 +9559,39 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         <select
           value={currency}
           onChange={(e) => setCurrency(e.target.value)}
-          aria-label="Currency"
+          aria-label={tr("Currency")}
         >
-          <option value="">All currencies</option>
-          <option>KES</option>
-          <option>USD</option>
+          <option value="">{tr("All currencies")}</option>
+          <option value={"KES"}>{tr("KES")}</option>
+          <option value={"USD"}>{tr("USD")}</option>
         </select>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          aria-label="Expense status"
+          aria-label={tr("Expense status")}
         >
-          <option value="active">Active</option>
-          <option value="void">Voided</option>
-          <option value="all">All statuses</option>
+          <option value="active">{tr("Active")}</option>
+          <option value="void">{tr("Voided")}</option>
+          <option value="all">{tr("All statuses")}</option>
         </select>
-        <div className="expense-date-range" aria-label="Expense date range">
-          <span className="expense-date-range-title">Date range</span>
+        <div className="expense-date-range" aria-label={tr("Expense date range")}>
+          <span className="expense-date-range-title">{tr("Date range")}</span>
           <label>
-            <span>From</span>
+            <span>{tr("From")}</span>
             <input
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              aria-label="From date"
+              aria-label={tr("From date")}
             />
           </label>
           <label>
-            <span>To</span>
+            <span>{tr("To")}</span>
             <input
               type="date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              aria-label="To date"
+              aria-label={tr("To date")}
             />
           </label>
         </div>
@@ -9695,14 +9600,14 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         <TableShell>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Office</th>
-              <th>Category</th>
-              <th>Description</th>
-              <th>Payment</th>
-              <th>Amount</th>
-              <th>Status</th>
-              {financial && <th>P&amp;L</th>}
+              <th>{tr("Date")}</th>
+              <th>{tr("Office")}</th>
+              <th>{tr("Category")}</th>
+              <th>{tr("Description")}</th>
+              <th>{tr("Payment")}</th>
+              <th>{tr("Amount")}</th>
+              <th>{tr("Status")}</th>
+              {financial && <th>{tr("P&L")}</th>}
               {canWrite && <th />}
             </tr>
           </thead>
@@ -9720,19 +9625,19 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
                 </td>
                 <td>
                   {x.paymentMethod}
-                  <small>{x.paid ? "Paid" : "Unpaid"}</small>
+                  <small>{x.paid ? tr("Paid") : tr("Unpaid")}</small>
                 </td>
                 <td>{money(x.amount, x.currency)}</td>
                 <td>
                   <Badge
                     tone={x.recordStatus === "void" ? "danger" : "success"}
                   >
-                    {x.recordStatus === "void" ? "Voided" : "Active"}
+                    {x.recordStatus === "void" ? tr("Voided") : tr("Active")}
                   </Badge>
                   {x.voidReason && <small>{x.voidReason}</small>}
                 </td>
                 {financial && (
-                  <td>{x.inProfitLoss ? "Included" : "Excluded"}</td>
+                  <td>{x.inProfitLoss ? tr("Included") : tr("Excluded")}</td>
                 )}
                 {canWrite && x.recordStatus !== "void" && (
                   <td>
@@ -9773,8 +9678,8 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         </TableShell>
       ) : (
         <Empty
-          title="No expenses"
-          detail="Log money paid out for rent, supplier payments, transport and other costs."
+          title={tr("No expenses")}
+          detail={tr("Log money paid out for rent, supplier payments, transport and other costs.")}
         />
       )}
       {editing !== undefined && (
@@ -9819,6 +9724,7 @@ function ExpenseForm({
   onClose: () => void;
   onSave: (r: Expense) => void;
 }) {
+  const tr = useTranslation();
   const branches = branchOptions(data, user);
   const roleOffice = officeForRole(user.role);
   const initialBranchId =
@@ -9851,7 +9757,7 @@ function ExpenseForm({
   });
   return (
     <Modal
-      title={current ? "Edit Expense" : "Create Expense"}
+      title={current ? tr("Edit Expense") : tr("Create Expense")}
       onClose={onClose}
     >
       <form
@@ -9877,14 +9783,14 @@ function ExpenseForm({
         }}
       >
         <div className="form-grid">
-          <Field label="Date">
+          <Field label={tr("Date")}>
             <input
               type="date"
               value={f.date}
               onChange={(e) => setF({ ...f, date: e.target.value })}
             />
           </Field>
-          <Field label="Branch">
+          <Field label={tr("Branch")}>
             <BranchSelect
               options={branches}
               disabled={locked}
@@ -9907,7 +9813,7 @@ function ExpenseForm({
               }}
             />
           </Field>
-          <Field label="Category">
+          <Field label={tr("Category")}>
             <select
               value={f.category}
               onChange={(e) => setF({ ...f, category: e.target.value })}
@@ -9924,18 +9830,18 @@ function ExpenseForm({
                 "Owner Drawing",
                 "Other",
               ].map((x) => (
-                <option key={x}>{x}</option>
+                <option key={x} value={x}>{tr(x)}</option>
               ))}
             </select>
           </Field>
-          <Field label="Description">
+          <Field label={tr("Description")}>
             <input
               required
               value={f.description}
               onChange={(e) => setF({ ...f, description: e.target.value })}
             />
           </Field>
-          <Field label="Currency">
+          <Field label={tr("Currency")}>
             <select
               value={f.currency}
               onChange={(e) => {
@@ -9950,11 +9856,11 @@ function ExpenseForm({
               }}
             >
               {branchCurrencies(branchById(data, f.branchId)).map((x) => (
-                <option key={x}>{x}</option>
+                <option key={x} value={x}>{tr(x)}</option>
               ))}
             </select>
           </Field>
-          <Field label="Amount">
+          <Field label={tr("Amount")}>
             <input
               required
               min="0"
@@ -9963,7 +9869,7 @@ function ExpenseForm({
               onChange={(e) => setF({ ...f, amount: e.target.value })}
             />
           </Field>
-          <Field label="Payment method">
+          <Field label={tr("Payment method")}>
             <select
               value={f.paymentMethod}
               onChange={(e) =>
@@ -9971,12 +9877,12 @@ function ExpenseForm({
               }
             >
               {paymentMethodsFor(data, f.branchId, f.currency).map((x) => (
-                <option key={x}>{x}</option>
+                <option key={x} value={x}>{tr(x)}</option>
               ))}
             </select>
           </Field>
           {user.role === "owner" && (
-            <Field label="Profit & loss">
+            <Field label={tr("Profit & loss")}>
               <label className="check">
                 <input
                   type="checkbox"
@@ -9985,11 +9891,11 @@ function ExpenseForm({
                     setF({ ...f, inProfitLoss: e.target.checked })
                   }
                 />
-                <span>Include in P&amp;L</span>
+                <span>{tr("Include in P&L")}</span>
               </label>
             </Field>
           )}
-          <Field label="Notes" wide>
+          <Field label={tr("Notes")} wide>
             <textarea
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
@@ -9997,11 +9903,9 @@ function ExpenseForm({
           </Field>
         </div>
         <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="button ghost" onClick={onClose}>{tr("Cancel")}</button>
           <button className="button primary">
-            {current ? "Save Changes" : "Create Expense"}
+            {current ? tr("Save Changes") : tr("Create Expense")}
           </button>
         </div>
       </form>
@@ -10010,6 +9914,7 @@ function ExpenseForm({
 }
 
 function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
+  const tr = useTranslation();
   const canWrite = user.role === "owner";
   const [editing, setEditing] = useState<Supplier | null | undefined>();
   const [paying, setPaying] = useState<Supplier | null>(null);
@@ -10040,29 +9945,28 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
     <>
       <PageHeader
         eyebrow="Accounts payable"
-        title="Accounts Payable"
-        detail="Track amounts billed, paid, due and outstanding to airlines and consolidators."
+        title={tr("Accounts Payable")}
+        detail={tr("Track amounts billed, paid, due and outstanding to airlines and consolidators.")}
         actions={
           canWrite && (
             <button className="button primary" onClick={() => setEditing(null)}>
-              <Icon name="plus" /> New Payable
-            </button>
+              <Icon name="plus" />{tr("New Payable")}</button>
           )
         }
       />
       <div className="metrics-grid payable-metrics">
-        <MetricCard icon="money" label="Outstanding (KES)" value={money(totals("KES"), "KES")} tone="cyan" foot="Current balance" />
-        <MetricCard icon="money" label="Outstanding (USD)" value={money(totals("USD"), "USD")} tone="violet" foot="Current balance" />
-        <MetricCard icon="receipt" label="Open Bills" value={data.suppliers.filter((x) => x.recordStatus !== "cancelled" && balanceFor(x) > 0).length} tone="orange" foot="Awaiting settlement" />
+        <MetricCard icon="money" label={tr("Outstanding (KES)")} value={money(totals("KES"), "KES")} tone="cyan" foot={tr("Current balance")} />
+        <MetricCard icon="money" label={tr("Outstanding (USD)")} value={money(totals("USD"), "USD")} tone="violet" foot={tr("Current balance")} />
+        <MetricCard icon="receipt" label={tr("Open Bills")} value={data.suppliers.filter((x) => x.recordStatus !== "cancelled" && balanceFor(x) > 0).length} tone="orange" foot={tr("Awaiting settlement")} />
       </div>
       <Panel className="filter-panel">
       <div className="payable-filters">
         <select
           value={branchFilter}
           onChange={(event) => setBranchFilter(event.target.value)}
-          aria-label="Payable branch"
+          aria-label={tr("Payable branch")}
         >
-          <option value="">All branches</option>
+          <option value="">{tr("All branches")}</option>
           {activeBranches(data).map((branch) => (
             <option key={branch.id} value={branch.id}>
               {branch.name}
@@ -10072,25 +9976,25 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
         <select
           value={currencyFilter}
           onChange={(event) => setCurrencyFilter(event.target.value)}
-          aria-label="Payable currency"
+          aria-label={tr("Payable currency")}
         >
-          <option value="">All currencies</option>
-          <option>KES</option>
-          <option>USD</option>
+          <option value="">{tr("All currencies")}</option>
+          <option value={"KES"}>{tr("KES")}</option>
+          <option value={"USD"}>{tr("USD")}</option>
         </select>
         <select
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value)}
-          aria-label="Payable status"
+          aria-label={tr("Payable status")}
         >
-          <option value="active">Active</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="all">All statuses</option>
+          <option value="active">{tr("Active")}</option>
+          <option value="cancelled">{tr("Cancelled")}</option>
+          <option value="all">{tr("All statuses")}</option>
         </select>
       </div>
       </Panel>
       {bills.length ? (
-        <Panel title="Payables" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
+        <Panel title={tr("Payables")} actions={<StatusBadge tone="blue">{tr("Live")}</StatusBadge>}>
         <RecordList>
           {bills.map((x) => {
             const paid = paidFor(x);
@@ -10118,7 +10022,7 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
                   <Badge
                     tone={b <= 0 ? "success" : paid > 0 ? "warning" : "danger"}
                   >
-                    {b <= 0 ? "Paid" : paid > 0 ? "Partial" : "Unpaid"}
+                    {b <= 0 ? tr("Paid") : paid > 0 ? tr("Partial") : tr("Unpaid")}
                   </Badge>
                 }
                 details={[
@@ -10143,9 +10047,7 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
                   canWrite ? (
                     <div className="row-actions">
                       {b > 0 && x.recordStatus !== "cancelled" && (
-                        <button type="button" onClick={() => setPaying(x)}>
-                          Pay
-                        </button>
+                        <button type="button" onClick={() => setPaying(x)}>{tr("Pay")}</button>
                       )}
 
                     </div>
@@ -10158,8 +10060,8 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
         </Panel>
       ) : (
         <Empty
-          title="No payables"
-          detail="Ticket costs and other unpaid obligations will appear here until settled."
+          title={tr("No payables")}
+          detail={tr("Ticket costs and other unpaid obligations will appear here until settled.")}
         />
       )}
       {editing !== undefined && (
@@ -10213,6 +10115,7 @@ function SupplierForm({
   onClose: () => void;
   onSave: (r: Supplier) => void;
 }) {
+  const tr = useTranslation();
   const branches = branchOptions(data, user);
   const [f, setF] = useState({
     date: current?.date || today(),
@@ -10228,7 +10131,7 @@ function SupplierForm({
   });
   return (
     <Modal
-      title={current ? "Edit Payable" : "Create Payable"}
+      title={current ? tr("Edit Payable") : tr("Create Payable")}
       onClose={onClose}
     >
       <form
@@ -10251,7 +10154,7 @@ function SupplierForm({
         }}
       >
         <div className="form-grid">
-          <Field label="Branch">
+          <Field label={tr("Branch")}>
             <BranchSelect
               options={branches}
               required
@@ -10268,21 +10171,21 @@ function SupplierForm({
               }}
             />
           </Field>
-          <Field label="Date">
+          <Field label={tr("Date")}>
             <input
               type="date"
               value={f.date}
               onChange={(e) => setF({ ...f, date: e.target.value })}
             />
           </Field>
-          <Field label="Payable to / provider">
+          <Field label={tr("Payable to / provider")}>
             <input
               required
               value={f.supplier}
               onChange={(e) => setF({ ...f, supplier: e.target.value })}
             />
           </Field>
-          <Field label="Bill reference">
+          <Field label={tr("Bill reference")}>
             <input
               value={f.reference}
               onChange={(event) =>
@@ -10290,14 +10193,14 @@ function SupplierForm({
               }
             />
           </Field>
-          <Field label="Description / reference" wide>
+          <Field label={tr("Description / reference")} wide>
             <input
               required
               value={f.description}
               onChange={(e) => setF({ ...f, description: e.target.value })}
             />
           </Field>
-          <Field label="Currency">
+          <Field label={tr("Currency")}>
             <select
               value={f.currency}
               onChange={(e) =>
@@ -10309,7 +10212,7 @@ function SupplierForm({
               ))}
             </select>
           </Field>
-          <Field label="Amount owed">
+          <Field label={tr("Amount owed")}>
             <input
               required
               type="number"
@@ -10318,14 +10221,14 @@ function SupplierForm({
               onChange={(e) => setF({ ...f, billed: e.target.value })}
             />
           </Field>
-          <Field label="Due date">
+          <Field label={tr("Due date")}>
             <input
               type="date"
               value={f.dueDate}
               onChange={(e) => setF({ ...f, dueDate: e.target.value })}
             />
           </Field>
-          <Field label="Notes" wide>
+          <Field label={tr("Notes")} wide>
             <textarea
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
@@ -10333,11 +10236,9 @@ function SupplierForm({
           </Field>
         </div>
         <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="button ghost" onClick={onClose}>{tr("Cancel")}</button>
           <button className="button primary">
-            {current ? "Save Changes" : "Create Payable"}
+            {current ? tr("Save Changes") : tr("Create Payable")}
           </button>
         </div>
       </form>
@@ -10414,6 +10315,7 @@ function PayablePaymentForm({
   onSaved: (data: AgencyData) => void;
   notify: (message: string) => void;
 }) {
+  const tr = useTranslation();
   const alreadyPaid = data.supplierPayments
     .filter(
       (payment) =>
@@ -10455,13 +10357,13 @@ function PayablePaymentForm({
   };
   return (
     <Modal
-      title="Record Payable Payment"
-      subtitle={`${bill.supplier} · Remaining ${money(balance, bill.currency)}`}
+      title={tr("Record Payable Payment")}
+      subtitle={tr("{0} · Remaining {1}", [bill.supplier, money(balance, bill.currency)])}
       onClose={onClose}
     >
       <form className="modal-form" onSubmit={submit}>
         <div className="form-grid">
-          <Field label="Amount paid">
+          <Field label={tr("Amount paid")}>
             <input
               required
               min="0.01"
@@ -10472,7 +10374,7 @@ function PayablePaymentForm({
               onChange={(e) => setForm({ ...form, amount: e.target.value })}
             />
           </Field>
-          <Field label="Payment date">
+          <Field label={tr("Payment date")}>
             <input
               required
               type="date"
@@ -10482,7 +10384,7 @@ function PayablePaymentForm({
               }
             />
           </Field>
-          <Field label="Payment method">
+          <Field label={tr("Payment method")}>
             <select
               value={form.paymentMethod}
               onChange={(e) =>
@@ -10493,18 +10395,18 @@ function PayablePaymentForm({
               }
             >
               {methods.map((method) => (
-                <option key={method}>{method}</option>
+                <option key={method} value={method}>{tr(method)}</option>
               ))}
             </select>
           </Field>
-          <Field label="Reference">
+          <Field label={tr("Reference")}>
             <input
               value={form.reference}
               onChange={(e) => setForm({ ...form, reference: e.target.value })}
-              placeholder="Bank or mobile reference"
+              placeholder={tr("Bank or mobile reference")}
             />
           </Field>
-          <Field label="Notes" wide>
+          <Field label={tr("Notes")} wide>
             <textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -10512,16 +10414,14 @@ function PayablePaymentForm({
           </Field>
         </div>
         <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="button ghost" onClick={onClose}>{tr("Cancel")}</button>
           <button
             disabled={
               busy || Number(form.amount) <= 0 || Number(form.amount) > balance
             }
             className="button primary"
           >
-            {busy ? "Recording..." : "Record Payment"}
+            {busy ? tr("Recording...") : tr("Record Payment")}
           </button>
         </div>
       </form>
@@ -10530,6 +10430,7 @@ function PayablePaymentForm({
 }
 
 function Clients({ data, user, save, notify }: ModuleProps) {
+  const tr = useTranslation();
   const financial = user.role === "owner" || user.role === "consultant";
   const canWrite = user.role !== "consultant";
   // Deleting is owner-only; operators create and correct, never remove.
@@ -10624,24 +10525,21 @@ function Clients({ data, user, save, notify }: ModuleProps) {
     <>
       <PageHeader
         eyebrow="Relationships"
-        title="Clients Registry"
+        title={tr("Clients Registry")}
         detail={
           financial
-            ? "Clients are added automatically from tickets, cargo and visas; download the full relationship record anytime."
-            : "Clients are added automatically from service records. Agency-wide spend remains protected."
+            ? tr("Clients are added automatically from tickets, cargo and visas; download the full relationship record anytime.")
+            : tr("Clients are added automatically from service records. Agency-wide spend remains protected.")
         }
         actions={
           <div className="button-row">
-            <button className="button secondary" onClick={download}>
-              Download clients
-            </button>
+            <button className="button secondary" onClick={download}>{tr("Download clients")}</button>
             {canWrite && (
               <button
                 className="button primary"
                 onClick={() => setEditing(null)}
               >
-                <Icon name="plus" /> New Client
-              </button>
+                <Icon name="plus" />{tr("New Client")}</button>
             )}
           </div>
         }
@@ -10652,19 +10550,19 @@ function Clients({ data, user, save, notify }: ModuleProps) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search clients…"
+            placeholder={tr("Search clients…")}
           />
         </label>
       </div>
       <div className="metrics-grid five">
-        <MetricCard icon="users" label="Total Clients" value={rows.length} tone="blue" foot="Current directory" />
-        <MetricCard icon="user" label="Active Clients" value={activeClientCount} tone="green" foot="With service activity" />
-        <MetricCard icon="building" label="Corporate Clients" value={`${corporateCount} (${rows.length ? Math.round((corporateCount / rows.length) * 100) : 0}%)`} tone="violet" foot="Registered companies" />
-        <MetricCard icon="user" label="Individual Clients" value={`${individualCount} (${rows.length ? Math.round((individualCount / rows.length) * 100) : 0}%)`} tone="orange" foot="Personal accounts" />
-        <MetricCard icon="wallet" label="Lifetime Spend" value={`${money(lifetimeKes, "KES")} / ${money(lifetimeUsd, "USD")}`} tone="cyan" foot="All services" />
+        <MetricCard icon="users" label={tr("Total Clients")} value={rows.length} tone="blue" foot={tr("Current directory")} />
+        <MetricCard icon="user" label={tr("Active Clients")} value={activeClientCount} tone="green" foot={tr("With service activity")} />
+        <MetricCard icon="building" label={tr("Corporate Clients")} value={`${corporateCount} (${rows.length ? Math.round((corporateCount / rows.length) * 100) : 0}%)`} tone="violet" foot={tr("Registered companies")} />
+        <MetricCard icon="user" label={tr("Individual Clients")} value={`${individualCount} (${rows.length ? Math.round((individualCount / rows.length) * 100) : 0}%)`} tone="orange" foot={tr("Personal accounts")} />
+        <MetricCard icon="wallet" label={tr("Lifetime Spend")} value={`${money(lifetimeKes, "KES")} / ${money(lifetimeUsd, "USD")}`} tone="cyan" foot={tr("All services")} />
       </div>
       {rows.length ? (
-        <Panel title="Client Directory" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
+        <Panel title={tr("Client Directory")} actions={<StatusBadge tone="blue">{tr("Live")}</StatusBadge>}>
         <RecordList>
           {rows.map((x) => {
             const s = clientStats(data, x);
@@ -10717,13 +10615,12 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                 badges={
                   <>
                     <Badge tone="blue">
-                      {s.tickets} ticket{s.tickets === 1 ? "" : "s"}
+                      {s.tickets}{" "}{tr("ticket")}{" "}{s.tickets === 1 ? "" : tr("s")}
                     </Badge>
                     <Badge tone="blue">
-                      {s.cargo} cargo
-                    </Badge>
+                      {s.cargo}{" "}{tr("cargo")}</Badge>
                     <Badge tone="neutral">
-                      {s.visas} visa{s.visas === 1 ? "" : "s"}
+                      {s.visas}{" "}{tr("visa")}{" "}{s.visas === 1 ? "" : tr("s")}
                     </Badge>
                   </>
                 }
@@ -10777,13 +10674,12 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                       className="small-icon"
                       onClick={() => void openClient(x)}
                     >
-                      <Icon name="clock" size={16} /> Activity
-                    </button>
+                      <Icon name="clock" size={16} />{tr("Activity")}</button>
                     {canWrite && (
                       <>
                         <button
                           className="small-icon edit-action"
-                          aria-label="Edit"
+                          aria-label={tr("Edit")}
                           onClick={() => setEditing(x)}
                         >
                           <Icon name="edit" size={16} />
@@ -10791,7 +10687,7 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                         {canDelete && (
                           <button
                             className="small-icon delete-action"
-                            aria-label="Delete"
+                            aria-label={tr("Delete")}
                             onClick={() => setDeleting(x)}
                           >
                             <Icon name="trash" size={16} />
@@ -10808,8 +10704,8 @@ function Clients({ data, user, save, notify }: ModuleProps) {
         </Panel>
       ) : (
         <Empty
-          title="No clients yet"
-          detail="Create a ticket, cargo shipment or visa case with a phone number; the client will appear here automatically."
+          title={tr("No clients yet")}
+          detail={tr("Create a ticket, cargo shipment or visa case with a phone number; the client will appear here automatically.")}
         />
       )}
       {editing !== undefined && (
@@ -10846,21 +10742,21 @@ function Clients({ data, user, save, notify }: ModuleProps) {
             <div>
               <section className="mini-kpis">
                 <div>
-                  <span>Tickets</span>
+                  <span>{tr("Tickets")}</span>
                   <strong>{history.tickets.length}</strong>
                 </div>
                 <div>
-                  <span>Visas</span>
+                  <span>{tr("Visas")}</span>
                   <strong>{history.visas.length}</strong>
                 </div>
                 <div>
-                  <span>Cargo</span>
+                  <span>{tr("Cargo")}</span>
                   <strong>{history.cargo.length}</strong>
                 </div>
                 {financial &&
                   Object.entries(openBalances).map(([currency, balance]) => (
                     <div key={currency}>
-                      <span>{currency} Outstanding</span>
+                      <span>{currency}{" "}{tr("Outstanding")}</span>
                       <strong>{money(balance, currency as Currency)}</strong>
                     </div>
                   ))}
@@ -10868,18 +10764,18 @@ function Clients({ data, user, save, notify }: ModuleProps) {
               <TableShell>
                 <thead>
                   <tr>
-                    <th>Type</th>
-                    <th>Reference</th>
-                    <th>Date</th>
-                    <th>Branch/route</th>
-                    <th>Status</th>
-                    {financial && <th>Remaining Balance</th>}
+                    <th>{tr("Type")}</th>
+                    <th>{tr("Reference")}</th>
+                    <th>{tr("Date")}</th>
+                    <th>{tr("Branch/route")}</th>
+                    <th>{tr("Status")}</th>
+                    {financial && <th>{tr("Remaining Balance")}</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {history.tickets.map((x) => (
                     <tr key={x.id}>
-                      <td>Ticket</td>
+                      <td>{tr("Ticket")}</td>
                       <td>{x.ref}</td>
                       <td>{dateLabel(x.saleDate)}</td>
                       <td>
@@ -10893,7 +10789,7 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                   ))}
                   {history.visas.map((x) => (
                     <tr key={x.id}>
-                      <td>Visa</td>
+                      <td>{tr("Visa")}</td>
                       <td>{x.ref}</td>
                       <td>{dateLabel(x.appDate)}</td>
                       <td>
@@ -10907,11 +10803,11 @@ function Clients({ data, user, save, notify }: ModuleProps) {
                   ))}
                   {history.cargo.map((x) => (
                     <tr key={x.id}>
-                      <td>Cargo</td>
+                      <td>{tr("Cargo")}</td>
                       <td>{x.tracking}</td>
                       <td>{dateLabel(x.dateIn)}</td>
                       <td>
-                        {x.origin} to {x.destination}
+                        {x.origin}{" "}{tr("to")}{" "}{x.destination}
                       </td>
                       <td>{x.status}</td>
                       {financial && (
@@ -10923,14 +10819,14 @@ function Clients({ data, user, save, notify }: ModuleProps) {
               </TableShell>
             </div>
           ) : (
-            <p>Loading activity...</p>
+            <p>{tr("Loading activity...")}</p>
           )}
         </Modal>
       )}
       {deleting && (
         <Confirm
-          title="Delete client?"
-          detail={`${deleting.name} will be removed from the client registry. This action cannot be undone.`}
+          title={tr("Delete client?")}
+          detail={tr("{0} will be removed from the client registry. This action cannot be undone.", [deleting.name])}
           confirmLabel="Delete Client"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
@@ -10965,6 +10861,7 @@ function ClientForm({
   onClose: () => void;
   onSave: (r: Client) => void;
 }) {
+  const tr = useTranslation();
   const branches = branchOptions(data, user);
   const initialBranchId =
     current?.homeBranchId ||
@@ -10986,8 +10883,8 @@ function ClientForm({
   });
   return (
     <Modal
-      title={current ? "Edit Client" : "Create Client"}
-      subtitle="Phone is the matching key for activity; email enables status notifications."
+      title={current ? tr("Edit Client") : tr("Create Client")}
+      subtitle={tr("Phone is the matching key for activity; email enables status notifications.")}
       onClose={onClose}
     >
       <form
@@ -11008,29 +10905,29 @@ function ClientForm({
         }}
       >
         <div className="form-grid">
-          <Field label="Client name">
+          <Field label={tr("Client name")}>
             <input
               required
               value={f.name}
               onChange={(e) => setF({ ...f, name: e.target.value })}
             />
           </Field>
-          <Field label="Phone number">
+          <Field label={tr("Phone number")}>
             <input
               required
               value={f.phone}
               onChange={(e) => setF({ ...f, phone: e.target.value })}
             />
           </Field>
-          <Field label="Email">
+          <Field label={tr("Email")}>
             <input
               type="email"
               value={f.email}
               onChange={(e) => setF({ ...f, email: e.target.value })}
-              placeholder="client@example.com"
+              placeholder={tr("client@example.com")}
             />
           </Field>
-          <Field label="Home branch">
+          <Field label={tr("Home branch")}>
             <BranchSelect
               options={branches}
               value={f.homeBranchId}
@@ -11045,31 +10942,31 @@ function ClientForm({
               }}
             />
           </Field>
-          <Field label="Preferred language">
+          <Field label={tr("Preferred language")}>
             <select
               value={f.preferredLanguage}
               onChange={(e) =>
                 setF({ ...f, preferredLanguage: e.target.value as "so" | "en" })
               }
             >
-              <option value="so">Somali</option>
-              <option value="en">English</option>
+              <option value="so">{tr("Somali")}</option>
+              <option value="en">{tr("English")}</option>
             </select>
           </Field>
-          <Field label="Client type">
+          <Field label={tr("Client type")}>
             <select
               value={f.type}
               onChange={(e) =>
                 setF({ ...f, type: e.target.value as Client["type"] })
               }
             >
-              <option>Trader</option>
-              <option>Diaspora</option>
-              <option>Corporate</option>
-              <option>Individual</option>
+              <option value={"Trader"}>{tr("Trader")}</option>
+              <option value={"Diaspora"}>{tr("Diaspora")}</option>
+              <option value={"Corporate"}>{tr("Corporate")}</option>
+              <option value={"Individual"}>{tr("Individual")}</option>
             </select>
           </Field>
-          <Field label="Notes" wide>
+          <Field label={tr("Notes")} wide>
             <textarea
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
@@ -11077,11 +10974,9 @@ function ClientForm({
           </Field>
         </div>
         <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="button ghost" onClick={onClose}>{tr("Cancel")}</button>
           <button className="button primary">
-            {current ? "Save Changes" : "Create Client"}
+            {current ? tr("Save Changes") : tr("Create Client")}
           </button>
         </div>
       </form>
@@ -11090,6 +10985,8 @@ function ClientForm({
 }
 
 function Receipt({ data }: { data: AgencyData }) {
+  const { locale, theme } = usePreferences();
+  const tr = useTranslation();
   const [ref, setRef] = useState("");
   const query = ref.trim().toLowerCase();
   const ticket = data.tickets.find((row) => row.ref.toLowerCase() === query);
@@ -11110,19 +11007,19 @@ function Receipt({ data }: { data: AgencyData }) {
     ]);
   };
   return <>
-    <PageHeader eyebrow="Client document" title="Receipt Builder" detail="Find a ticket, visa or cargo reference to preview and print its receipt." />
+    <PageHeader eyebrow="Client document" title={tr("Receipt Builder")} detail={tr("Find a ticket, visa or cargo reference to preview and print its receipt.")} />
     <div className="receipt-layout">
       <section className="panel lookup-panel">
-        <h2>Find a transaction</h2>
-        <label className="lookup-input"><Icon name="search" /><input aria-label="Transaction reference" autoFocus value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Ticket, visa or cargo reference" /></label>
-        {ref && !item && <p className="form-error">No matching record found.</p>}
+        <h2>{tr("Find a transaction")}</h2>
+        <label className="lookup-input"><Icon name="search" /><input aria-label={tr("Transaction reference")} autoFocus value={ref} onChange={(e) => setRef(e.target.value)} placeholder={tr("Ticket, visa or cargo reference")} /></label>
+        {ref && !item && <p className="form-error">{tr("No matching record found.")}</p>}
         {item && <div className="receipt-actions print-hide">
-          <button className="button ghost" onClick={downloadTextCopy}><Icon name="file" /> Text copy</button>
-          <button className="button primary" onClick={() => generateReceipt(item)}><Icon name="receipt" /> Print / Save PDF</button>
+          <button className="button ghost" onClick={downloadTextCopy}><Icon name="file" />{tr("Text copy")}</button>
+          <button className="button primary" onClick={() => generateReceipt(item)}><Icon name="receipt" />{tr("Print / Save PDF")}</button>
         </div>}
       </section>
-      {item ? <iframe title={`${item.kind} receipt preview`} sandbox="" srcDoc={buildReceiptHtml(item)} style={{ width: "100%", height: 1180, border: 0, borderRadius: 16 }} />
-        : <section className="panel empty-receipt"><Icon name="receipt" size={42} /><h3>Your receipt will appear here</h3><p>Search for a valid transaction reference.</p></section>}
+      {item ? <iframe title={tr("{0} receipt preview", [item.kind])} sandbox="" srcDoc={buildReceiptHtml(item, undefined, false, { locale, theme })} style={{ width: "100%", height: 1180, border: 0, borderRadius: 16 }} />
+        : <section className="panel empty-receipt"><Icon name="receipt" size={42} /><h3>{tr("Your receipt will appear here")}</h3><p>{tr("Search for a valid transaction reference.")}</p></section>}
     </div>
   </>;
 }
@@ -11136,6 +11033,7 @@ function Tracking({
   user: User;
   notify: (message: string) => void;
 }) {
+  const tr = useTranslation();
   const [kind, setKind] = useState<"cargo" | "visa">("cargo");
   const [q, setQ] = useState("");
   const [sending, setSending] = useState(false);
@@ -11232,22 +11130,20 @@ function Tracking({
     <>
       <PageHeader
         eyebrow="Customer status centre"
-        title="Cargo & Visa Tracking"
-        detail="Find a live record, download a customer-ready PDF or email the latest status when an address is recorded."
+        title={tr("Cargo & Visa Tracking")}
+        detail={tr("Find a live record, download a customer-ready PDF or email the latest status when an address is recorded.")}
       />
       <div className="status-kind-tabs">
         <button
           className={kind === "cargo" ? "active" : ""}
           onClick={() => switchKind("cargo")}
         >
-          <Icon name="cargo" /> Cargo shipment
-        </button>
+          <Icon name="cargo" />{tr("Cargo shipment")}</button>
         <button
           className={kind === "visa" ? "active" : ""}
           onClick={() => switchKind("visa")}
         >
-          <Icon name="visa" /> Visa application
-        </button>
+          <Icon name="visa" />{tr("Visa application")}</button>
       </div>
       <section className="tracking-card">
         <div className="tracking-search">
@@ -11258,8 +11154,8 @@ function Tracking({
             onChange={(e) => setQ(e.target.value)}
             placeholder={
               kind === "cargo"
-                ? "Enter NBO-… or MOG-…"
-                : "Enter VIS-N-… or VIS-M-…"
+                ? tr("Enter NBO-… or MOG-…")
+                : tr("Enter VIS-N-… or VIS-M-…")
             }
           />
         </div>
@@ -11269,8 +11165,8 @@ function Tracking({
               <div>
                 <p className="eyebrow">
                   {kind === "cargo"
-                    ? "Tracking number"
-                    : "Application reference"}
+                    ? tr("Tracking number")
+                    : tr("Application reference")}
                 </p>
                 <h2>{cargo?.tracking || visa?.ref}</h2>
                 <span className="tracking-pro-route">
@@ -11284,7 +11180,7 @@ function Tracking({
                     <>
                       <Icon name="globe" size={15} /> {visa?.destination}
                       <em>·</em>
-                      {visa?.visaType || "Visa application"}
+                      {visa?.visaType || tr("Visa application")}
                     </>
                   )}
                 </span>
@@ -11350,8 +11246,8 @@ function Tracking({
                 </div>
                 {cargoStatusKey(cargo.status) === "claim" && (
                   <div className="claim-alert">
-                    <strong>Claim opened</strong>
-                    <span>Please contact the agency office for an update.</span>
+                    <strong>{tr("Claim opened")}</strong>
+                    <span>{tr("Please contact the agency office for an update.")}</span>
                   </div>
                 )}
                 <div className="tracking-details tracking-details-pro">
@@ -11360,7 +11256,7 @@ function Tracking({
                       <Icon name="calendar" size={18} />
                     </span>
                     <div>
-                      <small>Received</small>
+                      <small>{tr("Received")}</small>
                       <strong>{dateLabel(cargo.dateIn)}</strong>
                     </div>
                   </div>
@@ -11369,7 +11265,7 @@ function Tracking({
                       <Icon name="user" size={18} />
                     </span>
                     <div>
-                      <small>Sender</small>
+                      <small>{tr("Sender")}</small>
                       <strong>{cargo.sender}</strong>
                     </div>
                   </div>
@@ -11378,7 +11274,7 @@ function Tracking({
                       <Icon name="users" size={18} />
                     </span>
                     <div>
-                      <small>Receiver</small>
+                      <small>{tr("Receiver")}</small>
                       <strong>{cargo.receiver}</strong>
                     </div>
                   </div>
@@ -11387,7 +11283,7 @@ function Tracking({
                       <Icon name="box" size={18} />
                     </span>
                     <div>
-                      <small>Contents</small>
+                      <small>{tr("Contents")}</small>
                       <strong>{cargo.contents}</strong>
                     </div>
                   </div>
@@ -11396,8 +11292,8 @@ function Tracking({
                       <Icon name="briefcase" size={18} />
                     </span>
                     <div>
-                      <small>Weight</small>
-                      <strong>{cargo.weight} kg</strong>
+                      <small>{tr("Weight")}</small>
+                      <strong>{cargo.weight}{" "}{tr("kg")}</strong>
                     </div>
                   </div>
                   <div>
@@ -11405,7 +11301,7 @@ function Tracking({
                       <Icon name="check" size={18} />
                     </span>
                     <div>
-                      <small>Delivered</small>
+                      <small>{tr("Delivered")}</small>
                       <strong>{dateLabel(cargo.dateDelivered)}</strong>
                     </div>
                   </div>
@@ -11445,18 +11341,15 @@ function Tracking({
                             <Icon name={icon} size={18} />
                           )}
                         </i>
-                        <span>{serviceStatusLabel(stage)}</span>
+                        <span>{tr(serviceStatusLabel(stage))}</span>
                       </div>
                     );
                   })}
                 </div>
                 {visa.status === "refused" && (
                   <div className="claim-alert">
-                    <strong>Application refused</strong>
-                    <span>
-                      Contact the agency office for guidance on the recorded
-                      decision.
-                    </span>
+                    <strong>{tr("Application refused")}</strong>
+                    <span>{tr("Contact the agency office for guidance on the recorded decision.")}</span>
                   </div>
                 )}
                 <div className="tracking-details tracking-details-pro">
@@ -11465,7 +11358,7 @@ function Tracking({
                       <Icon name="calendar" size={18} />
                     </span>
                     <div>
-                      <small>Application date</small>
+                      <small>{tr("Application date")}</small>
                       <strong>{dateLabel(visa.appDate)}</strong>
                     </div>
                   </div>
@@ -11474,7 +11367,7 @@ function Tracking({
                       <Icon name="user" size={18} />
                     </span>
                     <div>
-                      <small>Applicant</small>
+                      <small>{tr("Applicant")}</small>
                       <strong>{visa.applicant}</strong>
                     </div>
                   </div>
@@ -11483,7 +11376,7 @@ function Tracking({
                       <Icon name="globe" size={18} />
                     </span>
                     <div>
-                      <small>Destination</small>
+                      <small>{tr("Destination")}</small>
                       <strong>{visa.destination}</strong>
                     </div>
                   </div>
@@ -11492,8 +11385,8 @@ function Tracking({
                       <Icon name="passport" size={18} />
                     </span>
                     <div>
-                      <small>Application type</small>
-                      <strong>{visa.visaType || "Visa application"}</strong>
+                      <small>{tr("Application type")}</small>
+                      <strong>{visa.visaType || tr("Visa application")}</strong>
                     </div>
                   </div>
                   <div>
@@ -11501,7 +11394,7 @@ function Tracking({
                       <Icon name="building" size={18} />
                     </span>
                     <div>
-                      <small>Office</small>
+                      <small>{tr("Office")}</small>
                       <strong>
                         <BranchName data={data} branch={visa.office} />
                       </strong>
@@ -11512,8 +11405,8 @@ function Tracking({
                       <Icon name="mail" size={18} />
                     </span>
                     <div>
-                      <small>Email</small>
-                      <strong>{visa.email || "Not recorded"}</strong>
+                      <small>{tr("Email")}</small>
+                      <strong>{visa.email || tr("Not recorded")}</strong>
                     </div>
                   </div>
                 </div>
@@ -11522,8 +11415,7 @@ function Tracking({
             {canShare && (
               <div className="status-share-actions">
                 <button className="button secondary" onClick={download}>
-                  <Icon name="receipt" /> Download status PDF
-                </button>
+                  <Icon name="receipt" />{tr("Download status PDF")}</button>
                 <button
                   className="button primary"
                   disabled={!emailAddress || sending}
@@ -11531,18 +11423,18 @@ function Tracking({
                 >
                   <Icon name="mail" />{" "}
                   {sending
-                    ? "Sending…"
+                    ? tr("Sending…")
                     : emailAddress
-                      ? "Email customer"
-                      : "Add customer email first"}
+                      ? tr("Email customer")
+                      : tr("Add customer email first")}
                 </button>
               </div>
             )}
           </div>
         ) : q ? (
           <Empty
-            title={`${kind === "cargo" ? "Shipment" : "Visa application"} not found`}
-            detail={`Check the ${kind === "cargo" ? "tracking number" : "application reference"} and try again.`}
+            title={tr("{0} not found", [kind === "cargo" ? "Shipment" : "Visa application"])}
+            detail={tr("Check the {0} and try again.", [kind === "cargo" ? "tracking number" : "application reference"])}
           />
         ) : (
           <div className="tracking-placeholder">
@@ -11555,11 +11447,8 @@ function Tracking({
                 <Icon name="visa" />
               </span>
             </div>
-            <h3>One status centre, two services</h3>
-            <p>
-              Choose cargo or visa, then enter the reference generated by the
-              system.
-            </p>
+            <h3>{tr("One status centre, two services")}</h3>
+            <p>{tr("Choose cargo or visa, then enter the reference generated by the system.")}</p>
           </div>
         )}
       </section>
@@ -11568,6 +11457,7 @@ function Tracking({
 }
 
 export function LegacyReports({ data, user }: { data: AgencyData; user: User }) {
+  const tr = useTranslation();
   const [from, setFrom] = useState(
     `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`,
   );
@@ -11643,7 +11533,7 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
       grossProfit: row.serviceGrossProfit?.[service] || 0,
     })),
   );
-  const titleScope = selectedBranch ? selectedBranch.name : "All Branches";
+  const titleScope = selectedBranch ? selectedBranch.name : tr("All Branches");
   const trendCurrencies = selectedBranch
     ? branchCurrencies(selectedBranch)
     : availableCurrencies;
@@ -11699,8 +11589,8 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
     <>
       <PageHeader
         eyebrow="Protected financial view"
-        title="Financial Reports"
-        detail="Agency and branch performance, revenue, collections, profit and outstanding balances."
+        title={tr("Financial Reports")}
+        detail={tr("Agency and branch performance, revenue, collections, profit and outstanding balances.")}
         actions={
           <div className="report-actions">
             <select
@@ -11710,7 +11600,7 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
                 setCurrency("");
               }}
             >
-              <option value="">All Branches</option>
+              <option value="">{tr("All Branches")}</option>
               {branches.map((branch) => (
                 <option key={branch.id} value={branch.id}>
                   {branch.name}
@@ -11721,7 +11611,7 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
               value={currency}
               onChange={(e) => setCurrency(e.target.value as "" | Currency)}
             >
-              <option value="">All Currencies</option>
+              <option value="">{tr("All Currencies")}</option>
               {availableCurrencies.map((item) => (
                 <option key={item} value={item}>
                   {item}
@@ -11734,7 +11624,7 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
               />
-              <span>to</span>
+              <span>{tr("to")}</span>
               <input
                 type="date"
                 value={to}
@@ -11742,9 +11632,7 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
               />
             </div>
             {user.role === "owner" && (
-              <button className="button primary" onClick={download}>
-                Download PDF report
-              </button>
+              <button className="button primary" onClick={download}>{tr("Download PDF report")}</button>
             )}
           </div>
         }
@@ -11753,9 +11641,9 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
         <section className="mini-kpis">
           {totals.map((row) => (
             <div key={row.currency}>
-              <span>Agency {row.currency}</span>
+              <span>{tr("Agency")}{" "}{row.currency}</span>
               <strong>{money(row.revenue, row.currency)}</strong>
-              <small>Collections {money(row.collections, row.currency)}</small>
+              <small>{tr("Collections")}{" "}{money(row.collections, row.currency)}</small>
             </div>
           ))}
         </section>
@@ -11771,9 +11659,9 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
               </span>
               <span className="report-summary-label">
                 {metric === "grossProfit"
-                  ? "Gross Profit"
+                  ? tr("Gross Profit")
                   : metric === "outstanding"
-                    ? "Outstanding Debt"
+                    ? tr("Outstanding Debt")
                     : metric[0].toUpperCase() + metric.slice(1)}
               </span>
               {currencyRows.map((row) => (
@@ -11798,8 +11686,8 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
             <div>
               <p className="eyebrow">
                 {selectedBranch
-                  ? "Currency performance"
-                  : "Branch & currency performance"}
+                  ? tr("Currency performance")
+                  : tr("Branch & currency performance")}
               </p>
               <h2>{titleScope}</h2>
             </div>
@@ -11808,15 +11696,15 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
             <TableShell>
               <thead>
                 <tr>
-                  {!selectedBranch && <th>Branch</th>}
-                  <th>Currency</th>
-                  <th>Revenue</th>
-                  <th>Collections</th>
-                  <th>Direct cost</th>
-                  <th>Gross profit</th>
-                  <th>Expenses</th>
-                  <th>Outstanding debt</th>
-                  {!selectedBranch && <th>Accounts payable</th>}
+                  {!selectedBranch && <th>{tr("Branch")}</th>}
+                  <th>{tr("Currency")}</th>
+                  <th>{tr("Revenue")}</th>
+                  <th>{tr("Collections")}</th>
+                  <th>{tr("Direct cost")}</th>
+                  <th>{tr("Gross profit")}</th>
+                  <th>{tr("Expenses")}</th>
+                  <th>{tr("Outstanding debt")}</th>
+                  {!selectedBranch && <th>{tr("Accounts payable")}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -11851,24 +11739,24 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
             </TableShell>
           ) : (
             <Empty
-              title="No configured rows"
-              detail="There are no currencies available for this selection."
+              title={tr("No configured rows")}
+              detail={tr("There are no currencies available for this selection.")}
             />
           )}
         </article>
         <article className="panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Revenue by service</p>
-              <h2>Revenue breakdown</h2>
+              <p className="eyebrow">{tr("Revenue by service")}</p>
+              <h2>{tr("Revenue breakdown")}</h2>
             </div>
           </div>
           <div className="report-table">
             <div className="report-row header">
               <span>
-                {selectedBranch ? "Service" : "Branch / currency / service"}
+                {selectedBranch ? tr("Service") : tr("Branch / currency / service")}
               </span>
-              <span>Revenue</span>
+              <span>{tr("Revenue")}</span>
             </div>
             {serviceRows.map((row) => (
               <div
@@ -11894,16 +11782,16 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
         <article className="panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Collections</p>
-              <h2>Collections by Payment Method</h2>
+              <p className="eyebrow">{tr("Collections")}</p>
+              <h2>{tr("Collections by Payment Method")}</h2>
             </div>
           </div>
           <div className="report-table">
             <div className="report-row header">
               <span>
-                {selectedBranch ? "Method" : "Branch / currency / method"}
+                {selectedBranch ? tr("Method") : tr("Branch / currency / method")}
               </span>
-              <span>Collections</span>
+              <span>{tr("Collections")}</span>
             </div>
             {methodRows.length ? (
               methodRows.map((row) => (
@@ -11925,19 +11813,16 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
                 </div>
               ))
             ) : (
-              <p className="panel-copy">
-                No collections recorded for this period.
-              </p>
+              <p className="panel-copy">{tr("No collections recorded for this period.")}</p>
             )}
           </div>
         </article>
         <article className="panel span-2">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Revenue trend</p>
+              <p className="eyebrow">{tr("Revenue trend")}</p>
               <h2>
-                {titleScope} · {chartCurrency} Revenue Trend
-              </h2>
+                {titleScope} · {chartCurrency}{" "}{tr("Revenue Trend")}</h2>
             </div>
             {!currency && trendCurrencies.length > 1 && (
               <select
@@ -11975,15 +11860,13 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
                         height: `${Math.max(4, (value / maxTrend) * 100)}%`,
                       }}
                     />
-                    <small>{month.label}</small>
+                    <small>{tr(month.label)}</small>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <p className="panel-copy compact-empty">
-              No revenue recorded for this period.
-            </p>
+            <p className="panel-copy compact-empty">{tr("No revenue recorded for this period.")}</p>
           )}
         </article>
       </section>
@@ -11992,6 +11875,7 @@ export function LegacyReports({ data, user }: { data: AgencyData; user: User }) 
 }
 
 function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; scopeBranchId?: string }) {
+  const tr = useTranslation();
   const [from, setFrom] = useState(
     `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`,
   );
@@ -12043,7 +11927,7 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
   const rows = (report?.rows || []).filter(
     (row) => !currency || row.currency === currency,
   );
-  const titleScope = selectedBranch?.name || "All Branches";
+  const titleScope = selectedBranch?.name || tr("All Branches");
   const serviceRows = rows.flatMap((row) =>
     (["ticket", "cargo", "visa"] as const)
       .map((service) => {
@@ -12224,8 +12108,8 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
     <>
       <PageHeader
         eyebrow="Protected financial view"
-        title="Financial Reports"
-        detail={`${titleScope} / each currency shown separately / ${dateLabel(from)} to ${dateLabel(to)}`}
+        title={tr("Financial Reports")}
+        detail={tr("{0} / each currency shown separately / {1} to {2}", [titleScope, dateLabel(from), dateLabel(to)])}
         actions={
           <div className="report-actions">
             <div className="date-range">
@@ -12234,21 +12118,19 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
                 value={from}
                 max={to}
                 onChange={(event) => setFrom(event.target.value)}
-                aria-label="Report start date"
+                aria-label={tr("Report start date")}
               />
-              <span>to</span>
+              <span>{tr("to")}</span>
               <input
                 type="date"
                 value={to}
                 min={from}
                 onChange={(event) => setTo(event.target.value)}
-                aria-label="Report end date"
+                aria-label={tr("Report end date")}
               />
             </div>
             {user.role === "owner" && (
-              <button className="button primary" onClick={download}>
-                Download PDF report
-              </button>
+              <button className="button primary" onClick={download}>{tr("Download PDF report")}</button>
             )}
           </div>
         }
@@ -12256,20 +12138,19 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
       {selectedBranch && performanceSummary.length > 0 && (
         <section className="report-summary-block">
           <p className="eyebrow">
-            {titleScope} · financial performance
-          </p>
+            {titleScope}{" "}{tr("· financial performance")}</p>
           {performanceSummary.map((summary) => (
             <div key={`summary-${summary.currency}`}>
               {performanceSummary.length > 1 && (
                 <p className="branch-report-subhead">{summary.currency}</p>
               )}
               <div className="metrics-grid six">
-                <MetricCard icon="receipt" tone="blue" label="Customer Charges" value={money(summary.customerCharges, summary.currency)} foot="Billed to customers" />
-                <MetricCard icon="money" tone="green" label="Payments Received" value={money(summary.paymentsReceived, summary.currency)} foot="Collected in period" />
-                <MetricCard icon="expense" tone="orange" label="Direct Cost" value={money(summary.directCost, summary.currency)} foot="Cost of service" />
-                <MetricCard icon="report" tone="violet" label="Profit" value={money(summary.profit, summary.currency)} foot="Charges less cost" />
-                <MetricCard icon="logout" tone="pink" label="Refunds" value={money(summary.refunds, summary.currency)} foot="Returned to customers" />
-                <MetricCard icon="wallet" tone="cyan" label="Net Revenue" value={money(summary.netReceived, summary.currency)} foot="Received less refunds" />
+                <MetricCard icon="receipt" tone="blue" label={tr("Customer Charges")} value={money(summary.customerCharges, summary.currency)} foot={tr("Billed to customers")} />
+                <MetricCard icon="money" tone="green" label={tr("Payments Received")} value={money(summary.paymentsReceived, summary.currency)} foot={tr("Collected in period")} />
+                <MetricCard icon="expense" tone="orange" label={tr("Direct Cost")} value={money(summary.directCost, summary.currency)} foot={tr("Cost of service")} />
+                <MetricCard icon="report" tone="violet" label={tr("Profit")} value={money(summary.profit, summary.currency)} foot={tr("Charges less cost")} />
+                <MetricCard icon="logout" tone="pink" label={tr("Refunds")} value={money(summary.refunds, summary.currency)} foot={tr("Returned to customers")} />
+                <MetricCard icon="wallet" tone="cyan" label={tr("Net Revenue")} value={money(summary.netReceived, summary.currency)} foot={tr("Received less refunds")} />
               </div>
             </div>
           ))}
@@ -12279,12 +12160,12 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
       <section className="service-performance-section">
         <header className="service-performance-header">
           <p className="eyebrow">
-            {selectedBranch ? "Service performance" : "Branch & service performance"}
+            {selectedBranch ? tr("Service performance") : tr("Branch & service performance")}
           </p>
           <h2>
             {selectedBranch
-              ? `${titleScope} — charges, payments and profit by service`
-              : "Each branch, then its services, by charges, payments and profit"}
+              ? tr("{0} — charges, payments and profit by service", [titleScope])
+              : tr("Each branch, then its services, by charges, payments and profit")}
           </h2>
         </header>
         {branchReportGroups.length ? (
@@ -12312,44 +12193,40 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
 
                 {branch.currencies.map((sub) => (
                   <div key={`${branch.branchId}-${sub.currency}`}>
-                    <p className="branch-report-subhead">
-                      Branch performance
-                      {branch.currencies.length > 1 ? ` · ${sub.currency}` : ""}
+                    <p className="branch-report-subhead">{tr("Branch performance")}{" "}{branch.currencies.length > 1 ? ` · ${sub.currency}` : ""}
                     </p>
                     <div className="metrics-grid">
                       <MetricCard
                         icon="receipt"
                         tone="blue"
-                        label="Customer Charges"
+                        label={tr("Customer Charges")}
                         value={money(sub.totals.customerCharges, sub.currency)}
-                        foot="Billed to customers"
+                        foot={tr("Billed to customers")}
                       />
                       <MetricCard
                         icon="money"
                         tone="green"
-                        label="Payments Received"
+                        label={tr("Payments Received")}
                         value={money(sub.totals.paymentsReceived, sub.currency)}
-                        foot="Collected in period"
+                        foot={tr("Collected in period")}
                       />
                       <MetricCard
                         icon="expense"
                         tone="orange"
-                        label="Direct Cost"
+                        label={tr("Direct Cost")}
                         value={money(sub.totals.directCost, sub.currency)}
-                        foot="Cost of service"
+                        foot={tr("Cost of service")}
                       />
                       <MetricCard
                         icon="report"
                         tone="violet"
-                        label="Profit"
+                        label={tr("Profit")}
                         value={money(sub.totals.profit, sub.currency)}
-                        foot="Charges less cost"
+                        foot={tr("Charges less cost")}
                       />
                     </div>
 
-                    <p className="branch-report-subhead">
-                      Service performance
-                      {branch.currencies.length > 1 ? ` · ${sub.currency}` : ""}
+                    <p className="branch-report-subhead">{tr("Service performance")}{" "}{branch.currencies.length > 1 ? ` · ${sub.currency}` : ""}
                     </p>
                     <div className="metrics-grid">
                       {sub.services.map((service) => (
@@ -12374,7 +12251,7 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
                             service.service.slice(1)
                           }
                           value={money(service.profit, sub.currency)}
-                          foot={`${service.transactions} txns · ${money(service.paymentsReceived, sub.currency)} received`}
+                          foot={tr("{0} txns · {1} received", [service.transactions, money(service.paymentsReceived, sub.currency)])}
                         />
                       ))}
                     </div>
@@ -12385,11 +12262,11 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
           </div>
         ) : (
           <Empty
-            title={loading ? "Loading financial activity" : "No financial activity"}
+            title={loading ? tr("Loading financial activity") : tr("No financial activity")}
             detail={
               loading
-                ? "The payment ledger and service records are being reconciled."
-                : `No financial activity for ${titleScope}${currency ? ` in ${currency}` : ""} during this period.`
+                ? tr("The payment ledger and service records are being reconciled.")
+                : tr("No financial activity for {0}{1} during this period.", [titleScope, currency ? ` in ${currency}` : ""])
             }
           />
         )}
@@ -12398,21 +12275,21 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
         <article className="panel span-2">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Payments received by method</p>
-              <h2>Ledger receipts and refunds</h2>
+              <p className="eyebrow">{tr("Payments received by method")}</p>
+              <h2>{tr("Ledger receipts and refunds")}</h2>
             </div>
           </div>
           {methodRows.length ? (
             <TableShell>
               <thead>
                 <tr>
-                  {!selectedBranch && <th>Branch</th>}
-                  <th>Currency</th>
-                  <th>Method</th>
-                  <th>Transactions</th>
-                  <th>Received</th>
-                  <th>Refunds</th>
-                  <th>Net received</th>
+                  {!selectedBranch && <th>{tr("Branch")}</th>}
+                  <th>{tr("Currency")}</th>
+                  <th>{tr("Method")}</th>
+                  <th>{tr("Transactions")}</th>
+                  <th>{tr("Received")}</th>
+                  <th>{tr("Refunds")}</th>
+                  <th>{tr("Net received")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -12435,18 +12312,17 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
             </TableShell>
           ) : (
             <Empty
-              title="No payments received"
-              detail="Payments and refunds recorded in the ledger will appear here."
+              title={tr("No payments received")}
+              detail={tr("Payments and refunds recorded in the ledger will appear here.")}
             />
           )}
         </article>
         <article className="panel span-2">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Six-month trend</p>
+              <p className="eyebrow">{tr("Six-month trend")}</p>
               <h2>
-                {titleScope} / {chartCurrency} payments received and profit
-              </h2>
+                {titleScope} / {chartCurrency}{" "}{tr("payments received and profit")}</h2>
             </div>
             {!currency && trendCurrencies.length > 1 && (
               <select
@@ -12467,8 +12343,8 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
           ) ? (
             <div className="trend-comparison">
               <div className="trend-legend">
-                <span><i className="revenue" />Payments received</span>
-                <span><i className="profit" />Profit</span>
+                <span><i className="revenue" />{tr("Payments received")}</span>
+                <span><i className="profit" />{tr("Profit")}</span>
               </div>
               <div className="bar-chart dual-bar-chart">
                 {trendValues.map((item) => (
@@ -12492,15 +12368,15 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
                         }}
                       />
                     </div>
-                    <small>{item.label}</small>
+                    <small>{tr(item.label)}</small>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
             <Empty
-              title="No payment trend"
-              detail="Six-month payments and profit will appear after ledger payments are recorded."
+              title={tr("No payment trend")}
+              detail={tr("Six-month payments and profit will appear after ledger payments are recorded.")}
             />
           )}
         </article>
@@ -12510,6 +12386,7 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
 }
 
 function Team({ data, user, notify }: ModuleProps) {
+  const tr = useTranslation();
   const [members, setMembers] = useState<User[]>(data.users);
   const [adding, setAdding] = useState(false);
   const [credentials, setCredentials] = useState<{
@@ -12606,27 +12483,23 @@ function Team({ data, user, notify }: ModuleProps) {
     <>
       <PageHeader
         eyebrow="Owner administration"
-        title="Team & Role Access"
-        detail="Create Owner and Operator user accounts with an email login, temporary passwords and dedicated access links. Accounts work across browsers."
+        title={tr("Team & Role Access")}
+        detail={tr("Create Owner and Operator user accounts with an email login, temporary passwords and dedicated access links. Accounts work across browsers.")}
         actions={
           <button className="button primary" onClick={() => setAdding(true)}>
-            <Icon name="plus" /> New User
-          </button>
+            <Icon name="plus" />{tr("New User")}</button>
         }
       />
       <section className="permission-grid">
         <div>
-          <Badge tone="success">Owner</Badge>
-          <strong>Full control</strong>
-          <p>All branches, all financials, staff, settings, edit and delete.</p>
+          <Badge tone="success">{tr("Owner")}</Badge>
+          <strong>{tr("Full control")}</strong>
+          <p>{tr("All branches, all financials, staff, settings, edit and delete.")}</p>
         </div>
         <div>
-          <Badge tone="blue">Operator</Badge>
-          <strong>Branch operations</strong>
-          <p>
-            Tickets, visas, close, expenses and cargo for one assigned branch.
-            No agency financials.
-          </p>
+          <Badge tone="blue">{tr("Operator")}</Badge>
+          <strong>{tr("Branch operations")}</strong>
+          <p>{tr("Tickets, visas, close, expenses and cargo for one assigned branch. No agency financials.")}</p>
         </div>
       </section>
       <div className="team-list">
@@ -12650,15 +12523,15 @@ function Team({ data, user, notify }: ModuleProps) {
             <div>
               <strong>
                 {x.name}
-                {x.id === user.id && <small> You</small>}
+                {x.id === user.id && <small>{tr("You")}</small>}
               </strong>
               <span>{x.username}</span>
             </div>
             <Badge tone={x.active ? "success" : "neutral"}>
-              {x.active ? "Active" : "Suspended"}
+              {x.active ? tr("Active") : tr("Suspended")}
             </Badge>
             <span className="role-name">
-              {roleLabel[x.role]}
+              {tr(roleLabel[x.role])}
               {x.assignedBranchId
                 ? ` · ${branchName(data, x.assignedBranchId)}`
                 : ""}
@@ -12670,30 +12543,24 @@ function Team({ data, user, notify }: ModuleProps) {
                   disabled={busy === x.id}
                   onClick={() => void update({ id: x.id, active: !x.active })}
                 >
-                  {x.active ? "Suspend" : "Activate"}
+                  {x.active ? tr("Suspend") : tr("Activate")}
                 </button>
                 <button
                   className="edit-action"
                   disabled={busy === x.id}
                   onClick={() => void update({ id: x.id, resetPassword: true })}
-                >
-                  Reset password
-                </button>
+                >{tr("Reset password")}</button>
                 {x.loginUrl && (
                   <button
                     className="edit-action"
                     onClick={() => void copy(x.loginUrl!, "Login link")}
-                  >
-                    Copy link
-                  </button>
+                  >{tr("Copy link")}</button>
                 )}
                 <button
                   className="delete-action"
                   disabled={busy === x.id}
                   onClick={() => void remove(x)}
-                >
-                  Delete
-                </button>
+                >{tr("Delete")}</button>
               </div>
             )}
           </article>
@@ -12729,52 +12596,44 @@ function Team({ data, user, notify }: ModuleProps) {
       )}
       {credentials && (
         <Modal
-          title="Staff access generated"
-          subtitle="Share these details privately. The password is shown only now."
+          title={tr("Staff access generated")}
+          subtitle={tr("Share these details privately. The password is shown only now.")}
           onClose={() => setCredentials(null)}
         >
           <div className="credential-card">
             <p>
-              <span>Team member</span>
+              <span>{tr("Team member")}</span>
               <strong>{credentials.name}</strong>
             </p>
             <p>
-              <span>Email</span>
+              <span>{tr("Email")}</span>
               <strong>{credentials.username}</strong>
               <button
                 onClick={() => void copy(credentials.username, "Email")}
-              >
-                Copy
-              </button>
+              >{tr("Copy")}</button>
             </p>
             <p>
-              <span>Temporary password</span>
+              <span>{tr("Temporary password")}</span>
               <strong>{credentials.password}</strong>
               <button
                 onClick={() => void copy(credentials.password, "Password")}
-              >
-                Copy
-              </button>
+              >{tr("Copy")}</button>
             </p>
             <p>
-              <span>Dedicated login link</span>
+              <span>{tr("Dedicated login link")}</span>
               <strong className="credential-link">
                 {credentials.loginUrl}
               </strong>
               <button
                 onClick={() => void copy(credentials.loginUrl, "Login link")}
-              >
-                Copy
-              </button>
+              >{tr("Copy")}</button>
             </p>
           </div>
           <div className="modal-actions">
             <button
               className="button primary"
               onClick={() => setCredentials(null)}
-            >
-              Done
-            </button>
+            >{tr("Done")}</button>
           </div>
         </Modal>
       )}
@@ -12796,6 +12655,7 @@ function UserForm({
     assignedBranchId?: string;
   }) => void;
 }) {
+  const tr = useTranslation();
   const [f, setF] = useState({
     name: "",
     username: "",
@@ -12805,8 +12665,8 @@ function UserForm({
   });
   return (
     <Modal
-      title="Create User"
-      subtitle="Create an Owner or Operator account. Set a password of at least 10 characters with letters, numbers and a symbol."
+      title={tr("Create User")}
+      subtitle={tr("Create an Owner or Operator account. Set a password of at least 10 characters with letters, numbers and a symbol.")}
       onClose={onClose}
     >
       <form
@@ -12817,7 +12677,7 @@ function UserForm({
         }}
       >
         <div className="form-grid">
-          <Field label="Full name">
+          <Field label={tr("Full name")}>
             <input
               required
               autoFocus
@@ -12825,17 +12685,17 @@ function UserForm({
               onChange={(e) => setF({ ...f, name: e.target.value })}
             />
           </Field>
-          <Field label="Role">
+          <Field label={tr("Role")}>
             <select
               value={f.role}
               onChange={(e) => setF({ ...f, role: e.target.value as Role })}
             >
-              <option value="operator">Operator</option>
-              <option value="owner">Owner</option>
+              <option value="operator">{tr("Operator")}</option>
+              <option value="owner">{tr("Owner")}</option>
             </select>
           </Field>
           {f.role === "operator" && (
-            <Field label="Assigned branch">
+            <Field label={tr("Assigned branch")}>
               <BranchSelect
                 options={branches}
                 required
@@ -12846,29 +12706,27 @@ function UserForm({
               />
             </Field>
           )}
-          <Field label="Email">
+          <Field label={tr("Email")}>
             <input
               type="email"
               required
               value={f.username}
               onChange={(e) => setF({ ...f, username: e.target.value })}
-              placeholder="name@somway.com"
+              placeholder={tr("name@somway.com")}
             />
           </Field>
-          <Field label="Password" hint="At least 10 characters with letters, numbers and a symbol.">
+          <Field label={tr("Password")} hint="At least 10 characters with letters, numbers and a symbol.">
             <PasswordInput
               value={f.password}
               onChange={(e) => setF({ ...f, password: e.target.value })}
               required
               minLength={10}
-              placeholder="Set a secure password"
+              placeholder={tr("Set a secure password")}
             />
           </Field>
         </div>
         <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
-          </button>
+          <button type="button" className="button ghost" onClick={onClose}>{tr("Cancel")}</button>
           <button
             disabled={
               !f.name.trim() ||
@@ -12877,9 +12735,7 @@ function UserForm({
               (f.role === "operator" && !f.assignedBranchId)
             }
             className="button primary"
-          >
-            Create User
-          </button>
+          >{tr("Create User")}</button>
         </div>
       </form>
     </Modal>
@@ -12893,6 +12749,7 @@ function BranchManager({
   data: AgencyData;
   notify: (s: string) => void;
 }) {
+  const tr = useTranslation();
   const [branches, setBranches] = useState<Branch[]>(data.branches);
   const [editing, setEditing] = useState<Branch | null | undefined>();
   const [form, setForm] = useState({
@@ -12973,24 +12830,23 @@ function BranchManager({
     <article className="panel span-2">
       <div className="panel-head">
         <div>
-          <p className="eyebrow">Branches</p>
-          <h2>Branch management</h2>
+          <p className="eyebrow">{tr("Branches")}</p>
+          <h2>{tr("Branch management")}</h2>
         </div>
         <button className="button secondary" onClick={() => start()}>
-          <Icon name="plus" /> Add Branch
-        </button>
+          <Icon name="plus" />{tr("Add Branch")}</button>
       </div>
       {editing !== undefined && (
         <form className="modal-form" onSubmit={submit}>
           <div className="form-grid">
-            <Field label="Name">
+            <Field label={tr("Name")}>
               <input
                 required
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </Field>
-            <Field label="Code">
+            <Field label={tr("Code")}>
               <input
                 required
                 maxLength={6}
@@ -13000,21 +12856,21 @@ function BranchManager({
                 }
               />
             </Field>
-            <Field label="City">
+            <Field label={tr("City")}>
               <input
                 required
                 value={form.city}
                 onChange={(e) => setForm({ ...form, city: e.target.value })}
               />
             </Field>
-            <Field label="Country">
+            <Field label={tr("Country")}>
               <input
                 required
                 value={form.country}
                 onChange={(e) => setForm({ ...form, country: e.target.value })}
               />
             </Field>
-            <Field label="Default currency">
+            <Field label={tr("Default currency")}>
               <select
                 value={form.defaultCurrency}
                 onChange={(e) =>
@@ -13032,15 +12888,15 @@ function BranchManager({
                   })
                 }
               >
-                <option>KES</option>
-                <option>USD</option>
+                <option value={"KES"}>{tr("KES")}</option>
+                <option value={"USD"}>{tr("USD")}</option>
               </select>
             </Field>
-            <Field label="Allowed currencies" wide>
+            <Field label={tr("Allowed currencies")} wide>
               <div
                 className="currency-checks"
                 role="group"
-                aria-label="Allowed currencies"
+                aria-label={tr("Allowed currencies")}
               >
                 {(["KES", "USD"] as Currency[]).map((currency) => {
                   const checked = form.allowedCurrencies.includes(currency);
@@ -13067,20 +12923,20 @@ function BranchManager({
                 })}
               </div>
             </Field>
-            <Field label="Phone">
+            <Field label={tr("Phone")}>
               <input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
             </Field>
-            <Field label="Email">
+            <Field label={tr("Email")}>
               <input
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </Field>
-            <Field label="Address">
+            <Field label={tr("Address")}>
               <input
                 value={form.address}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
@@ -13092,10 +12948,8 @@ function BranchManager({
               type="button"
               className="button ghost"
               onClick={() => setEditing(undefined)}
-            >
-              Cancel
-            </button>
-            <button className="button primary">Save Branch</button>
+            >{tr("Cancel")}</button>
+            <button className="button primary">{tr("Save Branch")}</button>
           </div>
         </form>
       )}
@@ -13114,12 +12968,10 @@ function BranchManager({
               </span>
             </div>
             <Badge tone={branch.isActive ? "success" : "neutral"}>
-              {branch.isActive ? "Active" : "Inactive"}
+              {branch.isActive ? tr("Active") : tr("Inactive")}
             </Badge>
             <div className="branch-row-actions">
-              <button className="edit-action" onClick={() => start(branch)}>
-                Edit
-              </button>
+              <button className="edit-action" onClick={() => start(branch)}>{tr("Edit")}</button>
               {branch.isActive && (
                 <button
                   className="delete-action"
@@ -13132,9 +12984,7 @@ function BranchManager({
                       return;
                     void deactivate(branch);
                   }}
-                >
-                  Deactivate
-                </button>
+                >{tr("Deactivate")}</button>
               )}
             </div>
           </div>
@@ -13151,6 +13001,7 @@ function BackupPanel({
   notify: (message: string) => void;
   replaceData?: (data: AgencyData) => void;
 }) {
+  const tr = useTranslation();
   const [backup, setBackup] = useState<unknown>();
   const [fileName, setFileName] = useState("");
   const [validation, setValidation] = useState<{
@@ -13263,25 +13114,18 @@ function BackupPanel({
     <article className="panel">
       <div className="panel-head">
         <div>
-          <p className="eyebrow">Data protection</p>
-          <h2>Backup &amp; recovery</h2>
+          <p className="eyebrow">{tr("Data protection")}</p>
+          <h2>{tr("Backup & recovery")}</h2>
         </div>
       </div>
-      <p className="panel-copy">
-        Download business records and configuration. Staff passwords and active
-        sessions are never included.
-      </p>
+      <p className="panel-copy">{tr("Download business records and configuration. Staff passwords and active sessions are never included.")}</p>
       <div className="button-row">
         <button
           className="button secondary"
           disabled={busy}
           onClick={() => void downloadBackup()}
-        >
-          Download backup
-        </button>
-        <label className="button ghost file-button">
-          Choose backup
-          <input
+        >{tr("Download backup")}</button>
+        <label className="button ghost file-button">{tr("Choose backup")}<input
             type="file"
             accept="application/json,.json"
             onChange={chooseBackup}
@@ -13296,17 +13140,15 @@ function BackupPanel({
               className="button secondary"
               disabled={busy}
               onClick={() => void validateBackup()}
-            >
-              Check backup
-            </button>
+            >{tr("Check backup")}</button>
           ) : (
             <>
               <span>
-                {recordCount.toLocaleString()} records, created{" "}
+                {recordCount.toLocaleString()}{tr("records, created")}{" "}
                 {dateLabel(validation.createdAt)}
               </span>
               <input
-                aria-label="Restore confirmation"
+                aria-label={tr("Restore confirmation")}
                 value={confirmation}
                 onChange={(event) => setConfirmation(event.target.value)}
                 placeholder={expectedConfirmation}
@@ -13315,9 +13157,7 @@ function BackupPanel({
                 className="button danger"
                 disabled={busy || confirmation !== expectedConfirmation}
                 onClick={() => void restoreBackup()}
-              >
-                Restore checked backup
-              </button>
+              >{tr("Restore checked backup")}</button>
             </>
           )}
         </div>
@@ -13327,6 +13167,7 @@ function BackupPanel({
 }
 
 function OperatorAccessPanel({ owner }: { owner: boolean }) {
+  const tr = useTranslation();
   const [access, setAccess] = useState({ route: "", url: "" });
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -13379,24 +13220,25 @@ function OperatorAccessPanel({ owner }: { owner: boolean }) {
     } catch (e) { setError(e instanceof Error ? e.message : "Select and copy the URL manually."); }
   };
   return <article className="panel">
-    <div className="panel-head"><h2>Operator login URL</h2></div>
-    <p>{owner ? "Use a domain or a full URL. A domain without a path opens operator login on the homepage. Owner login stays at /admin." : "Your current login URL. Only the Owner can change this address."}</p>
-    <Field label="Active operator URL"><input readOnly value={access.url} /></Field>
-    <div className="button-row"><button className="button secondary" disabled={!access.url || busy} onClick={() => void copy()}>Copy operator URL</button></div>
+    <div className="panel-head"><h2>{tr("Operator login URL")}</h2></div>
+    <p>{owner ? tr("Use a domain or a full URL. A domain without a path opens operator login on the homepage. Owner login stays at /admin.") : tr("Your current login URL. Only the Owner can change this address.")}</p>
+    <Field label={tr("Active operator URL")}><input readOnly value={access.url} /></Field>
+    <div className="button-row"><button className="button secondary" disabled={!access.url || busy} onClick={() => void copy()}>{tr("Copy operator URL")}</button></div>
     {owner && <>
-      <p>The domain must already point to this server. Saving here does not register or connect a domain.</p>
-      <Field label="New login address"><input value={draft} maxLength={2048} placeholder="staff.example.com or https://example.com/staff" onChange={e => setDraft(e.target.value)} /></Field>
+      <p>{tr("The domain must already point to this server. Saving here does not register or connect a domain.")}</p>
+      <Field label={tr("New login address")}><input value={draft} maxLength={2048} placeholder={tr("staff.example.com or https://example.com/staff")} onChange={e => setDraft(e.target.value)} /></Field>
       <div className="button-row">
-        <button className="button primary" disabled={busy || !access.url || draft === access.url} onClick={() => void save(false)}>Save login URL</button>
-        <button className="button secondary" disabled={busy || !access.url} onClick={() => void save(true)}>Generate new path</button>
+        <button className="button primary" disabled={busy || !access.url || draft === access.url} onClick={() => void save(false)}>{tr("Save login URL")}</button>
+        <button className="button secondary" disabled={busy || !access.url} onClick={() => void save(true)}>{tr("Generate new path")}</button>
       </div>
     </>}
-    {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
-    {message && <p role="status">{message}</p>}
+    {error && <p role="alert" style={{ color: "#b91c1c" }}>{tr(error)}</p>}
+    {message && <p role="status">{tr(message)}</p>}
   </article>;
 }
 
 function LoginLinkPanel({ notify }: { notify: (message: string) => void }) {
+  const tr = useTranslation();
   const [value, setValue] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -13447,20 +13289,20 @@ function LoginLinkPanel({ notify }: { notify: (message: string) => void }) {
     <article className="panel">
       <div className="panel-head">
         <div>
-          <p className="eyebrow">Staff access</p>
-          <h2>Login link address</h2>
+          <p className="eyebrow">{tr("Staff access")}</p>
+          <h2>{tr("Login link address")}</h2>
         </div>
       </div>
       <div className="form-grid compact-form">
         <Field
-          label="Public site address"
+          label={tr("Public site address")}
           wide
           hint="The address staff use to open the site, including the port if any (e.g. http://169.58.173.197:8080). Staff login links are built from this. Leave blank to follow the address the site is opened from."
         >
           <input
             type="url"
             inputMode="url"
-            placeholder="http://169.58.173.197:8080"
+            placeholder={tr("http://169.58.173.197:8080")}
             value={value}
             onChange={(event) => setValue(event.target.value)}
           />
@@ -13471,15 +13313,14 @@ function LoginLinkPanel({ notify }: { notify: (message: string) => void }) {
           className="button primary"
           disabled={busy || !loaded}
           onClick={() => void save()}
-        >
-          Save login link address
-        </button>
+        >{tr("Save login link address")}</button>
       </div>
     </article>
   );
 }
 
 function BusinessHoursPanel({ notify }: { notify: (message: string) => void }) {
+  const tr = useTranslation();
   const [form, setForm] = useState({
     timezone: "Africa/Mogadishu",
     businessDayStart: "07:00",
@@ -13531,23 +13372,23 @@ function BusinessHoursPanel({ notify }: { notify: (message: string) => void }) {
     <article className="panel">
       <div className="panel-head">
         <div>
-          <p className="eyebrow">Business day</p>
-          <h2>Daily Summary hours</h2>
+          <p className="eyebrow">{tr("Business day")}</p>
+          <h2>{tr("Daily Summary hours")}</h2>
         </div>
       </div>
       <div className="form-grid compact-form">
-        <Field label="Timezone" wide>
+        <Field label={tr("Timezone")} wide>
           <select
             value={form.timezone}
             onChange={(event) =>
               setForm({ ...form, timezone: event.target.value })
             }
           >
-            <option value="Africa/Mogadishu">Africa/Mogadishu</option>
-            <option value="Africa/Nairobi">Africa/Nairobi</option>
+            <option value="Africa/Mogadishu">{tr("Africa/Mogadishu")}</option>
+            <option value="Africa/Nairobi">{tr("Africa/Nairobi")}</option>
           </select>
         </Field>
-        <Field label="Day starts">
+        <Field label={tr("Day starts")}>
           <input
             type="time"
             value={form.businessDayStart}
@@ -13556,7 +13397,7 @@ function BusinessHoursPanel({ notify }: { notify: (message: string) => void }) {
             }
           />
         </Field>
-        <Field label="Day ends">
+        <Field label={tr("Day ends")}>
           <input
             type="time"
             value={form.businessDayEnd}
@@ -13571,15 +13412,14 @@ function BusinessHoursPanel({ notify }: { notify: (message: string) => void }) {
           className="button primary"
           disabled={busy}
           onClick={() => void saveHours()}
-        >
-          Save business hours
-        </button>
+        >{tr("Save business hours")}</button>
       </div>
     </article>
   );
 }
 
 function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
+  const tr = useTranslation();
   const [agency, setAgency] = useState(data.agencyName);
   const settingsBranches = activeBranches(data);
   const initialSettingsBranch = settingsBranches[0];
@@ -13603,20 +13443,20 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
     currency: initialSettingsCurrency,
     amount: "",
   });
-  if (user.role !== "owner") return <><PageHeader eyebrow="Operator workspace" title="Settings" detail="Your operator access URL." /><OperatorAccessPanel owner={false} /></>;
+  if (user.role !== "owner") return <><PageHeader eyebrow="Operator workspace" title={tr("Settings")} detail={tr("Your operator access URL.")} /><OperatorAccessPanel owner={false} /></>;
   return (
     <>
       <PageHeader
         eyebrow="Owner administration"
-        title="Agency Settings"
-        detail="Set cargo rates, opening balances, naming and agency data portability."
+        title={tr("Agency Settings")}
+        detail={tr("Set cargo rates, opening balances, naming and agency data portability.")}
       />
       <section className="settings-grid">
         <article className="panel">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Identity</p>
-              <h2>Agency name</h2>
+              <p className="eyebrow">{tr("Identity")}</p>
+              <h2>{tr("Agency name")}</h2>
             </div>
           </div>
           <div className="inline-form">
@@ -13646,9 +13486,7 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
                   );
                 }
               }}
-            >
-              Save
-            </button>
+            >{tr("Save")}</button>
           </div>
         </article>
         <OwnerSecurity notify={notify} />
@@ -13659,8 +13497,8 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
         <article className="panel span-2">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Cargo pricing</p>
-              <h2>Rate per kilogram</h2>
+              <p className="eyebrow">{tr("Cargo pricing")}</p>
+              <h2>{tr("Rate per kilogram")}</h2>
             </div>
           </div>
           <div className="settings-entry">
@@ -13719,7 +13557,7 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
             </select>
             <input
               type="number"
-              placeholder="Rate / kg"
+              placeholder={tr("Rate / kg")}
               value={rateForm.rate}
               onChange={(e) =>
                 setRateForm({ ...rateForm, rate: e.target.value })
@@ -13764,9 +13602,7 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
                 );
                 notify("Cargo rate saved");
               }}
-            >
-              Save rate
-            </button>
+            >{tr("Save rate")}</button>
           </div>
           <div className="setting-list">
             {data.rates.map((x) => (
@@ -13775,10 +13611,10 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
                   {x.origin} → {x.destination}
                 </strong>
                 <span>{x.currency}</span>
-                <b>{money(x.rate, x.currency)} / kg</b>
+                <b>{money(x.rate, x.currency)}{tr("/ kg")}</b>
                 <button
-                  aria-label="Remove cargo rate"
-                  title="Remove cargo rate"
+                  aria-label={tr("Remove cargo rate")}
+                  title={tr("Remove cargo rate")}
                   onClick={() => {
                     if (
                       !window.confirm(
@@ -13808,8 +13644,8 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
         <article className="panel span-2">
           <div className="panel-head">
             <div>
-              <p className="eyebrow">Daily close</p>
-              <h2>Starting balances</h2>
+              <p className="eyebrow">{tr("Daily close")}</p>
+              <h2>{tr("Starting balances")}</h2>
             </div>
           </div>
           <div className="settings-entry">
@@ -13842,7 +13678,7 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
             >
               {paymentMethodsFor(data, balance.branchId, balance.currency).map(
                 (x) => (
-                  <option key={x}>{x}</option>
+                  <option key={x} value={x}>{tr(x)}</option>
                 ),
               )}
             </select>
@@ -13867,7 +13703,7 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
             </select>
             <input
               type="number"
-              placeholder="Opening float"
+              placeholder={tr("Opening float")}
               value={balance.amount}
               onChange={(e) =>
                 setBalance({ ...balance, amount: e.target.value })
@@ -13902,9 +13738,7 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
                 );
                 notify("Starting balance saved");
               }}
-            >
-              Save balance
-            </button>
+            >{tr("Save balance")}</button>
           </div>
           <div className="setting-list">
             {data.startingBalances.map((x) => (
@@ -13915,8 +13749,8 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
                 <span>{x.currency}</span>
                 <b>{money(x.amount, x.currency)}</b>
                 <button
-                  aria-label="Remove starting balance"
-                  title="Remove starting balance"
+                  aria-label={tr("Remove starting balance")}
+                  title={tr("Remove starting balance")}
                   onClick={() => {
                     if (
                       !window.confirm(
@@ -13951,6 +13785,7 @@ function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
 }
 
 function OwnerSecurity({ notify }: { notify: (message: string) => void }) {
+  const tr = useTranslation();
   const [form, setForm] = useState({ current: "", next: "", confirm: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -13990,15 +13825,15 @@ function OwnerSecurity({ notify }: { notify: (message: string) => void }) {
     <article className="panel">
       <div className="panel-head">
         <div>
-          <p className="eyebrow">Owner security</p>
-          <h2>Change password</h2>
+          <p className="eyebrow">{tr("Owner security")}</p>
+          <h2>{tr("Change password")}</h2>
         </div>
       </div>
       <form className="security-form" onSubmit={submit}>
         <PasswordInput
           required
           autoComplete="current-password"
-          placeholder="Current password"
+          placeholder={tr("Current password")}
           value={form.current}
           onChange={(e) => setForm({ ...form, current: e.target.value })}
         />
@@ -14006,7 +13841,7 @@ function OwnerSecurity({ notify }: { notify: (message: string) => void }) {
           required
           minLength={10}
           autoComplete="new-password"
-          placeholder="New password"
+          placeholder={tr("New password")}
           value={form.next}
           onChange={(e) => setForm({ ...form, next: e.target.value })}
         />
@@ -14014,37 +13849,38 @@ function OwnerSecurity({ notify }: { notify: (message: string) => void }) {
           required
           minLength={10}
           autoComplete="new-password"
-          placeholder="Confirm new password"
+          placeholder={tr("Confirm new password")}
           value={form.confirm}
           onChange={(e) => setForm({ ...form, confirm: e.target.value })}
         />
-        {error && <p className="form-error">{error}</p>}
+        {error && <p className="form-error">{tr(error)}</p>}
         <button disabled={busy} className="button secondary" type="submit">
-          {busy ? "Updating…" : "Update password"}
+          {busy ? tr("Updating…") : tr("Update password")}
         </button>
       </form>
     </article>
   );
 }
 function ActivityLog({ data }: { data: AgencyData }) {
+  const tr = useTranslation();
   const todayActivities = data.activities.filter((activity) => activity.at.slice(0, 10) === today());
   const activityCount = (pattern: RegExp) => todayActivities.filter((activity) => pattern.test(`${activity.action} ${activity.detail}`)).length;
   return (
     <>
       <PageHeader
         eyebrow="Accountability"
-        title="Activity Log"
-        detail="A shared audit trail of creates, updates, reviews and deletions."
+        title={tr("Activity Log")}
+        detail={tr("A shared audit trail of creates, updates, reviews and deletions.")}
       />
       <div className="metrics-grid five">
-        <MetricCard icon="trend" label="Total Actions Today" value={todayActivities.length} tone="blue" foot="Audit events" />
-        <MetricCard icon="user" label="Sign-ins" value={activityCount(/sign.?in|login/i)} tone="cyan" foot="Successful access" />
-        <MetricCard icon="edit" label="Updates" value={activityCount(/update|change|review|reopen/i)} tone="violet" foot="Record changes" />
-        <MetricCard icon="trash" label="Deletions" value={activityCount(/delete|archive|void/i)} tone="orange" foot="Removed or voided" />
-        <MetricCard icon="alert" label="System Alerts" value={activityCount(/alert|failed|error|blocked/i)} tone="red" foot="Requires attention" />
+        <MetricCard icon="trend" label={tr("Total Actions Today")} value={todayActivities.length} tone="blue" foot={tr("Audit events")} />
+        <MetricCard icon="user" label={tr("Sign-ins")} value={activityCount(/sign.?in|login/i)} tone="cyan" foot={tr("Successful access")} />
+        <MetricCard icon="edit" label={tr("Updates")} value={activityCount(/update|change|review|reopen/i)} tone="violet" foot={tr("Record changes")} />
+        <MetricCard icon="trash" label={tr("Deletions")} value={activityCount(/delete|archive|void/i)} tone="orange" foot={tr("Removed or voided")} />
+        <MetricCard icon="alert" label={tr("System Alerts")} value={activityCount(/alert|failed|error|blocked/i)} tone="red" foot={tr("Requires attention")} />
       </div>
       {data.activities.length ? (
-        <Panel title="Audit Events" actions={<StatusBadge tone="blue">Secured</StatusBadge>}>
+        <Panel title={tr("Audit Events")} actions={<StatusBadge tone="blue">{tr("Secured")}</StatusBadge>}>
         <div className="activity-list">
           {data.activities.map((x) => (
             <article key={x.id}>
@@ -14069,8 +13905,8 @@ function ActivityLog({ data }: { data: AgencyData }) {
         </Panel>
       ) : (
         <Empty
-          title="No activity yet"
-          detail="Actions taken by the team will appear here."
+          title={tr("No activity yet")}
+          detail={tr("Actions taken by the team will appear here.")}
         />
       )}
     </>

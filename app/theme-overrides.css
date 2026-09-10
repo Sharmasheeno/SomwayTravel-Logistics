@@ -40,3 +40,14 @@ html[data-theme="dark"] :is(input, select, textarea, .icon-button, .small-icon) 
 }
 html[data-theme="dark"] input::placeholder,
 html[data-theme="dark"] textarea::placeholder { color: var(--muted); }
+
+.auth-panel > .workspace-preferences { align-self: flex-end; margin-bottom: 24px; flex-wrap: wrap; }
+.public-nav > .workspace-preferences { flex-wrap: wrap; }
+html[data-theme="dark"] .top-preference button.selected {
+  color: #fff;
+  background: #1765cb;
+}
+html[data-theme="dark"] :is(.app-main, .modal-card, .record-modal) :is(h1,h2,h3,h4,.eyebrow-soft) {
+  color: var(--ink);
+}
+html[data-theme="dark"] :is(.modal-card, .record-modal) { color-scheme: dark; }
