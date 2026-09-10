@@ -2964,7 +2964,7 @@ export default function Home() {
     setData(next);
   };
   const loadWorkspace = async (signedIn: User) => {
-    const response = await fetch("/api/data", { cache: "no-store" });
+    const response = await fetch("/api/data", { cache: "no-store", credentials: "include" });
     const payload = await response.json();
     if (!response.ok)
       throw new Error(payload.error || "Could not load agency data.");
@@ -3131,7 +3131,7 @@ export default function Home() {
       })
       .catch(async (error) => {
         try {
-          const response = await fetch("/api/data", { cache: "no-store" });
+          const response = await fetch("/api/data", { cache: "no-store", credentials: "include" });
           const payload = await response.json();
           if (response.ok && payload.data) applyData(payload.data);
         } catch {}
