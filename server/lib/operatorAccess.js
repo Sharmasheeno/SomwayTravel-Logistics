@@ -25,7 +25,7 @@ export function parseOperatorAddress(value) {
 // Persist the default once; never cache it so rotations take effect immediately.
 export async function operatorSettings() {
   let settings = await AgencySettings.findOne({ key: "singleton" }).lean();
-  if (!settings?.operatorAccessRoute) {
+  if (!settings?.operatorAccessRoute || settings.operatorAccessRoute === "/") {
     await AgencySettings.updateOne(
       { key: "singleton" },
       { $setOnInsert: { key: "singleton" } },
