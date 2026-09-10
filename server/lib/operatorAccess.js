@@ -32,7 +32,7 @@ export async function operatorSettings() {
       { upsert: true },
     );
     await AgencySettings.updateOne(
-      { key: "singleton", $or: [{ operatorAccessRoute: { $exists: false } }, { operatorAccessRoute: "" }] },
+      { key: "singleton", $or: [{ operatorAccessRoute: { $exists: false } }, { operatorAccessRoute: "" }, { operatorAccessRoute: "/" }] },
       { $set: { operatorAccessRoute: generateOperatorRoute() } },
     );
     settings = await AgencySettings.findOne({ key: "singleton" }).lean();
