@@ -1,4 +1,5 @@
 import { ApiError, parseApiResponse } from "./api-core.js";
+import { resolveApiBase } from "./api-origin.js";
 
 // When VITE_API_BASE_URL is set (e.g. a separate API origin in production) we
 // call it directly. Left empty, calls stay same-origin ("/api/...") so the Vite
@@ -11,13 +12,13 @@ import { ApiError, parseApiResponse } from "./api-core.js";
 // treated as a relative path by fetch(), so normalise it to an absolute https
 // URL when a scheme is missing.
 const rawApiBase = ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || "").trim().replace(/\/$/, "");
-const apiBase = rawApiBase && !/^https?:\/\//i.test(rawApiBase) ? `https://${rawApiBase}` : rawApiBase;
 
 const requestId = () => globalThis.crypto?.randomUUID?.() || `web-${Date.now().toString(36)}`;
 
 export { ApiError };
 
 export const apiFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const apiBase = resolveApiBase(rawApiBase, typeof window === "undefined" ? "" : window.location.hostname);
   const raw = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const url = raw.startsWith("/api/") ? `${apiBase}${raw}` : raw;
   const headers = new Headers(init.headers);

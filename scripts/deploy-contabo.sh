@@ -51,7 +51,9 @@ echo "==> Installing dependencies (npm ci)"
 npm ci
 
 echo "==> Building client bundle (npm run build)"
-npm run build
+# Nginx forwards /api to Express. Never compile a server-local address into
+# the browser bundle, even if an old .env contains VITE_API_BASE_URL.
+VITE_API_BASE_URL="" npm run build
 
 echo "==> Restarting pm2 processes"
 # --update-env makes pm2 pick up any new environment variables too.
