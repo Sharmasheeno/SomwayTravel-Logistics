@@ -3,7 +3,6 @@ import { randomToken } from "../utils/tokens.js";
 
 const reserved = new Set(["admin", "api", "portal", "assets", "public", "login", "logout", "settings", "_next", "favicon", "robots", "sitemap"]);
 export function validateOperatorRoute(value) {
-  if (value === "/") return value;
   if (typeof value !== "string" || !/^\/[a-z][a-z0-9-]{0,127}$/.test(value) || reserved.has(value.slice(1))) {
     throw Object.assign(new Error("Use a short path such as /staff: lowercase letters, numbers or hyphens, starting with a letter (maximum 128 characters). System routes such as /admin are reserved."), { status: 400 });
   }
