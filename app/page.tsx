@@ -3007,10 +3007,7 @@ export default function Home() {
             me.error || "The current session could not be checked.",
           );
         const sessionUser = me.user as User;
-        if ((path === "/admin") !== (sessionUser.role === "owner")) {
-          setRouteUnavailable(true);
-          return;
-        }
+        if ((path === "/admin") !== (sessionUser.role === "owner")) {`r`n          clearTabSession();`r`n          return;`r`n        }
         const dataResponse = await fetch("/api/data", { cache: "no-store" });
         const payload = await dataResponse.json();
         if (!dataResponse.ok)
