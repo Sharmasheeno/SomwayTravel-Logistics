@@ -3019,12 +3019,10 @@ export default function Home() {
         applyData(payload.data || {});
         setUser(sessionUser);
       } catch (error) {
-        if (active)
-          setLoadError(
-            error instanceof Error
-              ? error.message
-              : "Could not open the secure workspace.",
-          );
+        if (active) {
+          if (path === "/admin") setLoadError("");
+          else setLoadError(error instanceof Error ? error.message : "Could not open the secure workspace.");
+        }
       } finally {
         if (active) setReady(true);
       }
