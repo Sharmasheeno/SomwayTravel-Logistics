@@ -38,12 +38,18 @@ const makeEntityModel = (initial = []) => {
 
 const makeClientStore = () => {
   const docs = [];
-  const findByNormalized = (phone) => docs.find((item) => item.normalizedPhone === phone) || null;
   return {
     docs,
     async findOne(query) {
       if (query.normalizedPhone) {
-        const found = findByNormalized(query.normalizedPhone);
+        // Mirror the real identity: match on phone AND (when supplied) name.
+        const found =
+          docs.find(
+            (item) =>
+              item.normalizedPhone === query.normalizedPhone &&
+              (query.normalizedName === undefined ||
+                item.normalizedName === query.normalizedName),
+          ) || null;
         if (found && query.id?.$ne && found.id === query.id.$ne) return null;
         return found;
       }
@@ -106,13 +112,23 @@ test("same name with different phones creates separate clients", async () => {
   });
 });
 
-test("same phone with different display name reuses client without overwriting trusted name", async () => {
+test("same person (same name, equivalent phone forms) reuses one client without overwriting the trusted name", async () => {
   await patchRelationships(async (clients) => {
     const first = await findOrCreateClient({ name: "Ahmed Mohamed Hassan", phone: "+252612345673", homeOffice: "Mogadishu Office" });
-    const second = await findOrCreateClient({ name: "Ahmed M.", phone: "0612345673", homeOffice: "Mogadishu Office" });
+    // Same name (different spacing/case) with an equivalent phone form → same person.
+    const second = await findOrCreateClient({ name: "  ahmed   MOHAMED hassan ", phone: "0612345673", homeOffice: "Mogadishu Office" });
     assert.equal(first._id, second._id);
     assert.equal(clients.docs.length, 1);
     assert.equal(clients.docs[0].name, "Ahmed Mohamed Hassan");
+  });
+});
+
+test("two different people who share a phone become separate clients", async () => {
+  await patchRelationships(async (clients) => {
+    const fartun = await attachClientRelationships("tickets", { passenger: "Fartun", phone: "+252611688269", office: "Mogadishu Office", branchId: branchB });
+    const ali = await attachClientRelationships("tickets", { passenger: "Ali", phone: "611688269", office: "Mogadishu Office", branchId: branchB });
+    assert.equal(clients.docs.length, 2);
+    assert.notEqual(String(fartun.clientId), String(ali.clientId));
   });
 });
 
@@ -126,18 +142,21 @@ test("cargo sender and receiver are independent clients and sender is reused", a
   });
 });
 
-test("manual client duplicate phone is rejected through entity persistence", async () => {
+test("manual client with the same name and phone is rejected, but a different name is allowed", async () => {
   await patchRelationships(async (clients) => {
     const clientsModel = makeEntityModel();
     const originals = { clients: ENTITY_MODELS.clients };
     ENTITY_MODELS.clients = clientsModel;
     try {
       await writeEntity({ collection: "clients", record: { id: "manual-1", name: "Manual A", phone: "+252612345676", homeOffice: "Mogadishu Office" }, user: owner });
-      clients.docs.push(doc({ id: "manual-1", _id: "client-manual-1", normalizedPhone: "+252612345676" }));
+      clients.docs.push(doc({ id: "manual-1", _id: "client-manual-1", name: "Manual A", normalizedName: "manual a", normalizedPhone: "+252612345676" }));
+      // Same name + same phone → duplicate, rejected.
       await assert.rejects(
-        writeEntity({ collection: "clients", record: { id: "manual-2", name: "Manual B", phone: "0612345676", homeOffice: "Mogadishu Office" }, user: owner }),
-        /phone number already exists/
+        writeEntity({ collection: "clients", record: { id: "manual-2", name: "Manual A", phone: "0612345676", homeOffice: "Mogadishu Office" }, user: owner }),
+        /name and phone number already exists/
       );
+      // Different person sharing the phone → allowed.
+      await writeEntity({ collection: "clients", record: { id: "manual-3", name: "Manual B", phone: "0612345676", homeOffice: "Mogadishu Office" }, user: owner });
     } finally {
       ENTITY_MODELS.clients = originals.clients;
     }

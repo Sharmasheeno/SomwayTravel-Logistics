@@ -235,7 +235,7 @@ test("service performance follows partial cargo payments without duplicating acc
       customerCharges: 66,
       paymentsReceived: 24,
       directCost: 0,
-      profit: 66,
+      profit: 24,
     });
     assert.equal(cargoBReceivable(), 42);
 
@@ -250,7 +250,7 @@ test("service performance follows partial cargo payments without duplicating acc
       status: "active",
     }));
     assert.equal((await servicePerformance()).paymentsReceived, 44);
-    assert.equal((await servicePerformance()).profit, 66);
+    assert.equal((await servicePerformance()).profit, 24);
     assert.equal(cargoBReceivable(), 22);
 
     payments.push(doc({
@@ -306,7 +306,7 @@ test("service charges and later ledger payments stay in their actual months", as
       customerCharges: 24,
       paymentsReceived: 0,
       directCost: 0,
-      profit: 24,
+      profit: 0,
     });
 
     const september = await buildFinanceReport({

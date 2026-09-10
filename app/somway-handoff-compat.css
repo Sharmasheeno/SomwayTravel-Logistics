@@ -564,41 +564,60 @@ h6,
 }
 
 .sidebar-brand .sidebar-logo {
-  width: min(100%, 220px);
-  height: 76px;
+  width: auto;
+  height: 52px;
+  max-width: 100%;
   max-height: none;
-  object-fit: cover;
-  object-position: center;
+  /* Horizontal SomWay lockup, transparent background — shown directly, no plaque. */
+  object-fit: contain;
+  object-position: left center;
   filter: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 
 .public-logo-lockup .public-header-logo,
 .public-logo-lockup .public-footer-logo {
-  width: 220px;
-  height: 68px;
-  object-fit: cover;
-  object-position: center;
+  width: auto;
+  height: 46px;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: left center;
   filter: none;
+  /* Public header and footer are dark navy, so the white logo sits directly on
+     them with no plaque — matching the sidebar/login. */
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 
 .public-footer .public-logo-lockup .public-footer-logo {
-  width: 210px;
-  height: 72px;
+  width: auto;
+  height: 50px;
 }
 
 .auth-brand-logo {
-  width: min(100%, 300px);
-  height: 104px;
-  object-fit: cover;
-  object-position: center;
+  width: auto;
+  height: 64px;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: left center;
   filter: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 
 .loading-brand-logo {
-  width: min(78vw, 320px);
-  height: 138px;
+  width: auto;
+  height: 84px;
+  max-width: min(82vw, 320px);
+  object-fit: contain;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
   margin: auto;
-  border-radius: 6px;
 }
 
 .loading-screen {
@@ -606,34 +625,34 @@ h6,
   color: #dce8f9;
 }
 
-/* The SomWay lockup is a wide horizontal mark. `object-fit: cover` cropped
-   it to fill a fixed 190x72 box, which is why only the middle of the wordmark
-   showed. It must scale to fit, and shrink with the card on a phone. */
+/* Horizontal SomWay lockup (~3:1); scale to fit by height and shrink with the
+   card on a phone. Transparent background sits on the white receipt sheet. */
 .receipt-brand-logo {
-  width: clamp(120px, 42vw, 190px);
-  height: auto;
-  max-height: 62px;
-  padding: 8px 10px;
-  background: #061b3d;
+  width: auto;
+  height: clamp(40px, 13vw, 58px);
+  max-width: 60vw;
+  padding: 8px 14px;
+  /* White wordmark on a white receipt would vanish; seat it on a black panel so
+     the full logo prints complete. */
+  background: #000;
   object-fit: contain;
   object-position: left center;
-  border-radius: 8px;
+  border-radius: 10px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 @media (max-width: 590px) {
   .public-logo-lockup .public-header-logo {
-    width: 154px;
-    height: 54px;
+    height: 40px;
   }
 
   .public-footer .public-logo-lockup .public-footer-logo {
-    width: 190px;
-    height: 68px;
+    height: 44px;
   }
 
   .auth-brand-logo {
-    width: 230px;
-    height: 100px;
+    height: 54px;
   }
 }
 
@@ -955,6 +974,26 @@ h6,
   grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.85fr) minmax(0, 1.1fr);
 }
 
+/* The third column holds two panels (Tasks & Alerts + Recent Clients). Stack
+   them vertically so each gets the full column width instead of being squeezed
+   side by side, which truncated their labels ("Custom...", "Cargo...", "M..."). */
+.dashboard-bottom-row .split-even {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Give the task/alert and client rows enough room to read: the label is the
+   important part, so let it use the available width and never get clipped by a
+   fixed tiny font. */
+.dashboard-bottom-row .timeline-row strong,
+.dashboard-bottom-row .recent-client-row strong {
+  font-size: 12px;
+  white-space: normal;
+}
+.dashboard-bottom-row .timeline-row small,
+.dashboard-bottom-row .recent-client-row .muted {
+  font-size: 10px;
+}
+
 .top-client-spend {
   font-size: 11px;
   font-weight: 700;
@@ -1066,7 +1105,7 @@ h6,
    supplied reference. The rail drops beneath the report below 1400px. */
 .ds-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 16px;
 }
@@ -1817,7 +1856,31 @@ h6,
   }
   .table-wrap .row-actions > * {
     flex: 1 1 0;
-    min-height: 42px;
+    min-height: 44px;
+  }
+  /* Text action buttons ("Receive Payment", cargo status transitions like
+     "Dispatch") carry white-space: nowrap. With flex: 1 1 0 every button was
+     forced to an equal ~25% share, so a long label could not shrink and spilled
+     out past its own background pill. Let the row wrap and give the labelled
+     text buttons their own full-width row so the label always sits inside the
+     pill; the compact icon buttons (aria-label) keep sharing a row. */
+  .table-wrap .row-actions {
+    flex-wrap: wrap;
+  }
+  .table-wrap .row-actions > button:not([aria-label]) {
+    flex: 1 1 100%;
+    min-width: 0;
+    padding: 0 12px;
+  }
+  .table-wrap .row-actions > button[aria-label] {
+    flex: 1 1 0;
+  }
+  /* The buttons stretch to the full card width on a phone, so a 16px glyph
+     is lost in a wide box. Scale the icon up to match the larger tap target. */
+  .table-wrap .row-actions button svg {
+    width: 24px !important;
+    height: 24px !important;
+    stroke-width: 2;
   }
 
   /* The topbar scrolls sideways as one strip. Branch scope and the date
@@ -2172,6 +2235,70 @@ h6,
 .account-signout {
   color: #d9363e;
 }
+.workspace-preferences {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.top-preference {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--white);
+}
+.top-preference button,
+.theme-button {
+  min-width: 28px;
+  height: 30px;
+  padding: 0 7px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.top-preference button.selected { background: var(--blue); color: var(--green); }
+.theme-button {
+  width: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--white);
+  font-size: 17px;
+}
+.top-preference button:hover,
+.theme-button:hover { color: var(--green); background: var(--mint); }
+html[data-theme="dark"] .top-preference,
+html[data-theme="dark"] .theme-button { background: var(--white); }
+.account-preference {
+  padding: 9px 10px 8px;
+  border-top: 1px solid var(--line);
+}
+.account-preference > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.preference-toggle { display: flex; gap: 4px; }
+.preference-toggle button {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 6px 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+}
+.preference-toggle button.selected { background: var(--blue); color: var(--green); font-weight: 700; }
+html[data-theme="dark"] .account-menu { background: var(--white); }
+html[data-theme="dark"] .account-identity strong { color: var(--ink); }
+html[data-theme="dark"] .account-action { color: var(--ink); }
+html[data-theme="dark"] .account-action:hover { background: var(--mint); }
 
 @media (max-width: 767px) {
   .notif-panel,
@@ -2218,6 +2345,34 @@ h6,
   --ui-danger: #d9363e;
   --ui-surface: #fff;
 }
+html[data-theme="dark"] {
+  --ui-border: #2b3d57;
+  --ui-ink: #e7eef8;
+  --ui-muted: #9fb0c8;
+  --ui-surface: #142238;
+  --ui-brand: #4f9aff;
+}
+html[data-theme="dark"] .metric-card,
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .overview-panel,
+html[data-theme="dark"] .service-panel,
+html[data-theme="dark"] .branch-panel,
+html[data-theme="dark"] .cargo-status-panel,
+html[data-theme="dark"] .transactions-panel,
+html[data-theme="dark"] .actions-panel,
+html[data-theme="dark"] .report-summary-card,
+html[data-theme="dark"] .service-group-summary,
+html[data-theme="dark"] .lookup-panel { background: var(--ui-surface) !important; color: var(--ui-ink); }
+html[data-theme="dark"] .metric-card .metric-main > strong,
+html[data-theme="dark"] .metric-card .metric-values strong,
+html[data-theme="dark"] .report-summary-card strong,
+html[data-theme="dark"] .service-group-summary > div > strong,
+html[data-theme="dark"] .donut strong { color: var(--ui-ink) !important; }
+html[data-theme="dark"] .panel-head h2,
+html[data-theme="dark"] .panel-head h3,
+html[data-theme="dark"] .panel-head p,
+html[data-theme="dark"] .metric-card .eyebrow,
+html[data-theme="dark"] .metric-card .metric-foot { color: var(--ui-muted); }
 
 /* --- Buttons ------------------------------------------------------- */
 button.primary,
@@ -2464,6 +2619,21 @@ button.danger:disabled,
 .row-actions button:hover {
   filter: brightness(0.96);
 }
+/* Keep the edit/delete/view glyphs a readable size inside their button chips
+   across the whole system (bookings, cargo, visa, clients, payables). The
+   icons are thin line glyphs, so they looked lost in the ~40px padded box --
+   size them up and thicken the stroke a touch so they read clearly. */
+.row-actions button svg,
+.row-actions .small-icon svg,
+.row-actions a svg,
+.branch-row-actions button svg,
+.team-actions button svg {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px;
+  min-height: 24px;
+  stroke-width: 2.1 !important;
+}
 
 /* The same three purpose colours as standalone classes, so record actions
    outside a table row -- branch Edit/Deactivate, cargo cancel, staff
@@ -2501,11 +2671,83 @@ button.payment-action {
   background: #eaf2ff;
   color: var(--ui-brand);
 }
+/* Refund is a money-out action on a cancelled service, so it is styled amber to
+   read distinctly from the blue "Pay" (money-in) action sitting beside it. */
+button.refund-action {
+  white-space: nowrap;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid #f5d9a8;
+  background: #fff5e6;
+  color: #b9741a;
+  cursor: pointer;
+}
 button.edit-action:hover,
 button.delete-action:hover,
-button.payment-action:hover {
+button.payment-action:hover,
+button.refund-action:hover {
   filter: brightness(0.96);
 }
+
+/* The refund dialog keeps the money-out action prominent and gives both
+   controls comfortable tap targets at every screen width. */
+.refund-modal-note {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #f3dfbd;
+  border-radius: 10px;
+  background: #fffaf0;
+  color: #765b2a;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.refund-modal-actions {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(180px, 1.3fr);
+  gap: 12px;
+  align-items: stretch;
+}
+.refund-modal-actions .button {
+  min-height: 46px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.refund-cancel-button {
+  background: #f7f9fc;
+  border-color: #d4e0eb;
+  color: #40516b;
+}
+.refund-submit-button {
+  background: linear-gradient(135deg, #b9741a, #9d5c0e);
+  border-color: #9d5c0e;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(157, 92, 14, 0.2);
+}
+.refund-value {
+  color: #a45f10;
+  font-weight: 700;
+}
+.cargo-details-actions .refund-action {
+  min-height: 46px;
+}
+@media (max-width: 520px) {
+  .refund-modal-actions {
+    grid-template-columns: 1fr;
+  }
+  .refund-modal-actions .button {
+    width: 100%;
+  }
+}
+
 button.edit-action:disabled,
 button.delete-action:disabled {
   opacity: 0.55;
@@ -3653,6 +3895,58 @@ h3 .branch-inline .branch-flag {
   white-space: nowrap;
 }
 
+/* The real overflow on phones was the CARD (article) itself, not just the
+   buttons: its grid kept fixed-width columns (130px / minmax(250px,auto)) plus
+   a 1fr column that expanded to fit the long email address, forcing the whole
+   card wider than the viewport — so the action row that spans it spilled off
+   the right edge too. Collapse the card to a safe stacked layout that stays
+   inside the screen, let long text wrap, and lay the actions out as a
+   deterministic 2-column grid. !important guards against the other rules. */
+@media (max-width: 767px) {
+  .team-list article {
+    grid-template-columns: 42px minmax(0, 1fr) !important;
+    grid-auto-rows: min-content;
+    row-gap: 8px !important;
+  }
+  /* Name / email block: never let the email force the card wider. */
+  .team-list article > div:nth-child(2) {
+    min-width: 0;
+  }
+  .team-list article > div:nth-child(2) > span {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  /* Status badge sits next to the name block (column 3 of the source order). */
+  .team-list article > .badge,
+  .team-list article > span:not(.role-name) {
+    justify-self: start;
+  }
+  /* Role line spans the full width under the avatar/name. */
+  .team-list .role-name {
+    grid-column: 1 / -1 !important;
+  }
+  /* Action buttons: full-width 2-col grid inside the card. */
+  .team-list article > .team-actions {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    align-items: stretch;
+    gap: 8px !important;
+    margin-top: 2px;
+  }
+  .team-list article > .team-actions > button {
+    min-width: 0 !important;
+    width: 100% !important;
+    padding: 0 6px !important;
+    white-space: nowrap;
+  }
+  /* Copy link (only rendered when a login URL exists) takes its own full row. */
+  .team-list article > .team-actions > button:nth-child(3) {
+    grid-column: 1 / -1 !important;
+  }
+}
+
 /* Every chart sits centred in its card on narrow screens: a donut, a bar
    chart or a grouped bar chart pinned left leaves dead space beside it. */
 @media (max-width: 767px) {
@@ -3750,4 +4044,237 @@ h3 .branch-inline .branch-flag {
   display: block;
   place-items: initial;
   border-radius: 0;
+}
+
+/* Desktop table action buttons were clipping. Cargo status transitions
+   ("Dispatch", "Arrive", etc.) render as plain <button> with no class, so
+   they fell through to `.row-actions button { width: 38px; height: 38px }`
+   in somway.css -- a fixed square that cropped the label. The wide
+   "Receive Payment" button plus these transitions then overflowed the
+   actions column and overlapped the neighbouring cells. Give the text
+   buttons real width and keep the whole action group on a single line so
+   the table's own horizontal scroll absorbs any genuine overflow instead
+   of columns colliding. Icon-only buttons (aria-label) stay square.
+   Scoped to >=768px so the mobile full-width stacked action buttons are
+   untouched. */
+@media (min-width: 768px) {
+  .row-actions {
+    flex-wrap: nowrap;
+  }
+  .row-actions > button:not([aria-label]) {
+    width: auto;
+    min-width: 0;
+    height: auto;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid #cfe0f7;
+    border-radius: 9px;
+    background: #eaf2ff;
+    color: var(--ui-brand);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    flex: 0 0 auto;
+  }
+  .row-actions > button[aria-label] {
+    flex: 0 0 auto;
+  }
+  /* The actions column should hug its content and never wrap its buttons
+     onto a second line on desktop; the .table-shell wrapper scrolls if the
+     whole table gets wider than its container. */
+  .table-shell td:last-child,
+  .table-wrap td:last-child {
+    white-space: nowrap;
+    width: 1%;
+  }
+}
+
+/* Revenue by Service used to be one long flat table where every row repeated
+   "Branch . Currency . Service". It now renders KPI cards grouped under a
+   branch heading -- the branch is stated once, and each currency+service is
+   its own card styled like the system metric-cards (icon chip + eyebrow +
+   big value) with the money figures below. */
+.branch-report-group {
+  display: grid;
+  gap: 22px;
+}
+.branch-report-title {
+  margin: 0 0 12px;
+  padding: 0 2px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ui-heading, #1f2a44);
+}
+.branch-report-title .branch-inline {
+  gap: 8px;
+}
+
+/* Card grid: same rhythm as the dashboard KPI grid, auto-fitting so a branch
+   with three services and one with six both look balanced. */
+.service-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+.service-kpi.metric-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+.service-kpi .metric-main {
+  flex: 1;
+  min-width: 0;
+}
+.service-kpi .metric-main > strong {
+  display: block;
+  margin: 6px 0 2px;
+  color: #083f73;
+  font: 700 22px/1.1 var(--display);
+}
+.service-kpi-caption {
+  display: block;
+  margin-bottom: 12px;
+  color: #7a8ba4;
+  font-size: 10px;
+  font-weight: 500;
+}
+.service-kpi-stats {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border);
+}
+.service-kpi-stats > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.service-kpi-stats dt {
+  color: #7a8ba4;
+  font-size: 11px;
+  font-weight: 500;
+}
+.service-kpi-stats dd {
+  margin: 0;
+  color: #29374f;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.service-kpi-stats dd.is-profit {
+  color: #16a34a;
+}
+.service-kpi-stats dd.is-loss {
+  color: #ef4444;
+}
+
+/* Business Day cards carry a status badge (and an owner-only Recalculate
+   action) below the figures. */
+.service-kpi-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+@media (max-width: 767px) {
+  .service-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* One-click receipt button in the Ticket Register reference column. It sits
+   beside the reference id + date so a receipt is generated in a single click,
+   without visiting the Receipt Builder and re-typing the reference. */
+.ref-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ref-cell-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.receipt-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid #cfe0f7;
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: var(--ui-brand);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter 140ms ease, transform 140ms ease;
+}
+.receipt-chip:hover {
+  filter: brightness(0.96);
+  transform: translateY(-1px);
+}
+.receipt-chip svg {
+  flex: 0 0 auto;
+}
+@media (max-width: 767px) {
+  .ref-cell {
+    flex-wrap: wrap;
+  }
+}
+
+/* Financial report: on phones the branch-performance and service-performance
+   KPI cards default to one column because the shared .metrics-grid mobile rule
+   uses minmax(148px, 1fr), which is wider than the branch block's inner width.
+   Force exactly two columns for the report's KPI grids on small screens only —
+   larger screens keep the existing responsive column count untouched. */
+@media (max-width: 767px) {
+  .branch-report-block .metrics-grid,
+  .report-summary-block .metrics-grid,
+  .report-summary-block .metrics-grid.six {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+}
+
+/* Small helper text beneath a form Field (e.g. the password policy hint). */
+.field .field-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #6b7a90;
+}
+/* Body-level notifications stay above every modal and its backdrop blur. */
+.toast.workspace-notification {
+  position: fixed;
+  z-index: 10000;
+  top: max(20px, env(safe-area-inset-top));
+  bottom: auto;
+  right: max(20px, env(safe-area-inset-right));
+  max-width: min(560px, calc(100vw - 40px));
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }

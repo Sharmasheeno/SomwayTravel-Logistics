@@ -1,3 +1,5 @@
+import { isCancelledService } from "./serviceRelationships.js";
+import { hasPayableParent, serviceKeys } from "./serviceRelationships.js";
 import Ticket from "../models/Ticket.js";
 import Cargo from "../models/Cargo.js";
 import Visa from "../models/Visa.js";
@@ -60,7 +62,7 @@ export const toPlain = (doc) => {
 const moneyRound = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
 export const defaultAgencyData = {
-  agencyName: "Macruf Travel and Cargo Agency",
+  agencyName: "SomWay Travel & Logistics",
   users: [],
   tickets: [],
   cargo: [],
@@ -118,9 +120,26 @@ export const readAgencyData = async () => {
     SupplierPayment.find({}).sort({ paymentDate: -1, createdAt: -1 }),
   ]);
 
+  const parentKeys = serviceKeys({ tickets, visas, cargo });
+  const liveBills = suppliers.filter((bill) => hasPayableParent(bill, parentKeys));
+  const liveBillIds = new Set(liveBills.map((bill) => bill.id));
   const paymentMethodIdByMongoId = new Map(
     paymentMethods.map((method) => [method._id.toString(), method.id]),
   );
+  // Service links are stored as Mongo ObjectIds, while the client-facing
+  // workspace uses the stable client.id. Normalize both sides so counts,
+  // filters and activity cards include tickets, visas and cargo consistently.
+  const clientIdByMongoId = new Map(
+    clients.map((client) => [client._id.toString(), client.id]),
+  );
+  const normalizeClientLinks = (record) => {
+    const next = { ...record };
+    for (const field of ["clientId", "senderClientId", "receiverClientId", "payerClientId"]) {
+      const value = next[field]?.toString?.() || next[field];
+      if (value && clientIdByMongoId.has(value)) next[field] = clientIdByMongoId.get(value);
+    }
+    return next;
+  };
   const paymentsByTransaction = new Map();
   for (const payment of payments) {
     const key = `${payment.transactionType}:${payment.transactionId}`;
@@ -137,7 +156,7 @@ export const readAgencyData = async () => {
     const transactionPayments =
       paymentsByTransaction.get(`${transactionType}:${plain.id}`) || [];
     const summary = deriveCustomerFinanceSummary({
-      totalCharge: total,
+      totalCharge: isCancelledService(plain) ? 0 : total,
       payments: transactionPayments,
     });
     const latestPaymentDate = transactionPayments
@@ -166,11 +185,11 @@ export const readAgencyData = async () => {
 
   return {
     agencyName,
-    tickets: tickets.map((row) => withCustomerFinance("ticket", row)),
-    cargo: cargo.map((row) => withCustomerFinance("cargo", row)),
-    visas: visas.map((row) => withCustomerFinance("visa", row)),
+    tickets: tickets.map((row) => normalizeClientLinks(withCustomerFinance("ticket", row))),
+    cargo: cargo.map((row) => normalizeClientLinks(withCustomerFinance("cargo", row))),
+    visas: visas.map((row) => normalizeClientLinks(withCustomerFinance("visa", row))),
     expenses: expenses.map(toPlain),
-    suppliers: suppliers.map(toPlain),
+    suppliers: liveBills.map(toPlain),
     clients: clients.map(toPlain),
     closes: closes.map(toPlain),
     rates: rates.map(toPlain),
@@ -188,8 +207,8 @@ export const readAgencyData = async () => {
           String(plain.paymentMethodId || ""),
       };
     }),
-    payments: payments.map(toPlain),
-    supplierPayments: supplierPayments.map(toPlain),
+    payments: payments.filter((payment) => parentKeys.has(`${payment.transactionType}:${payment.transactionId}`)).map(toPlain),
+    supplierPayments: supplierPayments.filter((payment) => liveBillIds.has(payment.supplierBillId)).map(toPlain),
   };
 };
 

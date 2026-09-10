@@ -7,10 +7,7 @@ const PREFIXES = {
   cargo: "CGO",
 };
 
-const compactDate = (value) =>
-  String(value || new Date().toISOString().slice(0, 10)).replace(/[^0-9]/g, "");
-
-export const nextBusinessReference = async ({ kind, branchId, date }) => {
+export const nextBusinessReference = async ({ kind, branchId }) => {
   const prefix = PREFIXES[kind];
   if (!prefix) {
     throw Object.assign(new Error("Unknown business reference type."), {
@@ -26,13 +23,14 @@ export const nextBusinessReference = async ({ kind, branchId, date }) => {
       },
     );
   }
-  const day = compactDate(date);
-  const branchCode = String(branch.code || "BR").toUpperCase();
-  const key = `${kind}:${branch._id}:${day}`;
+  // A single continuous sequence per record type (tickets, visas, cargo),
+  // independent of branch and date, so numbers read short: CGO-00001,
+  // CGO-00002, ... starting at 00001 and never resetting.
+  const key = kind;
   const counter = await ReferenceCounter.findOneAndUpdate(
     { key },
     { $inc: { value: 1 } },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   );
-  return `${prefix}-${branchCode}-${day}-${String(counter.value).padStart(4, "0")}`;
+  return `${prefix}-${String(counter.value).padStart(5, "0")}`;
 };

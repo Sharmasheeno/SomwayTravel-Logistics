@@ -1,4 +1,5 @@
 import express from "express";
+import { operatorSettings } from "../lib/operatorAccess.js";
 import User, { STAFF_ROLES } from "../models/User.js";
 import { requireOwner } from "../middleware/auth.js";
 import { assertActiveBranch } from "../lib/branches.js";
@@ -26,27 +27,54 @@ const slug = (value) =>
 // Generated credentials must satisfy the same policy as typed ones.
 const temporaryPassword = () => generateStrongPassword();
 
-const withLoginUrl = (req, user) => {
-  const origin = `${req.protocol}://${req.get("host")}`;
+// Resolve the public origin used to build staff login links, in priority
+// order: (1) the owner-editable Agency Settings value, (2) an env var, (3) the
+// incoming request. This means the correct scheme/host/port (e.g.
+// http://169.58.173.197:8080) is used even behind a proxy that terminates on
+// port 80 and drops the real port — and the owner can change it in-app with no
+// redeploy. Pass the pre-loaded settings row to avoid an extra query per user.
+const resolveLoginOrigin = (req, settings) => {
+  const configured = String(
+    settings?.publicBaseUrl ||
+      process.env.PUBLIC_APP_URL ||
+      process.env.PUBLIC_BASE_URL ||
+      "",
+  ).trim();
+  return (configured || `${req.protocol}://${req.get("host")}`).replace(
+    /\/+$/,
+    "",
+  );
+};
+
+const withLoginUrl = (req, user, origin, operatorRoute) => {
+  const base = (origin || `${req.protocol}://${req.get("host")}`).replace(
+    /\/+$/,
+    "",
+  );
   return {
     ...user.toSafeObject(true),
     loginUrl:
       user.role === "owner"
-        ? `${origin}/admin`
-        : `${origin}/portal/${user.loginToken}`,
+        ? `${base}/admin`
+        : `${base}${operatorRoute}`,
   };
 };
 
 router.get("/users", requireOwner, async (req, res) => {
-  const rows = await User.find({});
-  return res.json({ users: rows.map((row) => withLoginUrl(req, row)) });
+  const [rows, settings] = await Promise.all([
+    User.find({}),
+    operatorSettings(),
+  ]);
+  const origin = resolveLoginOrigin(req, settings);
+  return res.json({ users: rows.map((row) => withLoginUrl(req, row, origin, settings.operatorAccessRoute)) });
 });
 
 router.get("/settings", requireOwner, async (_req, res) => {
   const settings = await AgencySettings.findOne({ key: "singleton" }).lean();
   return res.json({
     settings: {
-      agencyName: settings?.agencyName || "Macruf Travel and Cargo Agency",
+      agencyName: settings?.agencyName || "SomWay Travel & Logistics",
+      publicBaseUrl: settings?.publicBaseUrl || "",
       timezone: settings?.timezone || "Africa/Mogadishu",
       businessDayStart: settings?.businessDayStart || "07:00",
       businessDayEnd: settings?.businessDayEnd || "18:00",
@@ -59,12 +87,34 @@ router.patch("/settings", requireOwner, async (req, res) => {
   const agencyName = String(
     req.body?.agencyName ||
       current?.agencyName ||
-      "Macruf Travel and Cargo Agency",
+      "SomWay Travel & Logistics",
   ).trim();
   if (agencyName.length < 3 || agencyName.length > 120) {
     return res.status(400).json({
       error: "Agency name must be between 3 and 120 characters.",
     });
+  }
+  // publicBaseUrl is optional and may be explicitly cleared to fall back to the
+  // env var / request. Only touch it when the caller actually sends the key.
+  let publicBaseUrl = current?.publicBaseUrl || "";
+  if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "publicBaseUrl")) {
+    publicBaseUrl = String(req.body.publicBaseUrl || "").trim();
+    if (publicBaseUrl) {
+      let parsed;
+      try {
+        parsed = new URL(publicBaseUrl);
+      } catch {
+        parsed = null;
+      }
+      if (!parsed || !/^https?:$/.test(parsed.protocol)) {
+        return res.status(400).json({
+          error:
+            "Login link base must be a full http(s) URL, e.g. http://169.58.173.197:8080",
+        });
+      }
+      // Store a clean origin (scheme + host + optional port), no trailing slash.
+      publicBaseUrl = parsed.origin;
+    }
   }
   const timezone = String(
     req.body?.timezone || current?.timezone || "Africa/Mogadishu",
@@ -92,7 +142,15 @@ router.patch("/settings", requireOwner, async (req, res) => {
   }
   await AgencySettings.findOneAndUpdate(
     { key: "singleton" },
-    { $set: { agencyName, timezone, businessDayStart, businessDayEnd } },
+    {
+      $set: {
+        agencyName,
+        publicBaseUrl,
+        timezone,
+        businessDayStart,
+        businessDayEnd,
+      },
+    },
     { upsert: true, setDefaultsOnInsert: true },
   );
   await Activity.create({
@@ -122,14 +180,10 @@ router.post("/users", requireOwner, async (req, res) => {
   const duplicate = await User.findOne({ email });
   if (duplicate) email = `${slug(trimmedName)}.${randomToken(2)}`;
 
-  // An owner may supply a password, but it has to meet the policy; an empty
-  // one falls back to a generated password that meets it by construction.
-  let finalPassword = temporaryPassword();
-  if (password !== undefined && String(password) !== "") {
-    const problem = passwordProblem(password);
-    if (problem) return res.status(400).json({ error: problem });
-    finalPassword = String(password);
-  }
+  // A password is required and must meet the policy.
+  const finalPassword = String(password ?? "");
+  const problem = passwordProblem(finalPassword);
+  if (problem) return res.status(400).json({ error: problem });
 
   const user = await User.create({
     name: trimmedName,
@@ -141,9 +195,11 @@ router.post("/users", requireOwner, async (req, res) => {
     active: true,
   });
 
-  return res
-    .status(201)
-    .json({ user: withLoginUrl(req, user), temporaryPassword: finalPassword });
+  const settings = await operatorSettings();
+  return res.status(201).json({
+    user: withLoginUrl(req, user, resolveLoginOrigin(req, settings), settings.operatorAccessRoute),
+    temporaryPassword: finalPassword,
+  });
 });
 
 router.patch("/users", requireOwner, async (req, res) => {
@@ -200,10 +256,53 @@ router.patch("/users", requireOwner, async (req, res) => {
     detail: `Updated ${target.name} (${target.role}, ${target.active ? "active" : "suspended"})`,
   });
 
+  const settingsForLink = await operatorSettings();
   return res.json({
-    user: withLoginUrl(req, target),
+    user: withLoginUrl(req, target, resolveLoginOrigin(req, settingsForLink), settingsForLink.operatorAccessRoute),
     ...(password ? { temporaryPassword: password } : {}),
   });
+});
+
+// Permanently remove a staff account. Owner-only, and guarded so the agency can
+// never be left without an owner and an owner cannot delete their own account.
+router.delete("/users/:id", requireOwner, async (req, res) => {
+  const id = String(req.params.id || "");
+  if (!id || id === req.user.id.toString()) {
+    return res
+      .status(400)
+      .json({ error: "You cannot delete your own account." });
+  }
+
+  const target = await User.findById(id);
+  if (!target) {
+    return res.status(404).json({ error: "Staff account not found." });
+  }
+
+  if (target.role === "owner") {
+    const otherOwners = await User.countDocuments({
+      role: "owner",
+      _id: { $ne: target._id },
+    });
+    if (otherOwners === 0) {
+      return res.status(409).json({
+        error: "Cannot delete the last owner. Create another owner first.",
+      });
+    }
+  }
+
+  await Session.deleteMany({ userId: target._id });
+  await target.deleteOne();
+  await Activity.create({
+    id: `log_${randomToken(8)}`,
+    at: new Date().toISOString(),
+    userId: req.user.id.toString(),
+    userName: req.user.name,
+    action: "Deleted staff",
+    entity: "Security",
+    detail: `Deleted ${target.name} (${target.role})`,
+  });
+
+  return res.json({ ok: true, id });
 });
 
 router.patch("/account", requireOwner, async (req, res) => {

@@ -82,7 +82,7 @@ test("new service records start with canonical status and audit history", () => 
     { id: "v-new", branchId: nbo, status: "Submitted" },
     nairobi,
   );
-  assert.equal(ticket.status, "booked");
+  assert.equal(ticket.status, "issued");
   assert.equal(visa.status, "submitted");
   assert.equal(ticket.workflowVersion, 0);
   assert.equal(visa.statusHistory[0].userId, "op-nbo");
@@ -107,7 +107,7 @@ test("ticket and visa transitions follow their canonical workflows", async () =>
     await transitionServiceStatus({
       kind: "ticket",
       id: ticket.id,
-      toStatus: "issued",
+      toStatus: "cancelled",
       user: nairobi,
     });
     await transitionServiceStatus({
@@ -123,12 +123,44 @@ test("ticket and visa transitions follow their canonical workflows", async () =>
       user: nairobi,
     });
   });
-  assert.equal(ticket.status, "issued");
+  assert.equal(ticket.status, "cancelled");
   assert.deepEqual(
     visa.statusHistory.map((entry) => entry.toStatus),
     ["approved", "delivered"],
   );
   assert.equal(visa.workflowVersion, 2);
+});
+
+test("visa cancellation is a normal terminal workflow state", async () => {
+  const visa = {
+    id: "v-cancel",
+    branchId: nbo,
+    status: "submitted",
+    workflowVersion: 0,
+    statusHistory: [],
+  };
+  await withWorkflowMocks({ visas: [visa] }, async () => {
+    await transitionServiceStatus({
+      kind: "visa",
+      id: visa.id,
+      toStatus: "cancelled",
+      user: nairobi,
+    });
+    await assert.rejects(
+      transitionServiceStatus({
+        kind: "visa",
+        id: visa.id,
+        toStatus: "approved",
+        user: nairobi,
+      }),
+      /cannot move/i,
+    );
+  });
+  assert.equal(visa.status, "cancelled");
+  assert.deepEqual(
+    visa.statusHistory.map((entry) => entry.toStatus),
+    ["cancelled"],
+  );
 });
 
 test("operators cannot skip workflow steps or update another branch", async () => {
@@ -198,7 +230,7 @@ test("stale service transition is rejected instead of overwriting history", asyn
         transitionServiceStatus({
           kind: "ticket",
           id: ticket.id,
-          toStatus: "issued",
+          toStatus: "cancelled",
           user: nairobi,
         }),
         /another session/i,
@@ -213,5 +245,6 @@ test("legacy service statuses normalize deterministically", () => {
   assert.equal(normalizeServiceStatus("ticket", "Created"), "booked");
   assert.equal(normalizeServiceStatus("ticket", "Canceled"), "cancelled");
   assert.equal(normalizeServiceStatus("visa", "Approved"), "approved");
+  assert.equal(normalizeServiceStatus("visa", "Cancelled"), "cancelled");
   assert.equal(normalizeServiceStatus("visa", "unknown"), "submitted");
 });

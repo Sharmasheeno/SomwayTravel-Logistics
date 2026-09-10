@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { apiFetch, apiRequest, SESSION_EXPIRED_EVENT } from "./lib/api";
+import { createPortal } from "react-dom";
 
 // A signed-in session belongs to the tab that established it. Opening the
 // workspace in a new tab, or returning after the browser was closed, goes
@@ -36,6 +37,7 @@ const tabHasSession = () => {
     return true;
   }
 };
+import { buildReceiptHtml } from "./lib/receipt.mjs";
 import { SomwayIcon } from "./somway-icon";
 
 const fetch = apiFetch;
@@ -92,7 +94,10 @@ type User = {
   loginUrl?: string;
 };
 type TicketStatus = "booked" | "issued" | "changed" | "cancelled";
-type VisaStatus = "submitted" | "approved" | "refused" | "delivered";
+type Locale = "en" | "so";
+type ThemeMode = "light" | "dark";
+const translate = (locale: Locale, english: string, somali: string) => locale === "so" ? somali : english;
+type VisaStatus = "submitted" | "approved" | "refused" | "delivered" | "cancelled";
 type Ticket = {
   id: string;
   ref: string;
@@ -385,6 +390,8 @@ type Activity = {
   detail: string;
 };
 type CustomerPayment = {
+  flow?: "inbound" | "outbound";
+  status?: "active" | "void";
   id: string;
   branchId: string;
   transactionType: "ticket" | "visa" | "cargo";
@@ -397,7 +404,6 @@ type CustomerPayment = {
   reference?: string;
   notes?: string;
   receivedByUserId?: string;
-  status?: "active" | "void";
   voidReason?: string;
 };
 type SupplierPayment = {
@@ -557,7 +563,8 @@ type InitialCustomerPayment = {
   branchId: string;
   paymentDate: string;
   paymentMethod: PaymentMethod;
-  reference: string;
+  reference?: string;
+  notes?: string;
   idempotencyKey?: string;
 };
 type ModuleProps = {
@@ -629,20 +636,40 @@ const roleLabel: Record<Role, string> = {
   officer_nairobi: "Legacy Nairobi Operator",
   officer_mogadishu: "Legacy Mogadishu Operator",
 };
+// crypto.randomUUID() only exists in a secure context (HTTPS/localhost). The
+// live site is served over plain HTTP, where it is undefined and throws. Fall
+// back to getRandomValues, then to a timestamp+random id, so ids always work.
+function safeUUID(): string {
+  const c: Crypto | undefined = globalThis.crypto;
+  if (c?.randomUUID) {
+    try {
+      return c.randomUUID();
+    } catch {
+      /* not a function / insecure context — fall through */
+    }
+  }
+  if (c?.getRandomValues) {
+    const b = c.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, "0"));
+    return `${h[0]}${h[1]}${h[2]}${h[3]}-${h[4]}${h[5]}-${h[6]}${h[7]}-${h[8]}${h[9]}-${h[10]}${h[11]}${h[12]}${h[13]}${h[14]}${h[15]}`;
+  }
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 const money = (value: number, currency: Currency) =>
   `${currency} ${new Intl.NumberFormat("en-KE", { maximumFractionDigits: 2 }).format(value || 0)}`;
-/** The same figure without its currency code, for narrow columns that name the
- *  currency once in the row instead of repeating it in every cell. */
-const amount = (value: number) =>
-  new Intl.NumberFormat("en-KE", { maximumFractionDigits: 2 }).format(
-    value || 0,
-  );
 const moneyByCurrency = <T,>(
   rows: T[],
   currencyFor: (row: T) => Currency,
   valueFor: (row: T) => number,
+  // Currencies to consider. When a single branch is in scope, pass that
+  // branch's currencies so a Mogadishu (USD-only) view never shows a stray
+  // "KES 0" and a Nairobi (KES-only) view never shows a stray "USD 0".
+  currencies: Currency[] = ["KES", "USD"],
 ) =>
-  (["KES", "USD"] as Currency[])
+  currencies
     .map((currency) => ({
       currency,
       value: rows
@@ -717,6 +744,12 @@ const paymentMethodsFor = (
     .filter((name): name is PaymentMethod => Boolean(name));
   return names;
 };
+// A cancelled service (ticket, visa or cargo) is reversed out of every
+// financial view — revenue, profit, receivables and client spend — so it no
+// longer counts anywhere despite remaining on record for audit.
+const isCancelledService = (record: {
+  status?: string | null;
+}) => ["cancelled", "canceled"].includes(String(record?.status || "").toLowerCase());
 const cargoStatusKey = (status: CargoStatus | string) =>
   (({
     "In Transit": "in_transit",
@@ -750,16 +783,17 @@ const cargoStatusTone = (status: CargoStatus | string) => {
 const serviceStatusLabel = (status: string) =>
   status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown";
 const ticketNextStatuses: Record<string, TicketStatus[]> = {
-  booked: ["issued", "cancelled"],
-  issued: ["changed", "cancelled"],
-  changed: ["issued", "cancelled"],
+  booked: ["cancelled"],
+  issued: ["cancelled"],
+  changed: ["cancelled"],
   cancelled: [],
 };
 const visaNextStatuses: Record<string, VisaStatus[]> = {
-  submitted: ["approved", "refused"],
-  approved: ["delivered"],
+  submitted: ["approved", "refused", "cancelled"],
+  approved: ["delivered", "cancelled"],
   refused: [],
   delivered: [],
+  cancelled: [],
 };
 
 function syncClients(data: AgencyData): AgencyData {
@@ -844,6 +878,297 @@ function downloadPdf(filename: string, title: string, lines: string[]) {
   downloadBlob(filename, new TextEncoder().encode(pdf), "application/pdf");
 }
 
+// One-click receipt. Rather than send the user to the Receipt Builder page to
+// re-type a reference, any register row can hand its already-known details
+// straight to this function, which opens a self-contained, print-ready A4
+// receipt in a new tab and triggers the browser's print/save dialog. The
+// markup is inlined (not the app's DOM) so the printout carries only the
+// receipt -- no sidebar, no chrome -- and looks the same on every device.
+type ReceiptData = {
+  agencyName: string;
+  ref: string;
+  date: string;
+  client: string;
+  description: string;
+  branch: string;
+  method: string;
+  paymentStatus: string;
+  serviceStatus: string;
+  amount: number;
+  currency: Currency;
+  served: string;
+  kind: "ticket" | "visa" | "cargo";
+  details: Array<[string, string]>;
+};
+function generateReceipt(receipt: ReceiptData, logoUrl?: string) {
+  const html = buildReceiptHtml(receipt, new URL(logoUrl || "/Som-way2.png", window.location.origin).href, true);
+  const win = window.open("", "_blank", "width=760,height=900");
+  if (win && win.document) {
+    // Direct document write: works in the common case and keeps the tab under
+    // our control so the title (the PDF filename) can be set.
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    try {
+      win.document.title = `receipt-${receipt.ref}`;
+    } catch {
+      // Cross-origin title set can throw in rare cases; the <title> tag covers it.
+    }
+    return;
+  }
+  // Some browsers hand back a window whose document cannot be written to
+  // (or block the direct write). Fall back to a Blob URL, which always
+  // renders the same self-contained page.
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  const opened = window.open(url, "_blank");
+  if (!opened) {
+    window.alert("Please allow pop-ups for this site to generate the receipt.");
+  }
+  // Revoke after the tab has had time to load the document.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+// A professional, print-ready shipment/visa status sheet. Mirrors the receipt
+// generator: opens a self-contained page (SomWay logo, big tracking number, a
+// progress timeline and detail cards) and triggers the browser print/save-PDF
+// dialog, so the downloaded document matches the polished on-screen tracking.
+type StatusSheet = {
+  kind: "cargo" | "visa";
+  title: string;
+  reference: string;
+  refLabel: string;
+  status: string;
+  route: string;
+  stages: string[];
+  currentStage: number;
+  failed: boolean;
+  details: Array<[string, string]>;
+  logoUrl?: string;
+};
+function generateStatusSheet(sheet: StatusSheet) {
+  const esc = (value: string | number) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  const logo = sheet.logoUrl
+    ? `<img class="brand" src="${esc(sheet.logoUrl)}" alt="SomWay Travel & Logistics" />`
+    : `<div class="brand brand-fallback">SW</div>`;
+  const steps = sheet.stages
+    .map((stage, index) => {
+      const active = !sheet.failed && index <= sheet.currentStage;
+      return `<div class="step ${active ? "active" : ""}"><i>${
+        active ? "&#10003;" : index + 1
+      }</i><span>${esc(stage)}</span></div>`;
+    })
+    .join("");
+  const progress = sheet.failed
+    ? 0
+    : (Math.max(0, sheet.currentStage) / (sheet.stages.length - 1)) * 100;
+  const cards = sheet.details
+    .map(
+      ([k, v]) =>
+        `<div class="card"><span>${esc(k)}</span><strong>${esc(v || "—")}</strong></div>`,
+    )
+    .join("");
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${esc(sheet.refLabel.toLowerCase().replace(/\s+/g, "-"))}-${esc(sheet.reference)}</title>
+<style>
+  :root { --green:#0d47a1; --teal:#00acc1; --muted:#61708c; --line:#dce6f2; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background:#eef2f7; color:#14243d;
+    font-family:"Poppins","Inter",system-ui,-apple-system,sans-serif; }
+  .sheet { max-width:720px; margin:24px auto; background:#fff; border:1px solid var(--line);
+    border-radius:16px; padding:36px 40px; box-shadow:0 18px 44px rgba(3,23,53,.10); }
+  header { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:18px;
+    padding-bottom:22px; border-bottom:2px solid var(--green); }
+  .brand { width:auto; height:52px; max-width:62vw; border-radius:10px; object-fit:contain;
+    object-position:left center; background:#000; padding:8px 14px; display:block;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .brand-fallback { width:64px; height:64px; display:grid; place-items:center; background:var(--green);
+    color:#fff; font:700 24px/1 Georgia,serif; padding:0; }
+  header p { font-size:11px; color:var(--muted); margin:4px 0 0; }
+  .tag { align-self:start; padding:7px 14px; border-radius:999px; background:#e0f5e9;
+    color:#0d8a4f; font-size:12px; font-weight:800; letter-spacing:.04em; }
+  .eyebrow { font-size:11px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--teal); margin:26px 0 6px; }
+  h1 { font:800 34px/1.05 "Poppins",Georgia,serif; color:#0d1b42; margin:0; letter-spacing:-.01em; }
+  .route { margin-top:10px; font-size:13px; font-weight:600; color:var(--muted); }
+  .track { position:relative; display:grid; grid-template-columns:repeat(${sheet.stages.length},1fr);
+    margin:44px 0 38px; }
+  .track:before { content:""; position:absolute; left:${100 / sheet.stages.length / 2}%;
+    right:${100 / sheet.stages.length / 2}%; top:26px; height:4px; border-radius:4px; background:#e6edf6; }
+  .track:after { content:""; position:absolute; left:${100 / sheet.stages.length / 2}%; top:26px;
+    height:4px; border-radius:4px; width:calc((100% - ${100 / sheet.stages.length}%) * ${progress / 100});
+    background:linear-gradient(90deg,var(--teal),var(--green)); }
+  .step { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center;
+    gap:10px; color:#9aa8bd; font-size:12px; font-weight:700; }
+  .step i { width:52px; height:52px; border-radius:50%; display:grid; place-items:center;
+    background:#eef3f9; color:#9aa8bd; border:4px solid #fff; box-shadow:0 0 0 1px #e0e8f2;
+    font-style:normal; font-size:18px; }
+  .step.active { color:var(--green); }
+  .step.active i { background:linear-gradient(145deg,var(--teal),var(--green)); color:#fff;
+    box-shadow:0 0 0 1px rgba(0,172,193,.4); }
+  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .card { background:#f6f9fc; border:1px solid #eef2f8; padding:15px 16px; border-radius:14px; }
+  .card span { display:block; font-size:10px; font-weight:800; letter-spacing:.08em;
+    text-transform:uppercase; color:#8a99b0; }
+  .card strong { display:block; margin-top:4px; font-size:15px; font-weight:700; color:#1a2b4a; }
+  footer { border-top:1px solid var(--line); margin-top:26px; padding-top:16px;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:11px; color:var(--muted); }
+  .toolbar { max-width:720px; margin:16px auto 0; display:flex; gap:10px; justify-content:flex-end; }
+  .toolbar button { border:0; border-radius:10px; padding:11px 18px; cursor:pointer; font:600 13px/1 inherit; }
+  .toolbar .print { background:var(--green); color:#fff; }
+  .toolbar .close { background:#e7edf5; color:#35425c; }
+  @media print { body { background:#fff; } .sheet { box-shadow:none; border:0; margin:0; max-width:none; }
+    .toolbar { display:none; } }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <header>${logo}<div><p>Nairobi &middot; Mogadishu</p></div><span class="tag">${esc(sheet.title)}</span></header>
+    <p class="eyebrow">${esc(sheet.refLabel)}</p>
+    <h1>${esc(sheet.reference)}</h1>
+    <p class="route">${esc(sheet.route)}</p>
+    <div class="track">${steps}</div>
+    <div class="cards">${cards}</div>
+    <footer><span>Generated ${esc(new Date().toLocaleString("en-GB"))}</span><span>WhatsApp +252 61 563 3609</span></footer>
+  </div>
+  <div class="toolbar">
+    <button class="close" onclick="window.close()">Close</button>
+    <button class="print" onclick="window.print()">Print / Save PDF</button>
+  </div>
+  <script>
+    window.addEventListener('load', function(){ setTimeout(function(){ window.focus(); window.print(); }, 350); });
+  <\/script>
+</body>
+</html>`;
+  const win = window.open("", "_blank", "width=820,height=980");
+  if (win && win.document) {
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  const opened = window.open(url, "_blank");
+  if (!opened) {
+    window.alert("Please allow pop-ups for this site to download the status.");
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+// Turn a ticket register row into receipt data for the one-click generator.
+// Resolve the "Paid via" label from the actual recorded customer payments for a
+// transaction, rather than the record's own paymentMethod field (which is often
+// blank on cargo). Falls back to the record field, then to an em dash.
+function paidViaLabel(
+  data: AgencyData,
+  type: "ticket" | "visa" | "cargo",
+  id: string,
+  fallback?: string,
+): string {
+  const active = data.payments.filter(
+    (p) =>
+      p.transactionType === type &&
+      p.transactionId === id &&
+      p.status !== "void",
+  );
+  const names = Array.from(
+    new Set(
+      active
+        .map((p) => {
+          const cfg = p.paymentMethodId
+            ? data.paymentMethods.find((m) => m.id === p.paymentMethodId)
+            : undefined;
+          return (cfg?.name || String(p.paymentMethod || "")).trim();
+        })
+        .filter(Boolean),
+    ),
+  );
+  if (names.length) return names.join(", ");
+  const clean = String(fallback || "").trim();
+  return clean && clean !== "—" ? clean : "—";
+}
+function ticketReceiptData(
+  ticket: Ticket,
+  agencyName: string,
+  method?: string,
+): ReceiptData {
+  const amountValue = ticket.amount || 0;
+  return {
+    agencyName,
+    ref: ticket.ref,
+    date: dateLabel(ticket.saleDate),
+    client: ticket.passenger,
+    description: `Flight ${ticket.route}${ticket.airlinePnr ? ` · ${ticket.airlinePnr}` : ""}`,
+    branch: ticket.office,
+    method: method ?? ticket.paymentMethod,
+    paymentStatus: ticket.paymentStatus || (ticket.paid ? "paid" : "unpaid"),
+    serviceStatus: ticket.status || "booked",
+    amount: amountValue,
+    currency: ticket.currency,
+    served: ticket.servedBy || "Agency team",
+    kind: "ticket",
+    details: [["Route", ticket.route], ["Airline / PNR", ticket.airlinePnr || "?"], ["Travel date", dateLabel(ticket.travelDate)], ["Booking status", ticket.status || "booked"]],
+  };
+}
+// Turn a visa register row into receipt data for the one-click generator.
+function visaReceiptData(
+  visa: Visa,
+  agencyName: string,
+  method?: string,
+): ReceiptData {
+  const amountValue = visa.amount || 0;
+  return {
+    agencyName,
+    ref: visa.ref,
+    date: dateLabel(visa.appDate),
+    client: visa.applicant,
+    description: `${visa.visaType} visa · ${visa.destination}`,
+    branch: visa.office,
+    method: method ?? visa.paymentMethod,
+    paymentStatus: visa.paymentStatus || (visa.paid ? "paid" : "unpaid"),
+    serviceStatus: visa.status || "submitted",
+    amount: amountValue,
+    currency: visa.currency,
+    served: visa.servedBy || "Agency team",
+    kind: "visa",
+    details: [["Destination country", visa.destination], ["Visa type", visa.visaType], ["Application status", visa.status || "submitted"]],
+  };
+}
+// Turn a cargo register row into receipt data for the one-click generator.
+function cargoReceiptData(
+  cargo: Cargo,
+  agencyName: string,
+  servedBy: string,
+  method?: string,
+): ReceiptData {
+  const amountValue =
+    cargo.customerCharge ?? (cargo.weight || 0) * (cargo.rate || 0);
+  return {
+    agencyName,
+    ref: cargo.tracking,
+    date: dateLabel(cargo.dateIn),
+    client:
+      cargo.paymentResponsibility === "receiver"
+        ? cargo.receiver
+        : cargo.sender,
+    description: `Cargo ${cargo.origin} → ${cargo.destination} · ${cargo.weight} kg`,
+    branch: cargo.paidByOffice || cargo.origin,
+    method: method ?? cargo.paymentMethod ?? "—",
+    paymentStatus: cargo.paymentStatus || (cargo.paid ? "paid" : "unpaid"),
+    serviceStatus: cargoStatusLabel(cargo.status),
+    amount: amountValue,
+    currency: cargo.currency,
+    served: servedBy || "Agency team",
+    kind: "cargo",
+    details: [["Sender", cargo.sender], ["Receiver", cargo.receiver], ["Destination", cargo.destination], ["Weight", `${cargo.weight} kg`], ["Description", cargo.contents]],
+  };
+}
 function Icon({ name, size = 18 }: { name: string; size?: number }) {
   return <SomwayIcon name={name} size={size} />;
 
@@ -1033,16 +1358,22 @@ function BrandMark({ className = "" }: { className?: string }) {
   return (
     <img
       className={`brand-mark ${className}`.trim()}
-      src="/somway-primary-logo-alpha.png"
+      src="/Som-way2.png"
       alt="SomWay Travel & Logistics"
     />
   );
 }
-function BrandLogo({ className = "" }: { className?: string }) {
+function BrandLogo({
+  className = "",
+  src = "/Som-way2.png",
+}: {
+  className?: string;
+  src?: string;
+}) {
   return (
     <img
       className={`brand-master-logo ${className}`.trim()}
-      src="/somway-primary-logo-alpha.png"
+      src={src}
       alt="SomWay Travel & Logistics"
     />
   );
@@ -1052,16 +1383,62 @@ function Field({
   label,
   children,
   wide = false,
+  icon,
+  iconTone = "blue",
+  hint,
 }: {
   label: string;
   children: ReactNode;
   wide?: boolean;
+  /** Optional leading glyph shown inside the control, matching the design. */
+  icon?: string;
+  /** Colour tone for the leading glyph (blue, green, violet, orange, cyan…). */
+  iconTone?: string;
+  /** Optional helper text shown beneath the control. */
+  hint?: string;
 }) {
   return (
     <label className={`field ${wide ? "wide" : ""}`}>
       <span>{label}</span>
-      <div className="field-control">{children}</div>
+      <div className={`field-control${icon ? " has-icon" : ""}`}>
+        {icon && (
+          <span className={`field-icon tone-${iconTone}`} aria-hidden="true">
+            <Icon name={icon} size={15} />
+          </span>
+        )}
+        {children}
+      </div>
+      {hint && <small className="field-hint">{hint}</small>}
     </label>
+  );
+}
+// A titled group of form fields with a small icon header, matching the
+// "SHIPMENT DETAILS / CONTACT DETAILS / PRICING" card sections in the design.
+// Purely presentational: it wraps the existing fields, changing no logic.
+function FormSection({
+  icon,
+  title,
+  children,
+  tone = "blue",
+  className = "",
+}: {
+  icon: string;
+  title: string;
+  children: ReactNode;
+  /** Colour tone for the section's header icon. */
+  tone?: string;
+  className?: string;
+}) {
+  return (
+    <section className={`form-section ${className}`.trim()}>
+      <header className="form-section-head">
+        <span className={`form-section-icon tone-${tone}`} aria-hidden="true">
+          <Icon name={icon} size={15} />
+        </span>
+        <h4>{title}</h4>
+      </header>
+      <div className="form-grid">{children}</div>
+    </section>
   );
 }
 function PasswordInput({
@@ -1561,16 +1938,14 @@ function ProfileModal({
         </p>
         <div className="form-grid">
           <Field label="Current password">
-            <input
-              type="password"
+            <PasswordInput
               autoComplete="current-password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
             />
           </Field>
           <Field label="New password">
-            <input
-              type="password"
+            <PasswordInput
               autoComplete="new-password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
@@ -2052,6 +2427,7 @@ function Toolbar({
   setOffice,
   branches = [],
   allowAll = true,
+  showBranch = true,
 }: {
   query: string;
   setQuery: (v: string) => void;
@@ -2059,6 +2435,7 @@ function Toolbar({
   setOffice: (v: string) => void;
   branches?: Branch[];
   allowAll?: boolean;
+  showBranch?: boolean;
 }) {
   return (
     <div className="toolbar filter-row">
@@ -2070,21 +2447,23 @@ function Toolbar({
           placeholder="Search records…"
         />
       </label>
-      <label className="filter-field">
-        <span>Branch</span>
-        <div>
-          <Icon name="building" size={16} />
-          <select value={office} onChange={(e) => setOffice(e.target.value)}>
-            {allowAll && <option value="All">All Branches</option>}
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.name}>
-                {branch.name}
-              </option>
-            ))}
-          </select>
-          <Icon name="chevron" size={14} />
-        </div>
-      </label>
+      {showBranch && (
+        <label className="filter-field">
+          <span>Branch</span>
+          <div>
+            <Icon name="building" size={16} />
+            <select value={office} onChange={(e) => setOffice(e.target.value)}>
+              {allowAll && <option value="All">All Branches</option>}
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.name}>
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+            <Icon name="chevron" size={14} />
+          </div>
+        </label>
+      )}
     </div>
   );
 }
@@ -2093,14 +2472,17 @@ function Actions({
   onDelete,
   onPayment,
   paymentLabel = "Record payment",
+  refundAction,
 }: {
   onEdit: () => void;
   onDelete?: () => void;
   onPayment?: () => void;
   paymentLabel?: string;
+  refundAction?: ReactNode;
 }) {
   return (
     <div className="row-actions action-group">
+      {refundAction}
       {onPayment && (
         <button type="button" className="small-icon payment-action" title={paymentLabel} onClick={onPayment}>
           Pay
@@ -2142,6 +2524,164 @@ function TableShell({
   );
 }
 
+// A single record shown as a compact horizontal summary line (a handful of
+// labelled cells plus status badges) with a "View" toggle that expands the
+// full set of details and the row's actions. This replaces the wide tables in
+// the registers so many records fit on screen at once — especially on phones,
+// where a table only showed one or two rows. Used on every screen size.
+type RecordCell = {
+  label: string;
+  value: ReactNode;
+  strong?: boolean;
+  hide?: boolean;
+};
+function RecordList({ children }: { children: ReactNode }) {
+  return <div className="record-list">{children}</div>;
+}
+function RecordCard({
+  title,
+  subtitle,
+  chips,
+  cells,
+  badges,
+  details = [],
+  actions,
+  defaultOpen = false,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  chips?: ReactNode;
+  cells: RecordCell[];
+  badges?: ReactNode;
+  details?: RecordCell[];
+  actions?: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const shownCells = cells.filter((cell) => !cell.hide);
+  const shownDetails = details.filter((detail) => !detail.hide);
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+  return (
+    <article className={`record-card${open ? " open" : ""}`}>
+      <div className="record-summary">
+        <div className="record-title-cell">
+          <div className="record-title">{title}</div>
+          {subtitle && <small className="record-subtitle">{subtitle}</small>}
+          {chips && <div className="record-chips">{chips}</div>}
+        </div>
+        <div className="record-cells">
+          {shownCells.map((cell, index) => (
+            <div className="record-cell" key={`${cell.label}-${index}`}>
+              <span className="record-cell-label">{cell.label}</span>
+              <span
+                className={`record-cell-value${cell.strong ? " strong" : ""}`}
+              >
+                {cell.value}
+              </span>
+            </div>
+          ))}
+        </div>
+        {badges && <div className="record-badges">{badges}</div>}
+        <button
+          type="button"
+          className="record-view"
+          aria-haspopup="dialog"
+          onClick={() => setOpen(true)}
+        >
+          <Icon name="eye" size={15} />
+          <span>View</span>
+        </button>
+      </div>
+      {open && typeof document !== "undefined" && createPortal(
+        <div className="record-modal-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
+          <div className="record-modal" role="dialog" aria-modal="true" aria-label="Record details" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="record-modal-header">
+              <div>
+                <div className="record-modal-title">{title}</div>
+                {subtitle && <small className="record-subtitle">{subtitle}</small>}
+              </div>
+              <button type="button" className="record-modal-close" aria-label="Close details" onClick={() => setOpen(false)}>
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            {chips && <div className="record-modal-chips">{chips}</div>}
+            {shownDetails.length > 0 && (
+              <div className="record-detail-grid">
+                {shownDetails.map((detail, index) => (
+                  <div className="record-detail" key={`${detail.label}-${index}`}>
+                    <span className="record-detail-label">{detail.label}</span>
+                    <span className="record-detail-value">{detail.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {actions && (
+              <div className="record-actions" onClick={() => setOpen(false)}>
+                {actions}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </article>
+  );
+}
+
+
+function refundAvailable(data: AgencyData, type: "ticket" | "visa" | "cargo", record: { id: string; status?: string }) {
+  if (!isCancelledService(record)) return 0;
+  const payments = data.payments.filter((p) => p.transactionType === type && p.transactionId === record.id && p.status !== "void");
+  const ledger = payments.reduce((sum, p) => sum + (p.flow === "outbound" ? -1 : 1) * p.amount, 0);
+  if (ledger > 0 || payments.length || !(record as { paid?: boolean }).paid) return Math.max(0, Math.round(ledger * 100) / 100);
+  const charge = type === "cargo"
+    ? Number((record as { weight?: number }).weight || 0) * Number((record as { rate?: number }).rate || 0)
+    : Number((record as { amount?: number }).amount || 0);
+  return Math.max(0, Math.round(charge * 100) / 100);
+}
+function refundedAmount(data: AgencyData, type: "ticket" | "visa" | "cargo", record: { id: string }) {
+  return Math.max(0, Math.round(data.payments
+    .filter((payment) => payment.transactionType === type && payment.transactionId === record.id && payment.status !== "void" && payment.flow === "outbound")
+    .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0) * 100) / 100);
+}
+function CancellationRefundAction({ type, record, data, onSaved }: {
+  type: "ticket" | "visa" | "cargo";
+  record: { id: string; status?: string; paid?: boolean; currency: Currency; amount?: number; weight?: number; rate?: number; branchId?: string | null; paidByBranchId?: string | null; originBranchId?: string | null; ref?: string; tracking?: string };
+  data: AgencyData;
+  onSaved: (data: AgencyData) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const available = refundAvailable(data, type, record);
+  if (available <= 0) return null;
+  return <>
+    <button
+      type="button"
+      className="refund-action"
+      title={`Refund ${money(available, record.currency)} to the customer`}
+      onClick={() => setOpen(true)}
+    >
+      <Icon name="wallet" size={14} />
+      <span>Refund {money(available, record.currency)}</span>
+    </button>
+    {open && <CustomerPaymentForm transactionType={type} transactionId={record.id}
+      label={record.ref || record.tracking || record.id} branchId={String(record.paidByBranchId || record.branchId || record.originBranchId || "")}
+      currency={record.currency} balance={available} isRefund cancellationRefund data={data}
+      onClose={() => setOpen(false)} onSaved={(next) => { setOpen(false); onSaved(next); }} />}
+  </>;
+}
+
 function CustomerPaymentForm({
   transactionType,
   transactionId,
@@ -2154,6 +2694,7 @@ function CustomerPaymentForm({
   totalCharge,
   amountPaid,
   isRefund = false,
+  cancellationRefund = false,
   data,
   onClose,
   onSaved,
@@ -2169,6 +2710,7 @@ function CustomerPaymentForm({
   totalCharge?: number;
   amountPaid?: number;
   isRefund?: boolean;
+  cancellationRefund?: boolean;
   data: AgencyData;
   onClose: () => void;
   onSaved: (data: AgencyData) => void;
@@ -2188,11 +2730,11 @@ function CustomerPaymentForm({
     setBusy(true);
     setError("");
     try {
-      const payload = await apiRequest<{ data: AgencyData }>("/api/payments", {
+      const payload = await apiRequest<{ data: AgencyData }>(cancellationRefund ? "/api/payments/refund" : "/api/payments", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": globalThis.crypto.randomUUID(),
+          "Idempotency-Key": safeUUID(),
         },
         body: JSON.stringify({
           transactionType,
@@ -2222,8 +2764,9 @@ function CustomerPaymentForm({
       subtitle={`${label} / Remaining ${money(balance, currency)}`}
       onClose={onClose}
     >
-      <form className="modal-form" onSubmit={submit}>
+      <form className={`modal-form ${cancellationRefund ? "refund-modal-form" : ""}`} onSubmit={submit}>
         {error && <p className="form-error">{error}</p>}
+        {cancellationRefund && <p className="refund-modal-note">Record this after returning the money to the customer. This records the outgoing refund in the agency ledger.</p>}
         {!isRefund && (
           <dl className="payment-summary">
             <div><dt>Customer</dt><dd>{customer || label}</dd></div>
@@ -2241,6 +2784,7 @@ function CustomerPaymentForm({
               required
               min="0.01"
               max={balance}
+              readOnly={cancellationRefund}
               step="0.01"
               type="number"
               value={form.amount}
@@ -2248,6 +2792,11 @@ function CustomerPaymentForm({
                 setForm({ ...form, amount: event.target.value })
               }
             />
+            {!isRefund && (
+              <small className="field-hint">
+                Remaining after this payment: {money(Math.max(0, balance - (Number(form.amount) || 0)), currency)}
+              </small>
+            )}
           </Field>
           <Field label={isRefund ? "Refund date" : "Payment date"}>
             <input
@@ -2292,17 +2841,17 @@ function CustomerPaymentForm({
             />
           </Field>
         </div>
-        <div className="modal-actions">
-          <button type="button" className="button ghost" onClick={onClose}>
-            Cancel
+        <div className={`modal-actions ${cancellationRefund ? "refund-modal-actions" : ""}`}>
+          <button type="button" className="button ghost refund-cancel-button" onClick={onClose}>
+            Close
           </button>
           <button
-            className="button primary"
+            className={`button primary ${cancellationRefund ? "refund-submit-button" : ""}`}
             disabled={
               busy || Number(form.amount) <= 0 || Number(form.amount) > balance
             }
           >
-            {busy ? "Saving..." : isRefund ? "Record Refund" : "Record Payment"}
+            {busy ? "Saving..." : isRefund ? "Refund customer" : "Record Payment"}
           </button>
         </div>
       </form>
@@ -2363,8 +2912,9 @@ export default function Home() {
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [setupRequired, setSetupRequired] = useState(false);
   const [portalPath, setPortalPath] = useState("/");
+  const [routeUnavailable, setRouteUnavailable] = useState(false);
+  const [publicLanding, setPublicLanding] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState<Page>("overview");
   const [mobileNav, setMobileNav] = useState(false);
@@ -2377,6 +2927,8 @@ export default function Home() {
   const [seenAlerts, setSeenAlerts] = useState<string[]>([]);
   const [accountOpen, setAccountOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [locale, setLocale] = useState<Locale>("en");
+  const [theme, setTheme] = useState<ThemeMode>("light");
   // Toasts carry a tone: a failed save used to render with the same green
   // tick as a success, so an error read as confirmation. Errors also stay
   // on screen longer and can be dismissed, because they need reading.
@@ -2385,13 +2937,34 @@ export default function Home() {
   const [overviewBranchId, setOverviewBranchId] = useState("");
   const [overviewFrom, setOverviewFrom] = useState(`${today().slice(0, 7)}-01`);
   const [overviewTo, setOverviewTo] = useState(today());
+  const ui = locale === "so" ? {
+    Dashboard: "Dashboard", Bookings: "Boos celin", Cargo: "Rar", "Visa Services": "Adeegyada Fiisaha",
+    "Daily Summary": "Warbixinta Maalinlaha", Expenses: "Kharashaadka", Clients: "Macmiisha",
+    "Accounts Receivable": "Deynta la sugayo", Receipts: "Rasiidhada", "Track Shipment": "Raac shixnadda",
+    "Financial Reports": "Warbixinta maaliyadeed", "Accounts Payable": "Deynta la bixinayo", "Activity Log": "Diiwaanka hawsha",
+    "Team & Roles": "Kooxda iyo doorarka", Settings: "Dejinta"
+  } : {};
+  const label = (text: string) => (ui as Record<string, string>)[text] || text;
+  useEffect(() => {
+    try {
+      const savedLocale = localStorage.getItem("somway-locale");
+      const savedTheme = localStorage.getItem("somway-theme");
+      if (savedLocale === "en" || savedLocale === "so") setLocale(savedLocale);
+      if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem("somway-locale", locale); localStorage.setItem("somway-theme", theme); } catch {}
+  }, [locale, theme]);
   const applyData = (source: Partial<AgencyData>) => {
     const next = syncClients({ ...emptyData, ...source });
     dataRef.current = next;
     setData(next);
   };
   const loadWorkspace = async (signedIn: User) => {
-    const response = await fetch("/api/data", { cache: "no-store" });
+    const response = await fetch("/api/data", { cache: "no-store", credentials: "include" });
     const payload = await response.json();
     if (!response.ok)
       throw new Error(payload.error || "Could not load agency data.");
@@ -2405,11 +2978,10 @@ export default function Home() {
     const load = async () => {
       const path = window.location.pathname;
       setPortalPath(path);
-      if (path === "/") {
-        setReady(true);
-        return;
-      }
       try {
+        const routeResponse = await fetch(`/api/operator-access/validate?path=${encodeURIComponent(path)}`, { cache: "no-store" });
+        if (routeResponse.status === 404 && path === "/") { setPublicLanding(true); return; }
+        if (!routeResponse.ok && path !== "/admin") { setRouteUnavailable(true); return; }
         const statusResponse = await fetch("/api/auth/status", {
           cache: "no-store",
         });
@@ -2417,8 +2989,10 @@ export default function Home() {
         if (!statusResponse.ok)
           throw new Error(status.error || "Secure storage is unavailable.");
         if (!active) return;
-        setSetupRequired(Boolean(status.setupRequired));
-        if (status.setupRequired) return;
+        // The owner account is created directly (seed or database), so the
+        // in-app first-run setup screen is intentionally not shown; /admin
+        // always presents the email + password login form.
+        void status;
         // This tab never signed in -- a new tab, or a return visit after the
         // browser closed. Do not resume the cookie; show the login screen.
         if (!tabHasSession()) return;
@@ -2433,30 +3007,9 @@ export default function Home() {
             me.error || "The current session could not be checked.",
           );
         const sessionUser = me.user as User;
-        if (path === "/admin" && sessionUser.role !== "owner") {
-          await fetch("/api/auth/logout", { method: "POST" });
-              clearTabSession();
+        if ((path === "/admin") !== (sessionUser.role === "owner")) {
+          clearTabSession();
           return;
-        }
-        if (path.startsWith("/portal/")) {
-          const token = path.split("/").filter(Boolean)[1] || "";
-          const linkResponse = await fetch(
-            `/api/auth/link?token=${encodeURIComponent(token)}`,
-            { cache: "no-store" },
-          );
-          const link = await linkResponse.json();
-          if (!linkResponse.ok)
-            throw new Error(
-              link.error || "This staff access link is unavailable.",
-            );
-          if (
-            String(link.user.username).toLowerCase() !==
-            sessionUser.username.toLowerCase()
-          ) {
-            await fetch("/api/auth/logout", { method: "POST" });
-              clearTabSession();
-            return;
-          }
         }
         const dataResponse = await fetch("/api/data", { cache: "no-store" });
         const payload = await dataResponse.json();
@@ -2466,12 +3019,10 @@ export default function Home() {
         applyData(payload.data || {});
         setUser(sessionUser);
       } catch (error) {
-        if (active)
-          setLoadError(
-            error instanceof Error
-              ? error.message
-              : "Could not open the secure workspace.",
-          );
+        if (active) {
+          if (path === "/admin") setLoadError("");
+          else setLoadError(error instanceof Error ? error.message : "Could not open the secure workspace.");
+        }
       } finally {
         if (active) setReady(true);
       }
@@ -2580,7 +3131,7 @@ export default function Home() {
       })
       .catch(async (error) => {
         try {
-          const response = await fetch("/api/data", { cache: "no-store" });
+          const response = await fetch("/api/data", { cache: "no-store", credentials: "include" });
           const payload = await response.json();
           if (response.ok && payload.data) applyData(payload.data);
         } catch {}
@@ -2599,40 +3150,34 @@ export default function Home() {
     setToastTone("success");
     setToast(message);
   };
+  useEffect(() => {
+    if (publicLanding) return;
+    let active = true;
+    const check = async () => {
+      try {
+        const response = await fetch(`/api/operator-access/validate?path=${encodeURIComponent(portalPath)}`, { cache: "no-store" });
+        if (active && response.status === 404) setRouteUnavailable(true);
+      } catch { /* Preserve the session during a temporary network outage. */ }
+    };
+    const timer = window.setInterval(check, 10000);
+    window.addEventListener("focus", check);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", check); };
+  }, [portalPath, publicLanding]);
+  if (routeUnavailable) return <AuthMessage title="Access link unavailable" detail="This operator link is no longer active. Ask the Owner for the current login URL." />;
   if (!ready)
     return (
       <main className="loading-screen">
-        <BrandLogo className="loading-brand-logo" />
+        <BrandLogo className="loading-brand-logo" src="/Som-way2.png" />
         <p>Preparing your agency workspace…</p>
       </main>
     );
-  if (portalPath === "/") return <Landing />;
+  if (publicLanding) return <Landing />;
   if (loadError && !user)
     return <AuthMessage title="Access unavailable" detail={loadError} />;
-  if (setupRequired && portalPath === "/admin")
-    return (
-      <Bootstrap
-        onReady={async (owner) => {
-          await loadWorkspace(owner);
-          setSetupRequired(false);
-        }}
-      />
-    );
-  if (setupRequired)
-    return (
-      <AuthMessage
-        title="Workspace setup pending"
-        detail="The agency owner must complete the one-time setup before staff accounts can sign in."
-      />
-    );
   if (!user)
     return (
       <Login
-        linkToken={
-          portalPath.startsWith("/portal/")
-            ? portalPath.split("/").filter(Boolean)[1]
-            : ""
-        }
+        linkToken=""
         onLogin={loadWorkspace}
       />
     );
@@ -2644,35 +3189,35 @@ export default function Home() {
     finance?: boolean;
     owner?: boolean;
   }[] = [
-    { page: "overview", label: "Dashboard", icon: "dashboard" },
-    { page: "tickets", label: "Bookings", icon: "plane" },
-    { page: "cargo", label: "Cargo", icon: "box" },
-    { page: "visas", label: "Visa Services", icon: "passport" },
-    { page: "daily-close", label: "Daily Summary", icon: "settings" },
-    { page: "expenses", label: "Expenses", icon: "wallet" },
-    { page: "clients", label: "Clients", icon: "users" },
+    { page: "overview", label: label("Dashboard"), icon: "dashboard" },
+    { page: "tickets", label: label("Bookings"), icon: "plane" },
+    { page: "cargo", label: label("Cargo"), icon: "box" },
+    { page: "visas", label: label("Visa Services"), icon: "passport" },
+    { page: "daily-close", label: label("Daily Summary"), icon: "settings" },
+    { page: "expenses", label: label("Expenses"), icon: "wallet" },
+    { page: "clients", label: label("Clients"), icon: "users" },
     {
       page: "receivables",
-      label: "Accounts Receivable",
+      label: label("Accounts Receivable"),
       icon: "money",
     },
-    { page: "receipt", label: "Receipts", icon: "file" },
-    { page: "tracking", label: "Track Shipment", icon: "search" },
+    { page: "receipt", label: label("Receipts"), icon: "file" },
+    { page: "tracking", label: label("Track Shipment"), icon: "search" },
     {
       page: "reports",
-      label: "Financial Reports",
+      label: label("Financial Reports"),
       icon: "chart",
       finance: true,
     },
     {
       page: "suppliers",
-      label: "Accounts Payable",
+      label: label("Accounts Payable"),
       icon: "wallet",
       finance: true,
     },
-    { page: "activity", label: "Activity Log", icon: "shield", finance: true },
-    { page: "team", label: "Team & Roles", icon: "users", owner: true },
-    { page: "settings", label: "Settings", icon: "settings", owner: true },
+    { page: "activity", label: label("Activity Log"), icon: "shield", finance: true },
+    { page: "team", label: label("Team & Roles"), icon: "users", owner: true },
+    { page: "settings", label: label("Settings"), icon: "settings" },
   ];
   const nav = navItems.filter(
     (item) =>
@@ -2685,6 +3230,7 @@ export default function Home() {
           <Overview
             data={data}
             user={user}
+            locale={locale}
             onNavigate={setPage}
             branchId={overviewBranchId}
             from={overviewFrom}
@@ -2787,7 +3333,7 @@ export default function Home() {
     <div className={`app-shell ${navCollapsed ? "nav-collapsed" : ""}`}>
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
         <div className="brand-lockup sidebar-brand">
-          <BrandLogo className="sidebar-logo" />
+          <BrandLogo className="sidebar-logo" src="/Som-way2.png" />
         </div>
         <nav>
           {nav.map((item) => (
@@ -2878,8 +3424,10 @@ export default function Home() {
           <div className="top-actions">
             {/* Branch scope is global: it drives every module's branch filter.
                 Operators are pinned to their own branch, so they see a label
-                rather than a control they are not allowed to change. */}
-            {branchOptions(data, user).length > 1 ? (
+                rather than a control they are not allowed to change. The Daily
+                Summary screen owns its own Branch dropdown, so the global chip
+                is hidden there to avoid a confusing duplicate control. */}
+            {page === "daily-close" ? null : branchOptions(data, user).length > 1 ? (
               <label className="topbar-filter topbar-control">
                 <Icon name="building" size={16} />
                 <select
@@ -2922,6 +3470,15 @@ export default function Home() {
                 />
               </label>
             )}
+            <div className="workspace-preferences" aria-label="Workspace preferences">
+              <div className="top-preference" role="group" aria-label="Language">
+                <button type="button" className={locale === "en" ? "selected" : ""} onClick={() => setLocale("en")} aria-label="Use English">EN</button>
+                <button type="button" className={locale === "so" ? "selected" : ""} onClick={() => setLocale("so")} aria-label="Use Somali">SO</button>
+              </div>
+              <button type="button" className="theme-button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}>
+                {theme === "light" ? "☾" : "☀"}
+              </button>
+            </div>
             <div className="notif-anchor">
               <button
                 className="icon-btn"
@@ -3022,6 +3579,20 @@ export default function Home() {
             <Icon name="plane" size={15} />
             Public website
           </a>
+          <div className="account-preference">
+            <span>Language</span>
+            <div className="preference-toggle" role="group" aria-label="Language">
+              <button type="button" className={locale === "en" ? "selected" : ""} onClick={() => setLocale("en")}>English</button>
+              <button type="button" className={locale === "so" ? "selected" : ""} onClick={() => setLocale("so")}>Soomaali</button>
+            </div>
+          </div>
+          <div className="account-preference">
+            <span>Appearance</span>
+            <div className="preference-toggle" role="group" aria-label="Appearance">
+              <button type="button" className={theme === "light" ? "selected" : ""} onClick={() => setTheme("light")}>Light</button>
+              <button type="button" className={theme === "dark" ? "selected" : ""} onClick={() => setTheme("dark")}>Dark</button>
+            </div>
+          </div>
           <button
             className="account-action account-signout"
             onClick={async () => {
@@ -3045,8 +3616,8 @@ export default function Home() {
           onSaved={(updated) => setUser({ ...user, ...updated })}
         />
       )}
-      {toast && (
-        <div className={`toast toast-${toastTone}`} role="status">
+      {toast && createPortal(
+        <div className={`toast workspace-notification toast-${toastTone}`} role={toastTone === "error" ? "alert" : "status"} aria-atomic="true">
           <Icon name={toastTone === "error" ? "alert" : "check"} size={16} />
           <span>{toast}</span>
           <button
@@ -3057,7 +3628,8 @@ export default function Home() {
           >
             <Icon name="x" size={13} />
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -3685,133 +4257,6 @@ function LegacyLanding() {
   );
 }
 
-function Bootstrap({ onReady }: { onReady: (owner: User) => Promise<void> }) {
-  const [form, setForm] = useState({ name: "", password: "", confirm: "" });
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (!form.name.trim() || form.password.length < 10)
-      return setError(
-        "Enter the owner name and use at least 10 characters for the password.",
-      );
-    if (form.password !== form.confirm)
-      return setError("Passwords do not match.");
-    setSubmitting(true);
-    try {
-      const response = await fetch("/api/auth/setup-owner", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name, password: form.password }),
-      });
-      const payload = await response.json();
-      if (!response.ok)
-        throw new Error(payload.error || "Owner setup could not be completed.");
-      await onReady(payload.user);
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Owner setup could not be completed.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-  return (
-    <main className="auth-screen">
-      <section className="auth-story">
-        <a className="auth-back" href="/">
-          ← Public website
-        </a>
-        <div className="brand light">
-          <BrandLogo className="auth-brand-logo" />
-        </div>
-        <div className="story-copy">
-          <p className="eyebrow">Owner-only setup</p>
-          <h1>Secure the agency workspace.</h1>
-          <p>
-            Create the first owner password once. The account, staff access and
-            agency records will then work across supported browsers.
-          </p>
-          <div className="story-stats">
-            <div>
-              <strong>2</strong>
-              <span>connected offices</span>
-            </div>
-            <div>
-              <strong>4</strong>
-              <span>permission roles</span>
-            </div>
-            <div>
-              <strong>1</strong>
-              <span>owner administrator</span>
-            </div>
-          </div>
-        </div>
-        <div className="route-line">
-          <span>NBO</span>
-          <i />
-          <b>Secure agency workspace</b>
-          <i />
-          <span>MGQ</span>
-        </div>
-      </section>
-      <section className="auth-panel">
-        <form onSubmit={submit}>
-          <p className="eyebrow">First-time setup</p>
-          <h2>Create the owner password</h2>
-          <p className="form-intro">
-            Only the owner can complete this one-time step.
-          </p>
-          <Field label="Owner login">
-            <input readOnly autoComplete="username" value={OWNER_LOGIN} />
-          </Field>
-          <Field label="Owner name">
-            <input
-              autoFocus
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Full name"
-            />
-          </Field>
-          <div className="form-grid">
-            <Field label="Password">
-              <PasswordInput
-                autoComplete="new-password"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-              />
-            </Field>
-            <Field label="Confirm">
-              <PasswordInput
-                autoComplete="new-password"
-                value={form.confirm}
-                onChange={(e) => setForm({ ...form, confirm: e.target.value })}
-              />
-            </Field>
-          </div>
-          {error && <p className="form-error">{error}</p>}
-          <button
-            disabled={submitting}
-            className="button primary full"
-            type="submit"
-          >
-            {submitting ? "Securing workspace…" : "Create secure workspace"}{" "}
-            <Icon name="arrow" />
-          </button>
-          <p className="storage-note">
-            <Icon name="lock" size={16} />
-            Encrypted password and agency data are stored securely for
-            cross-browser access.
-          </p>
-        </form>
-      </section>
-    </main>
-  );
-}
-
 function Login({
   linkToken,
   onLogin,
@@ -3852,6 +4297,7 @@ function Login({
           username,
           password,
           linkToken: linkToken || undefined,
+          accessPath: window.location.pathname,
         }),
       });
       const payload = await response.json();
@@ -3875,7 +4321,7 @@ function Login({
           ← Public website
         </a>
         <div className="brand light">
-          <BrandLogo className="auth-brand-logo" />
+          <BrandLogo className="auth-brand-logo" src="/Som-way2.png" />
         </div>
         <div className="story-copy">
           <p className="eyebrow">Welcome back</p>
@@ -3897,13 +4343,14 @@ function Login({
             {staffName ? `Welcome, ${staffName.split(" ")[0]}` : "Sign in"}
           </h2>
           <p className="form-intro">
-            Enter your username and password to continue.
+            Enter your email and password to continue.
           </p>
-          <Field label="Username">
+          <Field label="Email">
             <input
+              type="email"
               readOnly={Boolean(linkToken)}
               autoFocus={!linkToken}
-              autoComplete="username"
+              autoComplete="email"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
@@ -3942,7 +4389,7 @@ function AuthMessage({ title, detail }: { title: string; detail: string }) {
           ← Public website
         </a>
         <div className="brand light">
-          <BrandLogo className="auth-brand-logo" />
+          <BrandLogo className="auth-brand-logo" src="/Som-way2.png" />
         </div>
         <div className="story-copy">
           <p className="eyebrow">Protected workspace</p>
@@ -3993,17 +4440,17 @@ export function LegacyOverview({
       ...data.tickets.map((x) => ({
         d: x.saleDate,
         c: x.currency,
-        a: x.type === "Refund" ? -x.amount : x.amount,
+        a: x.type === "Refund" ? -x.amount : x.paymentStatus === "paid" ? x.amount : 0,
       })),
       ...data.visas.map((x) => ({
         d: x.appDate,
         c: x.currency,
-        a: x.type === "Refund" ? -x.amount : x.amount,
+        a: x.type === "Refund" ? -x.amount : x.paymentStatus === "paid" ? x.amount : 0,
       })),
       ...data.cargo.map((x) => ({
         d: x.dateIn,
         c: x.currency,
-        a: x.customerCharge ?? x.weight * x.rate,
+        a: x.paymentStatus === "paid" ? (x.customerCharge ?? x.weight * x.rate) : 0,
       })),
     ]
       .filter((x) => x.c === currency && monthKey(x.d) === thisMonth)
@@ -4361,21 +4808,7 @@ function PreviousOverview({
             : `Your ${office} operational desk is ready. Agency-wide financials are protected.`
         }
         actions={
-          financial ? (
-            <select
-              className="overview-branch-select"
-              value={branchId}
-              onChange={(event) => setBranchId(event.target.value)}
-              aria-label="Dashboard branch"
-            >
-              <option value="">All Branches</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-          ) : (
+          !financial && (
             <button className="button primary" onClick={() => onNavigate("cargo")}>
               <Icon name="plus" /> New Cargo
             </button>
@@ -4608,6 +5041,7 @@ function PreviousOverview({
 function Overview({
   data,
   user,
+  locale = "en",
   onNavigate,
   branchId,
   from,
@@ -4615,12 +5049,18 @@ function Overview({
 }: {
   data: AgencyData;
   user: User;
+  locale?: Locale;
   onNavigate: (p: Page) => void;
   branchId: string;
   from: string;
   to: string;
 }) {
-  const financial = user.role === "owner" || user.role === "consultant";
+  // Owners/consultants see agency-wide analytics (profit, cost, per-branch
+  // charts). Operators now see their OWN branch's money figures too — Payments
+  // Received and Accounts Receivable are theirs to act on, so they are no longer
+  // masked. `financialCharts` still gates the cost/profit-heavy analytics row.
+  const financialCharts = user.role === "owner" || user.role === "consultant";
+  const financial = financialCharts || user.role === "operator";
   const branches = activeBranches(data);
   const [report, setReport] = useState<FinanceReport | null>(null);
   // Totals for the window immediately before the selected one, so the money
@@ -4674,15 +5114,23 @@ function Overview({
   }, [branchId, financial, from, to]);
 
   const selectedBranch = branches.find((branch) => branch.id === branchId);
-  const scopedTickets = branchId
-    ? data.tickets.filter((ticket) => ticket.branchId === branchId)
-    : data.tickets;
-  const scopedCargo = branchId
-    ? data.cargo.filter((cargo) => cargo.originBranchId === branchId)
-    : data.cargo;
-  const scopedVisas = branchId
-    ? data.visas.filter((visa) => visa.branchId === branchId)
-    : data.visas;
+  // Cancelled services are excluded from every dashboard figure and list; they
+  // remain on record but represent no activity, revenue or open work.
+  const scopedTickets = (
+    branchId
+      ? data.tickets.filter((ticket) => ticket.branchId === branchId)
+      : data.tickets
+  ).filter((ticket) => !isCancelledService(ticket));
+  const scopedCargo = (
+    branchId
+      ? data.cargo.filter((cargo) => cargo.originBranchId === branchId)
+      : data.cargo
+  ).filter((cargo) => !isCancelledService(cargo));
+  const scopedVisas = (
+    branchId
+      ? data.visas.filter((visa) => visa.branchId === branchId)
+      : data.visas
+  ).filter((visa) => !isCancelledService(visa));
   const scopedClients = branchId
     ? data.clients.filter((client) => client.homeBranchId === branchId)
     : data.clients;
@@ -4714,7 +5162,7 @@ function Overview({
   const revenueValue = formatTotals(
     totals.map((row) => ({
       currency: row.currency,
-      value: row.paymentsReceived ?? row.revenue,
+      value: row.revenue,
     })),
   );
   const receivableValue = formatTotals(
@@ -4773,7 +5221,7 @@ function Overview({
     value: month.rows
       .filter((row) => row.currency === activeTrendCurrency)
       .reduce(
-        (sum, row) => sum + (row.paymentsReceived ?? row.revenue),
+        (sum, row) => sum + row.revenue,
         0,
       ),
   }));
@@ -4790,8 +5238,7 @@ function Overview({
             summary.transactions +
             (row.serviceDetails?.[service]?.transactions || 0),
           revenue:
-            summary.revenue +
-            (row.serviceDetails?.[service]?.paymentsReceived || 0),
+            summary.revenue + (row.services?.[service] || 0),
         }),
         { service, transactions: 0, revenue: 0 },
       );
@@ -4915,7 +5362,9 @@ function Overview({
   return <LiveOverviewDashboard
     data={data}
     user={user}
+    locale={locale}
     financial={financial}
+    financialCharts={financialCharts}
     branches={branches}
     branchId={branchId}
     displayCurrencies={displayCurrencies}
@@ -4947,7 +5396,9 @@ function Overview({
 type LiveOverviewDashboardProps = {
   data: AgencyData;
   user: User;
+  locale: Locale;
   financial: boolean;
+  financialCharts: boolean;
   branches: Branch[];
   branchId: string;
   displayCurrencies: Currency[];
@@ -5001,7 +5452,9 @@ type LiveOverviewDashboardProps = {
 function LiveOverviewDashboard({
   data,
   user,
+  locale,
   financial,
+  financialCharts,
   branches,
   branchId,
   displayCurrencies,
@@ -5027,6 +5480,7 @@ function LiveOverviewDashboard({
   onNavigate,
   trends,
 }: LiveOverviewDashboardProps) {
+  const t = (en: string, so: string) => translate(locale, en, so);
   const selectedBranch = branches.find((branch) => branch.id === branchId);
   const serviceTotal = serviceSummary.reduce((sum, item) => sum + item.revenue, 0);
   const serviceColors = ["#0b66e3", "#00a9c7", "#3bbf63"];
@@ -5135,34 +5589,34 @@ function LiveOverviewDashboard({
           )}
           <div>
             <span className="status-icon blue"><Icon name="cargo" /></span>
-            <div><strong>{activeCases}</strong><small>Active Cases</small></div>
+            <div><strong>{activeCases}</strong><small>Open Jobs</small></div>
           </div>
           <div>
             <span className="status-icon amber"><Icon name="expense" /></span>
-            <div><strong>{pendingApprovals}</strong><small>Pending Approvals</small></div>
+            <div><strong>{pendingApprovals}</strong><small>Reviews Pending</small></div>
           </div>
           <div>
             <span className="status-icon green"><Icon name="close" /></span>
-            <div><strong>{completedJobs}</strong><small>Completed Jobs</small></div>
+            <div><strong>{completedJobs}</strong><small>Jobs Completed</small></div>
           </div>
         </section>
       </div>
 
       <div className="metrics-grid six">
-        <MetricCard icon="money" label="Payments Received" value={financial ? revenueValue.split("\n")[0] : "Protected"} tone="cyan" delta={trends.payments} foot="Selected period" />
-        <MetricCard icon="box" label="Cargo Shipments" value={scopedCargo.length} tone="blue" delta={trends.cargo} foot={`${activeCargo.length} currently active`} />
-        <MetricCard icon="wallet" label="Accounts Receivable" value={financial ? receivableValue.split("\n")[0] : "Protected"} tone="green" foot={`${receivableRecords} outstanding records`} />
-        <MetricCard icon="users" label="Total Clients" value={scopedClients.filter((client) => client.isActive !== false).length} tone="violet" foot={selectedBranch?.name || "All active relationships"} />
-        <MetricCard icon="passport" label="Visa Applications" value={scopedVisas.length} tone="cyan" delta={trends.visas} foot={`${pendingVisas.length} in progress`} />
-        <MetricCard icon="ticket" label="Tickets Issued" value={scopedTickets.filter((ticket) => ticket.status !== "cancelled").length} tone="blue" delta={trends.tickets} foot={`${scopedTickets.length} total records`} />
+        <MetricCard icon="money" label={translate(locale, "Payments Received", "Lacag la helay")} value={revenueValue.split("\n")[0]} tone="cyan" delta={trends.payments} foot={translate(locale, "Selected period", "Muddada la doortay")} />
+        <MetricCard icon="box" label={translate(locale, "Cargo Shipments", "Shixnadaha raranka")} value={scopedCargo.length} tone="blue" delta={trends.cargo} foot={`${activeCargo.length} ${translate(locale, "currently active", "hadda firfircoon")}`} />
+        <MetricCard icon="wallet" label={translate(locale, "Accounts Receivable", "Deynta la sugayo")} value={receivableValue.split("\n")[0]} tone="green" foot={`${receivableRecords} ${translate(locale, "outstanding records", "diiwaan oo harsan")}`} />
+        <MetricCard icon="users" label={translate(locale, "Total Clients", "Wadarta macmiisha")} value={scopedClients.filter((client) => client.isActive !== false).length} tone="violet" foot={selectedBranch?.name || translate(locale, "All active relationships", "Dhammaan xiriirrada firfircoon")} />
+        <MetricCard icon="passport" label={translate(locale, "Visa Applications", "Codsiyada fiisaha")} value={scopedVisas.length} tone="cyan" delta={trends.visas} foot={`${pendingVisas.length} ${translate(locale, "in progress", "socda")}`} />
+        <MetricCard icon="ticket" label={translate(locale, "Tickets Issued", "Tigidhada la bixiyay")} value={scopedTickets.filter((ticket) => ticket.status !== "cancelled").length} tone="blue" delta={trends.tickets} foot={`${scopedTickets.length} ${translate(locale, "total records", "diiwaan guud")}`} />
       </div>
 
-      {financial && (
+      {financialCharts && (
         <div
           className="split-3 dashboard-analytics-row"
           style={{ marginTop: 14, gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.25fr)" }}
         >
-          <Panel title="Monthly Payments Trend" subtitle="Money received from customers" actions={displayCurrencies.length > 1 ? <select className="trend-select" value={activeTrendCurrency} onChange={(event) => setTrendCurrency(event.target.value as Currency)} aria-label="Trend currency">{displayCurrencies.map((currency) => <option key={currency}>{currency}</option>)}</select> : undefined}>
+          <Panel title={translate(locale, "Monthly Payments Trend", "Isbeddelka lacagaha bil kasta")} subtitle={translate(locale, "Money received from customers", "Lacagta laga helay macaamiisha")} actions={displayCurrencies.length > 1 ? <select className="trend-select" value={activeTrendCurrency} onChange={(event) => setTrendCurrency(event.target.value as Currency)} aria-label="Trend currency">{displayCurrencies.map((currency) => <option key={currency}>{currency}</option>)}</select> : undefined}>
             <BarChart
               values={trendValues.map((item) => item.value)}
               labels={trendValues.map((item) => item.label)}
@@ -5170,7 +5624,7 @@ function LiveOverviewDashboard({
               axisLabel={`Monthly payments received in ${activeTrendCurrency}`}
             />
           </Panel>
-          <Panel title="Payments by Service" subtitle={`${activeTrendCurrency} service mix`}>
+          <Panel title={translate(locale, "Payments by Service", "Lacagaha adeegyada")} subtitle={`${activeTrendCurrency} ${translate(locale, "service mix", "isku-darka adeegyada")}`}>
             <Donut total={money(serviceTotal, activeTrendCurrency)} centerLabel="Total" segments={serviceSegments} />
           </Panel>
           <Panel title="Branch Performance" subtitle={`${activeTrendCurrency} revenue by branch`}>
@@ -5331,31 +5785,50 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
   const rows = scopedRows.filter((ticket) => {
     if (ticketView === "issued") return ticket.status === "issued";
     if (ticketView === "pending")
-      return ticket.type !== "Refund" && ticket.paymentStatus !== "paid";
+      return !isCancelledService(ticket) && ticket.type !== "Refund" && ticket.paymentStatus !== "paid";
     if (ticketView === "refund")
-      return ticket.type === "Refund" && ticket.paymentStatus !== "paid";
+      return refundAvailable(data, "ticket", ticket) > 0 || (ticket.type === "Refund" && ticket.paymentStatus !== "paid");
     if (ticketView === "cancelled") return ticket.status === "cancelled";
     return true;
   });
+  // Cancelled tickets stay visible in the register but must not count towards
+  // revenue, profit, the issued total or pending refunds.
+  const financeRows = scopedRows.filter((ticket) => !isCancelledService(ticket));
+  // When a single branch is in scope, only that branch's currencies are shown,
+  // so a Mogadishu (USD-only) view never displays a stray "KES 0".
+  const scopeBranch =
+    office === "All" ? undefined : branchById(data, branchIdForOffice(data, office));
+  const scopeCurrencies = scopeBranch
+    ? branchCurrencies(scopeBranch)
+    : (["KES", "USD"] as Currency[]);
   const ticketRevenue = moneyByCurrency(
-    scopedRows,
+    financeRows,
     (ticket) => ticket.currency,
-    (ticket) => (ticket.type === "Refund" ? -ticket.amount : ticket.amount),
+    (ticket) => ticket.type === "Refund" ? -ticket.amount : ticket.paymentStatus === "paid" ? ticket.amount : 0,
+    scopeCurrencies,
   );
   const ticketProfit = moneyByCurrency(
-    scopedRows,
+    financeRows,
     (ticket) => ticket.currency,
     (ticket) =>
-      ticket.type === "Refund" ? -ticket.amount : ticket.amount - ticket.cost,
+      ticket.type === "Refund" ? -ticket.amount : ticket.paymentStatus === "paid" ? ticket.amount - ticket.cost : 0,
+    scopeCurrencies,
   );
   const pendingRefunds = scopedRows.filter(
-    (ticket) => ticket.type === "Refund" && ticket.paymentStatus !== "paid",
+    (ticket) => refundAvailable(data, "ticket", ticket) > 0 || (!isCancelledService(ticket) && ticket.type === "Refund" && ticket.paymentStatus !== "paid"),
   );
   const updateTicketStatus = async (
     ticket: Ticket,
     status: NonNullable<Ticket["status"]>,
   ) => {
-    const currentStatus = ticket.status || "booked";
+    const currentStatus = ticket.status || "issued";
+    if (
+      status === "cancelled" &&
+      !window.confirm(
+        `Cancel ${ticket.ref}? Its payable to the airline is reversed. Any customer payment already collected stays available to refund.`,
+      )
+    )
+      return;
     const normallyAllowed = (ticketNextStatuses[currentStatus] || []).includes(
       status,
     );
@@ -5406,6 +5879,7 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
         setOffice={setOffice}
         branches={branches}
         allowAll={!roleOffice}
+        showBranch={false}
       />
       <div className="subtabs" aria-label="Ticket views">
         {[
@@ -5426,162 +5900,164 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
         ))}
       </div>
       <div className="metrics-grid">
-        <MetricCard icon="ticket" label="Tickets Issued" value={scopedRows.length} tone="blue" foot="Selected branch" />
+        <MetricCard icon="ticket" label="Tickets Issued" value={financeRows.length} tone="blue" foot="Selected branch" />
         <MetricCard icon="money" label="Revenue" value={ticketRevenue} tone="cyan" foot="Sales less refunds" />
-        <MetricCard icon="trend" label="Gross Profit" value={ticketProfit} tone="green" foot="Revenue less agency cost" />
+        {financial ? (
+          <MetricCard icon="trend" label="Gross Profit" value={ticketProfit} tone="green" foot="Revenue less agency cost" />
+        ) : (
+          <MetricCard
+            icon="check"
+            label="Issued Tickets"
+            value={financeRows.filter((ticket) => ticket.status === "issued").length}
+            tone="green"
+            foot="Confirmed & ticketed"
+          />
+        )}
         <MetricCard
           icon="wallet"
           label="Pending Refunds"
-          value={moneyByCurrency(pendingRefunds, (ticket) => ticket.currency, (ticket) => ticket.amount)}
+          value={moneyByCurrency(pendingRefunds, (ticket) => ticket.currency, (ticket) => isCancelledService(ticket) ? refundAvailable(data, "ticket", ticket) : (ticket.balance ?? ticket.amount), scopeCurrencies)}
           tone="orange"
           foot={`${pendingRefunds.length} open record${pendingRefunds.length === 1 ? "" : "s"}`}
         />
       </div>
       {rows.length ? (
         <Panel title="Ticket Register" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Passenger</th>
-              <th>Route / travel</th>
-              <th>Office</th>
-              <th>Payment</th>
-              {financial && (
-                <>
-                  <th>Sale</th>
-                  <th>Agency cost</th>
-                  <th>Profit</th>
-                </>
-              )}
-              <th>Payment status</th>
-              <th>Ticket status</th>
-              {canWrite && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((x) => {
-              const profit =
-                x.type === "Refund" ? -x.amount : x.amount - x.cost;
-              return (
-                <tr key={x.id}>
-                  <td>
-                    <strong>{x.ref}</strong>
-                    <small>{dateLabel(x.saleDate)}</small>
-                  </td>
-                  <td>
-                    {x.passenger}
-                    <small>{x.phone}</small>
-                  </td>
-                  <td>
-                    {x.route}
-                    <small>
-                      {dateLabel(x.travelDate)} · {x.airlinePnr || "No PNR"}
-                    </small>
-                  </td>
-                  <td>
-                    <BranchBadge data={data} office={x.office} />
-                  </td>
-                  <td>
-                    {x.paymentMethod}
-                    <small>
-                      {x.paymentStatus === "partial"
-                        ? `${money(x.amountPaid || 0, x.currency)} paid`
-                        : x.paid
-                          ? dateLabel(x.paymentDate)
-                          : x.type === "Refund"
-                            ? "Refund not paid"
-                            : "Awaiting payment"}
-                    </small>
-                  </td>
-                  {financial && (
-                    <>
-                      <td>
-                        {money(
-                          (x.type === "Refund" ? -1 : 1) * x.amount,
-                          x.currency,
-                        )}
-                      </td>
-                      <td>{money(x.cost, x.currency)}</td>
-                      <td className={profit < 0 ? "negative" : "positive"}>
-                        {money(profit, x.currency)}
-                      </td>
-                    </>
-                  )}
-                  <td>
-                    <Badge
-                      tone={
-                        x.type === "Refund"
-                          ? x.paid
-                            ? "success"
-                            : "danger"
-                          : x.paymentStatus === "paid"
-                            ? "success"
-                            : x.paymentStatus === "partial"
-                              ? "blue"
-                              : "warning"
-                      }
-                    >
-                      {x.type === "Refund"
-                        ? x.paid
-                          ? "Refunded"
-                          : "Refund due"
-                        : x.paymentStatus === "paid"
-                          ? "Paid"
-                          : x.paymentStatus === "partial"
-                            ? "Part paid"
-                            : "Unpaid"}
+        <RecordList>
+          {rows.map((x) => {
+            const profit =
+              x.type === "Refund" ? -x.amount : x.paymentStatus === "paid" ? x.amount - x.cost : 0;
+            const refunded = refundedAmount(data, "ticket", x);
+            const payStatusTone =
+              x.type === "Refund"
+                ? x.paid
+                  ? "success"
+                  : "danger"
+                : x.paymentStatus === "paid"
+                  ? "success"
+                  : x.paymentStatus === "partial"
+                    ? "blue"
+                    : "warning";
+            const payStatusLabel =
+              x.type === "Refund"
+                ? x.paid
+                  ? "Refunded"
+                  : "Refund due"
+                : x.paymentStatus === "paid"
+                  ? "Paid"
+                  : x.paymentStatus === "partial"
+                    ? "Part paid"
+                    : "Unpaid";
+            return (
+              <RecordCard
+                key={x.id}
+                title={x.ref}
+                subtitle={
+                  <>
+                    <BranchName data={data} branch={x.office} /> ·{" "}
+                    {dateLabel(x.saleDate)}
+                  </>
+                }
+                cells={[
+                  { label: "Passenger", value: x.passenger, strong: true },
+                  { label: "Route", value: x.route },
+                  {
+                    label: "Sale",
+                    value: money(
+                      (x.type === "Refund" ? -1 : 1) * x.amount,
+                      x.currency,
+                    ),
+                    hide: !financial,
+                  },
+                ]}
+                badges={
+                  <>
+                    {refunded <= 0 && <Badge tone={payStatusTone}>{payStatusLabel}</Badge>}
+                    {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
+                    <Badge tone={x.status === "cancelled" ? "danger" : "blue"}>
+                      {serviceStatusLabel(x.status || "issued")}
                     </Badge>
-                  </td>
-                  <td>
-                    {canWrite ? (
-                      <select
-                        className={`inline-status ${x.status || "booked"}`}
-                        aria-label={`Ticket status for ${x.ref}`}
-                        value={x.status || "booked"}
-                        onChange={(event) =>
-                          void updateTicketStatus(
-                            x,
-                            event.target.value as NonNullable<Ticket["status"]>,
+                    {canWrite && x.status !== "cancelled" ? (
+                      <button
+                        type="button"
+                        className="inline-cancel"
+                        aria-label={`Cancel ticket ${x.ref}`}
+                        onClick={() => void updateTicketStatus(x, "cancelled")}
+                      >
+                        <Icon name="x" /> Cancel
+                      </button>
+                    ) : null}
+                  </>
+                }
+                details={[
+                  { label: "Reference", value: x.ref },
+                  { label: "Passenger", value: x.passenger },
+                  { label: "Phone", value: x.phone },
+                  { label: "Branch", value: <BranchName data={data} branch={x.office} /> },
+                  { label: "Route", value: x.route },
+                  { label: "Travel date", value: dateLabel(x.travelDate) },
+                  { label: "PNR", value: x.airlinePnr || "No PNR" },
+                  { label: "Sale date", value: dateLabel(x.saleDate) },
+                  {
+                    label: "Payment method",
+                    value:
+                      refunded > 0
+                        ? `Refunded ${money(refunded, x.currency)}`
+                        : x.paymentStatus === "partial"
+                        ? `${x.paymentMethod} · ${money(x.amountPaid || 0, x.currency)} paid`
+                        : `${x.paymentMethod}${
+                            x.paid
+                              ? ` · ${dateLabel(x.paymentDate)}`
+                              : x.type === "Refund"
+                                ? " · Refund not paid"
+                                : " · Awaiting payment"
+                          }`,
+                  },
+                  {
+                    label: "Sale",
+                    value: money(
+                      (x.type === "Refund" ? -1 : 1) * x.amount,
+                      x.currency,
+                    ),
+                    hide: !financial,
+                  },
+                  ...(refunded > 0 ? [{ label: "Refunded to customer", value: money(refunded, x.currency) }] : []),
+                  { label: "Agency cost", value: money(x.cost, x.currency), hide: !financial },
+                  {
+                    label: "Profit",
+                    value: money(profit, x.currency),
+                    hide: !financial,
+                  },
+                ]}
+                actions={
+                  <>
+                    {x.type !== "Refund" && (
+                      <button
+                        type="button"
+                        className="receipt-chip"
+                        title={`Generate receipt for ${x.ref}`}
+                        onClick={() =>
+                          generateReceipt(
+                            ticketReceiptData(
+                              x,
+                              data.agencyName,
+                              paidViaLabel(data, "ticket", x.id, x.paymentMethod),
+                            ),
+                            "/Som-way2.png",
                           )
                         }
                       >
-                        {[
-                          x.status || "booked",
-                          ...(user.role === "owner"
-                            ? ([
-                                "booked",
-                                "issued",
-                                "changed",
-                                "cancelled",
-                              ] as const)
-                            : ticketNextStatuses[x.status || "booked"] || []),
-                        ]
-                          .filter(
-                            (status, index, list) =>
-                              list.indexOf(status) === index,
-                          )
-                          .map((status) => (
-                            <option key={status} value={status}>
-                              {serviceStatusLabel(status)}
-                            </option>
-                          ))}
-                      </select>
-                    ) : (
-                      <Badge
-                        tone={x.status === "cancelled" ? "danger" : "blue"}
-                      >
-                        {serviceStatusLabel(x.status || "booked")}
-                      </Badge>
+                        <Icon name="receipt" size={14} />
+                        <span>Receipt</span>
+                      </button>
                     )}
-                  </td>
-                  {canWrite && (
-                    <td>
+                    {canWrite && (
                       <Actions
+                        refundAction={<CancellationRefundAction type="ticket" record={x} data={data} onSaved={(next) => replaceData?.(next)} />}
                         onEdit={() => setEditing(x)}
                         onDelete={canDelete ? () => setDeleting(x) : undefined}
                         onPayment={
-                          (x.balance ?? x.amount) > 0
+                          !isCancelledService(x) && (x.balance ?? x.amount) > 0
                             ? () => setPaying(x)
                             : undefined
                         }
@@ -5591,13 +6067,13 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                             : "Record payment"
                         }
                       />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
+                    )}
+                  </>
+                }
+              />
+            );
+          })}
+        </RecordList>
         </Panel>
       ) : (
         <Empty
@@ -5612,8 +6088,21 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
           branches={branches}
           data={data}
           onClose={() => setEditing(undefined)}
-          onSave={(record) => {
-            void save(
+          onSave={async (record, initialPayment) => {
+            if (initialPayment) {
+              try {
+                const payload = await apiRequest<{ data?: AgencyData }>("/api/entities/tickets/with-payment", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "Idempotency-Key": initialPayment.idempotencyKey || uid("ticket-payment") },
+                  body: JSON.stringify({ record, initialPayment, action: { entity: "Ticket", detail: `Created and paid ${record.ref}` } }),
+                });
+                if (payload.data) replaceData?.(payload.data);
+              } catch (caught) {
+                notify(caught instanceof Error ? caught.message : "Ticket and payment could not be recorded");
+                return;
+              }
+            } else {
+              const saved = await save(
               (d) => ({
                 ...d,
                 tickets: editing
@@ -5624,7 +6113,9 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                 entity: "Ticket",
                 detail: `${editing ? "Updated" : "Created"} ${record.ref}`,
               },
-            );
+              );
+              if (!saved) return;
+            }
             setEditing(undefined);
             notify(
               `Ticket ${record.ref} ${editing ? "updated" : "created"} for ${record.passenger || "passenger"}`,
@@ -5654,9 +6145,9 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
       )}
       {deleting && (
         <Confirm
-          title="Archive ticket?"
-          detail={`${deleting.ref} will leave active registers while its history remains retained.`}
-          confirmLabel="Archive Ticket"
+          title="Delete ticket?"
+          detail={`${deleting.ref} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.`}
+          confirmLabel="Delete Ticket"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
             save(
@@ -5664,10 +6155,10 @@ function Tickets({ data, user, save, notify, replaceData, scopeBranchId, focusRe
                 ...d,
                 tickets: d.tickets.filter((x) => x.id !== deleting.id),
               }),
-              { entity: "Ticket", detail: `Archived ${deleting.ref}` },
+              { entity: "Ticket", detail: `Deleted ${deleting.ref}` },
             );
             setDeleting(null);
-            notify("Ticket archived");
+            notify("Ticket deleted");
           }}
         />
       )}
@@ -5687,7 +6178,7 @@ function TicketForm({
   branches: Branch[];
   data: AgencyData;
   onClose: () => void;
-  onSave: (r: Ticket) => void;
+  onSave: (r: Ticket, initialPayment?: InitialCustomerPayment) => void | Promise<void>;
 }) {
   const initialBranch = current?.branchId || branches[0]?.id || "";
   const selectedBranch = branchById(data, initialBranch);
@@ -5716,13 +6207,14 @@ function TicketForm({
     amount: String(current?.amount || ""),
     cost: String(current?.cost || ""),
     paymentMethod: initialPaymentMethod,
+    paymentChoice: current?.paid ? "paid" : "later",
     notes: current?.notes || "",
   });
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!f.passenger || !f.phone || !f.route || !f.amount || !f.paymentMethod)
       return;
-    onSave({
+    const record = {
       id: current?.id || uid("tkt"),
       ref: current?.ref || "",
       office: branchName(data, f.branchId, f.office),
@@ -5738,13 +6230,21 @@ function TicketForm({
       amount: Number(f.amount),
       cost: f.type === "Refund" ? 0 : Number(f.cost) || 0,
       paymentMethod: f.paymentMethod as PaymentMethod,
-      paid: false,
-      paymentDate: "",
+      paid: f.paymentChoice === "paid",
+      paymentDate: f.paymentChoice === "paid" ? f.saleDate : "",
       servedBy: user.name,
       notes: f.notes,
       createdBy: current?.createdBy || user.id,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    await onSave(record, !current && f.paymentChoice === "paid" ? {
+      branchId: f.branchId,
+      amount: Number(f.amount),
+      paymentDate: f.saleDate,
+      paymentMethod: f.paymentMethod,
+      notes: `Initial ticket payment for ${record.passenger}`,
+      idempotencyKey: uid("ticket-payment"),
+    } : undefined);
   };
   return (
     <Modal
@@ -5752,30 +6252,38 @@ function TicketForm({
       subtitle="Required fields are marked by their labels."
       onClose={onClose}
       side={
-        <div>
-          <h3>Profit Summary</h3>
-          <div className="summary-eq">
-            <span className="muted">Sale Amount</span>
-            <div className="big">{money(Number(f.amount) || 0, f.currency as Currency)}</div>
-            <div className="muted">minus</div>
-            <span className="muted">Agency Cost</span>
-            <div className="big">{money(Number(f.cost) || 0, f.currency as Currency)}</div>
-            <hr />
-            <span className="muted">Gross Profit</span>
-            <div className="big green">
+        <div className="form-summary-card">
+          <p className="summary-eyebrow">Profit Summary</p>
+          <div className="form-summary-row">
+            <span>Sale Amount</span>
+            <strong>{money(Number(f.amount) || 0, f.currency as Currency)}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-row">
+            <span>Agency Cost</span>
+            <strong>{money(Number(f.cost) || 0, f.currency as Currency)}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-total green">
+            <span>Gross Profit</span>
+            <strong>
               {money(
                 f.type === "Refund"
                   ? -(Number(f.amount) || 0)
                   : (Number(f.amount) || 0) - (Number(f.cost) || 0),
                 f.currency as Currency,
               )}
-            </div>
+            </strong>
           </div>
+          <p className="form-summary-note">
+            Gross Profit = Sale Amount − Agency Cost. Values update
+            automatically.
+          </p>
         </div>
       }
     >
       <form className="modal-form" onSubmit={submit}>
-        <div className="form-grid">
+        <FormSection icon="ticket" title="Booking Details" tone="blue">
           <Field label="Branch">
             <BranchSelect
               options={branches}
@@ -5810,7 +6318,7 @@ function TicketForm({
               <option>Refund</option>
             </select>
           </Field>
-          <Field label="Sale date">
+          <Field label="Sale date" icon="calendar" iconTone="violet">
             <input
               required
               type="date"
@@ -5818,28 +6326,32 @@ function TicketForm({
               onChange={(e) => setF({ ...f, saleDate: e.target.value })}
             />
           </Field>
-          <Field label="Travel date">
+          <Field label="Travel date" icon="calendar" iconTone="violet">
             <input
               type="date"
               value={f.travelDate}
               onChange={(e) => setF({ ...f, travelDate: e.target.value })}
             />
           </Field>
-          <Field label="Passenger name">
+        </FormSection>
+        <FormSection icon="user" title="Passenger & Route" tone="violet">
+          <Field label="Passenger name" icon="user" iconTone="blue">
             <input
               required
+              placeholder="Enter passenger name"
               value={f.passenger}
               onChange={(e) => setF({ ...f, passenger: e.target.value })}
             />
           </Field>
-          <Field label="Phone">
+          <Field label="Phone" icon="phone" iconTone="green">
             <input
               required
+              placeholder="Enter phone number"
               value={f.phone}
               onChange={(e) => setF({ ...f, phone: e.target.value })}
             />
           </Field>
-          <Field label="From">
+          <Field label="From" icon="plane" iconTone="blue">
             <input
               required
               placeholder="NBO–DXB"
@@ -5847,13 +6359,16 @@ function TicketForm({
               onChange={(e) => setF({ ...f, route: e.target.value })}
             />
           </Field>
-          <Field label="To">
+          <Field label="To" icon="plane" iconTone="blue">
             <input
+              placeholder="Enter destination"
               value={f.airlinePnr}
               onChange={(e) => setF({ ...f, airlinePnr: e.target.value })}
             />
           </Field>
-          <Field label="Currency">
+        </FormSection>
+        <FormSection icon="money" title="Pricing & Payment" tone="green">
+          <Field label="Currency" icon="money" iconTone="green">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -5869,26 +6384,28 @@ function TicketForm({
               ))}
             </select>
           </Field>
-          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"}>
+          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"} icon="money" iconTone="green">
             <input
               required
               min="0"
               type="number"
+              placeholder="Enter sale amount"
               value={f.amount}
               onChange={(e) => setF({ ...f, amount: e.target.value })}
             />
           </Field>
           {user.role === "owner" && f.type !== "Refund" && (
-            <Field label="Agency cost">
+            <Field label="Agency cost" icon="wallet" iconTone="orange">
               <input
                 min="0"
                 type="number"
+                placeholder="Enter agency cost"
                 value={f.cost}
                 onChange={(e) => setF({ ...f, cost: e.target.value })}
               />
             </Field>
           )}
-          <Field label="Payment method">
+          <Field label="Payment method" icon="wallet" iconTone="orange">
             <select
               required
               value={f.paymentMethod}
@@ -5901,13 +6418,22 @@ function TicketForm({
               ))}
             </select>
           </Field>
-          <Field label="Notes" wide>
+          {!current && f.type !== "Refund" && (
+            <Field label="Customer payment" icon="check" iconTone="green">
+              <select value={f.paymentChoice} onChange={(e) => setF({ ...f, paymentChoice: e.target.value as "paid" | "later" })}>
+                <option value="paid">Paid now</option>
+                <option value="later">Pay later (Accounts Receivable)</option>
+              </select>
+            </Field>
+          )}
+          <Field label="Notes" wide icon="edit" iconTone="gray">
             <textarea
+              placeholder="Add any notes (optional)"
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
-        </div>
+        </FormSection>
         <div className="modal-actions">
           <button type="button" className="button ghost" onClick={onClose}>
             Cancel
@@ -5973,6 +6499,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
   const [editing, setEditing] = useState<Cargo | null | undefined>();
   const [paying, setPaying] = useState<Cargo | null>(null);
   const [details, setDetails] = useState<Cargo | null>(null);
+  const [deleting, setDeleting] = useState<Cargo | null>(null);
   const rows = data.cargo
     .filter(
       (x) =>
@@ -5982,6 +6509,13 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
           .includes(query.toLowerCase()),
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  // When a single origin branch is in scope, only that branch's currencies are
+  // shown so a USD-only branch never displays a stray "KES 0".
+  const cargoScopeBranch =
+    office === "All" ? undefined : branchById(data, branchIdForOffice(data, office));
+  const cargoScopeCurrencies = cargoScopeBranch
+    ? branchCurrencies(cargoScopeBranch)
+    : (["KES", "USD"] as Currency[]);
   const cargoStatusCounts = [
     ["Received", "received", "#0b66e3"],
     ["In Transit", "in_transit", "#7c3aed"],
@@ -6056,7 +6590,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
           <MetricCard
             icon="money"
             label="Cargo Revenue"
-            value={moneyByCurrency(rows, (cargo) => cargo.currency, (cargo) => cargo.customerCharge ?? cargo.weight * cargo.rate)}
+            value={moneyByCurrency(rows, (cargo) => cargo.currency, (cargo) => cargo.paymentStatus === "paid" ? (cargo.customerCharge ?? cargo.weight * cargo.rate) : 0, cargoScopeCurrencies)}
             tone="cyan"
             foot="Customer charges"
           />
@@ -6095,119 +6629,165 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
         office={office}
         setOffice={setOffice}
         branches={branchOptions(data, user)}
+        showBranch={false}
       />
       {rows.length ? (
         <Panel title="Shipments" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Tracking</th>
-              <th>Route</th>
-              <th>Sender → receiver</th>
-              <th>Shipment</th>
-              {financial && <th>Cargo charge</th>}
-              <th>Payment</th>
-              <th>Status</th>
-              <th>Last update</th>
-              {canWrite && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((x) => {
-              const amount = x.customerCharge ?? x.weight * x.rate;
-              const actions = cargoNextActions(x, user);
-              const canTakePayment =
-                user.role === "owner" ||
+        <RecordList>
+          {rows.map((x) => {
+            const amount = x.customerCharge ?? x.weight * x.rate;
+            const refunded = refundedAmount(data, "cargo", x);
+            const actions = cargoNextActions(x, user);
+            const canTakePayment =
+              user.role === "owner" ||
+              (user.role === "operator" &&
+                String(user.assignedBranchId || "") ===
+                  String(x.paidByBranchId || x.originBranchId || ""));
+            const canCancel =
+              !["delivered", "cancelled"].includes(
+                cargoStatusKey(x.status),
+              ) &&
+              (user.role === "owner" ||
                 (user.role === "operator" &&
-                  String(user.assignedBranchId || "") ===
-                    String(x.paidByBranchId || x.originBranchId || ""));
-              const canCancel =
-                !["delivered", "cancelled"].includes(
-                  cargoStatusKey(x.status),
-                ) &&
-                (user.role === "owner" ||
-                  (user.role === "operator" &&
-                    [x.originBranchId, x.destinationBranchId].some(
-                      (branchId) =>
-                        String(branchId || "") ===
-                        String(user.assignedBranchId || ""),
-                    )));
-              return (
-                <tr key={x.id}>
-                  <td>
-                    <button type="button" className="text-button" onClick={() => setDetails(x)}>
-                      <strong>{x.tracking}</strong>
-                    </button>
-                    <small>{dateLabel(x.dateIn)}</small>
-                  </td>
-                  <td>
-                    <span className="route-inline">
-                      {x.origin.slice(0, 3).toUpperCase()} <b>→</b>{" "}
-                      {x.destination.slice(0, 3).toUpperCase()}
-                    </span>
-                  </td>
-                  <td>
-                    {x.sender}
-                    <small>
-                      to {x.receiver} · Payer:{" "}
-                      {x.paymentResponsibility === "receiver"
-                        ? "Receiver"
-                        : x.paymentResponsibility === "sender"
-                          ? "Sender"
-                          : "Unresolved"}
-                    </small>
-                  </td>
-                  <td>
-                    {x.weight} kg · {x.contents}
-                    <small>{money(x.rate, x.currency)} / kg</small>
-                  </td>
-                  {financial && (
-                    <td>
-                      {money(amount, x.currency)}
-                      <small>Customer charge</small>
-                    </td>
-                  )}
-                  <td>
-                    <Badge
-                      tone={
-                        x.paymentStatus === "paid"
-                          ? "success"
-                          : x.paymentStatus === "partial"
-                            ? "blue"
-                            : "warning"
-                      }
-                    >
-                      {x.paymentStatus === "paid"
-                        ? "Paid"
-                        : x.paymentStatus === "partial"
-                          ? "Part paid"
-                          : "Unpaid"}
-                    </Badge>
-                    <small>
-                      {x.paymentStatus === "partial"
-                        ? `${money(x.amountPaid || 0, x.currency)} paid · ${money(x.balance || 0, x.currency)} due`
-                        : x.paymentStatus === "unpaid"
-                          ? `${money(x.balance ?? amount, x.currency)} due`
-                          : "Paid in full"}
-                    </small>
-                  </td>
-                  <td>
+                  [x.originBranchId, x.destinationBranchId].some(
+                    (branchId) =>
+                      String(branchId || "") ===
+                      String(user.assignedBranchId || ""),
+                  )));
+            const paymentTone =
+              x.paymentStatus === "paid"
+                ? "success"
+                : x.paymentStatus === "partial"
+                  ? "blue"
+                  : "warning";
+            const paymentLabel =
+              x.paymentStatus === "paid"
+                ? "Paid"
+                : x.paymentStatus === "partial"
+                  ? "Part paid"
+                  : "Unpaid";
+            return (
+              <RecordCard
+                key={x.id}
+                title={
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => setDetails(x)}
+                  >
+                    {x.tracking}
+                  </button>
+                }
+                subtitle={
+                  <>
+                    <BranchName data={data} branch={x.origin} /> ·{" "}
+                    {dateLabel(x.dateIn)}
+                  </>
+                }
+                cells={[
+                  {
+                    label: "Sender",
+                    value: x.sender,
+                    strong: true,
+                  },
+                  {
+                    label: "Route",
+                    value: `${x.origin.slice(0, 3).toUpperCase()} → ${x.destination.slice(0, 3).toUpperCase()}`,
+                  },
+                  {
+                    label: "Cargo charge",
+                    value: money(amount, x.currency),
+                    hide: !financial,
+                  },
+                ]}
+                badges={
+                  <>
+                    {refunded <= 0 && <Badge tone={paymentTone}>{paymentLabel}</Badge>}
+                    {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
                     <Badge tone={cargoStatusTone(x.status)}>
                       {cargoStatusLabel(x.status)}
                     </Badge>
-                  </td>
-                  <td>
-                    {new Date(x.updatedAt).toLocaleDateString("en-GB")}
-                    <small>
-                      {x.statusHistory?.at(-1)?.userName ||
-                        data.users.find((u) => u.id === x.updatedBy)?.name ||
-                        "Team"}
-                    </small>
-                  </td>
-                  {canWrite && (
-                    <td>
+                  </>
+                }
+                details={[
+                  { label: "Tracking", value: x.tracking },
+                  { label: "Branch", value: <BranchName data={data} branch={x.origin} /> },
+                  { label: "Sender", value: x.sender },
+                  { label: "Receiver", value: x.receiver },
+                  {
+                    label: "Payer",
+                    value:
+                      x.paymentResponsibility === "receiver"
+                        ? "Receiver"
+                        : x.paymentResponsibility === "sender"
+                          ? "Sender"
+                          : "Unresolved",
+                  },
+                  {
+                    label: "Route",
+                    value: `${x.origin} → ${x.destination}`,
+                  },
+                  { label: "Shipment", value: `${x.weight} kg · ${x.contents}` },
+                  { label: "Rate", value: `${money(x.rate, x.currency)} / kg` },
+                  {
+                    label: "Cargo charge",
+                    value: money(amount, x.currency),
+                    hide: !financial,
+                  },
+                  {
+                    label: "Payment",
+                    value:
+                      refunded > 0
+                        ? `Refunded ${money(refunded, x.currency)}`
+                        : x.paymentStatus === "partial"
+                        ? `${money(x.amountPaid || 0, x.currency)} paid · ${money(x.balance || 0, x.currency)} due`
+                        : x.paymentStatus === "unpaid"
+                          ? `${money(x.balance ?? amount, x.currency)} due`
+                          : "Paid in full",
+                  },
+                  { label: "Date created", value: dateLabel(x.dateIn) },
+                  {
+                    label: "Last update",
+                    value: `${new Date(x.updatedAt).toLocaleDateString("en-GB")} · ${
+                      x.statusHistory?.at(-1)?.userName ||
+                      data.users.find((u) => u.id === x.updatedBy)?.name ||
+                      "Team"
+                    }`,
+                  },
+                ]}
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      className="small-icon"
+                      onClick={() => setDetails(x)}
+                    >
+                      Full details
+                    </button>
+                    <button
+                      type="button"
+                      className="receipt-chip"
+                      title={`Generate receipt for ${x.tracking}`}
+                      onClick={() =>
+                        generateReceipt(
+                          cargoReceiptData(
+                            x,
+                            data.agencyName,
+                            data.users.find((u) => u.id === x.createdBy)?.name ||
+                              "Agency team",
+                            paidViaLabel(data, "cargo", x.id, x.paymentMethod),
+                          ),
+                          "/Som-way2.png",
+                        )
+                      }
+                    >
+                      <Icon name="receipt" size={14} />
+                      <span>Receipt</span>
+                    </button>
+                    {canWrite && (
                       <div className="row-actions">
-                        {canTakePayment && (x.balance ?? amount) > 0 && (
+                        <CancellationRefundAction type="cargo" record={x} data={data} onSaved={(next) => replaceData?.(next)} />
+                        {canTakePayment && !isCancelledService(x) && (x.balance ?? amount) > 0 && (
                           <button
                             type="button"
                             className="payment-action"
@@ -6238,8 +6818,9 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                         </button>
                         {canCancel && (
                           <button
-                            className="delete-action"
+                            className="edit-action"
                             aria-label="Cancel shipment"
+                            title="Cancel shipment"
                             type="button"
                             onClick={() => {
                               const reason = window.prompt(
@@ -6250,17 +6831,28 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
                               }
                             }}
                           >
+                            <Icon name="x" size={16} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            className="delete-action"
+                            aria-label="Delete"
+                            title="Delete shipment"
+                            type="button"
+                            onClick={() => setDeleting(x)}
+                          >
                             <Icon name="trash" size={16} />
                           </button>
                         )}
                       </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
+                    )}
+                  </>
+                }
+              />
+            );
+          })}
+        </RecordList>
         </Panel>
       ) : (
         <Empty
@@ -6325,6 +6917,7 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
           cargo={data.cargo.find((item) => item.id === details.id) || details}
           data={data}
           onClose={() => setDetails(null)}
+          onSaved={(next) => { setDetails(null); replaceData?.(next); }}
           onReceive={() => {
             const current = data.cargo.find((item) => item.id === details.id) || details;
             setDetails(null);
@@ -6349,6 +6942,25 @@ function CargoDesk({ data, user, save, notify, replaceData, scopeBranchId, focus
           }}
         />
       )}
+      {deleting && (
+        <Confirm
+          title="Delete shipment?"
+          detail={`${deleting.tracking} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.`}
+          confirmLabel="Delete Shipment"
+          onClose={() => setDeleting(null)}
+          onConfirm={() => {
+            save(
+              (d) => ({
+                ...d,
+                cargo: d.cargo.filter((x) => x.id !== deleting.id),
+              }),
+              { entity: "Cargo", detail: `Deleted ${deleting.tracking}` },
+            );
+            setDeleting(null);
+            notify("Shipment deleted");
+          }}
+        />
+      )}
     </>
   );
 }
@@ -6358,11 +6970,13 @@ function CargoDetails({
   data,
   onClose,
   onReceive,
+  onSaved,
 }: {
   cargo: Cargo;
   data: AgencyData;
   onClose: () => void;
   onReceive: () => void;
+  onSaved: (data: AgencyData) => void;
 }) {
   const charge = cargo.customerCharge ?? cargo.weight * cargo.rate;
   const payments = data.payments
@@ -6372,6 +6986,8 @@ function CargoDetails({
         payment.transactionId === cargo.id,
     )
     .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate));
+  const refunded = refundedAmount(data, "cargo", cargo);
+  const refundable = refundAvailable(data, "cargo", cargo);
   return (
     <Modal title={`Cargo ${cargo.tracking}`} subtitle="Shipment and payment details." onClose={onClose}>
       <div className="details-sections">
@@ -6395,6 +7011,7 @@ function CargoDetails({
             <div><dt>Balance due</dt><dd>{money(cargo.balance ?? charge, cargo.currency)}</dd></div>
             <div><dt>Accounts receivable</dt><dd>{money(cargo.balance ?? charge, cargo.currency)}</dd></div>
             <div><dt>Payment status</dt><dd>{cargo.paymentStatus || "unpaid"}</dd></div>
+            {refunded > 0 && <div><dt>Refunded to customer</dt><dd className="refund-value">{money(refunded, cargo.currency)}</dd></div>}
           </dl>
         </section>
         <section className="panel details-history">
@@ -6408,8 +7025,9 @@ function CargoDetails({
           )) : <p>No payments recorded.</p>}
         </section>
       </div>
-      <div className="modal-actions">
+      <div className="modal-actions cargo-details-actions">
         <button type="button" className="button ghost" onClick={onClose}>Close</button>
+        {refundable > 0 && <CancellationRefundAction type="cargo" record={cargo} data={data} onSaved={onSaved} />}
         {(cargo.balance ?? charge) > 0 ? (
           <button type="button" className="button primary" onClick={onReceive}>Receive Payment</button>
         ) : <span className="readonly-value">Paid in full</span>}
@@ -6621,9 +7239,31 @@ function CargoForm({
       title={current ? `Update ${current.tracking}` : "Create Cargo"}
       subtitle="Record the shipment, customer charge and customer responsible for payment."
       onClose={onClose}
+      side={
+        <div className="form-summary-card">
+          <p className="summary-eyebrow">Cargo Summary</p>
+          <div className="form-summary-row">
+            <span>Weight</span>
+            <strong>{f.weight ? `${f.weight} kg` : "— kg"}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-row">
+            <span>Rate per kg</span>
+            <strong>{f.rate ? money(Number(f.rate), f.currency as Currency) : "—"}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-total">
+            <span>Cargo Charge</span>
+            <strong>{money(shipmentValue, f.currency as Currency)}</strong>
+          </div>
+          <p className="form-summary-note">
+            Cargo Charge = Weight × Rate per kg. Values update automatically.
+          </p>
+        </div>
+      }
     >
       <form className="modal-form" onSubmit={submit}>
-        <div className="form-grid">
+        <FormSection icon="box" title="Shipment Details" tone="cyan">
           <Field label="Origin branch">
             <BranchSelect
               options={originBranches}
@@ -6682,7 +7322,7 @@ function CargoForm({
               }
             />
           </Field>
-          <Field label="Date received">
+          <Field label="Date received" icon="calendar" iconTone="violet">
             <input
               required
               type="date"
@@ -6690,21 +7330,33 @@ function CargoForm({
               onChange={(e) => setF({ ...f, dateIn: e.target.value })}
             />
           </Field>
-          <Field label="Sender">
+          <Field label="Contents" icon="box" iconTone="cyan">
             <input
               required
+              placeholder="e.g. Documents, Electronics, Apparel"
+              value={f.contents}
+              onChange={(e) => setF({ ...f, contents: e.target.value })}
+            />
+          </Field>
+        </FormSection>
+        <FormSection icon="user" title="Contact Details" tone="violet">
+          <Field label="Sender" icon="user" iconTone="blue">
+            <input
+              required
+              placeholder="Enter sender name"
               value={f.sender}
               onChange={(e) => setF({ ...f, sender: e.target.value })}
             />
           </Field>
-          <Field label="Sender phone">
+          <Field label="Sender phone" icon="phone" iconTone="green">
             <input
               required
+              placeholder="Enter phone number"
               value={f.senderPhone}
               onChange={(e) => setF({ ...f, senderPhone: e.target.value })}
             />
           </Field>
-          <Field label="Sender email (optional, for status updates)">
+          <Field label="Sender email (optional, for status updates)" icon="mail" iconTone="cyan">
             <input
               type="email"
               value={f.senderEmail}
@@ -6712,21 +7364,23 @@ function CargoForm({
               placeholder="client@example.com"
             />
           </Field>
-          <Field label="Receiver">
+          <Field label="Receiver" icon="user" iconTone="blue">
             <input
               required
+              placeholder="Enter receiver name"
               value={f.receiver}
               onChange={(e) => setF({ ...f, receiver: e.target.value })}
             />
           </Field>
-          <Field label="Receiver phone">
+          <Field label="Receiver phone" icon="phone" iconTone="green">
             <input
               required={f.paymentResponsibility === "receiver"}
+              placeholder="Enter phone number"
               value={f.receiverPhone}
               onChange={(e) => setF({ ...f, receiverPhone: e.target.value })}
             />
           </Field>
-          <Field label="Customer responsible for payment">
+          <Field label="Customer responsible for payment" icon="user" iconTone="blue">
             <select
               required
               value={f.paymentResponsibility}
@@ -6742,24 +7396,20 @@ function CargoForm({
               <option value="receiver">Receiver</option>
             </select>
           </Field>
-          <Field label="Contents" wide>
-            <input
-              required
-              value={f.contents}
-              onChange={(e) => setF({ ...f, contents: e.target.value })}
-            />
-          </Field>
-          <Field label="Weight (kg)">
+        </FormSection>
+        <FormSection icon="money" title="Pricing" tone="green">
+          <Field label="Weight (kg)" icon="box" iconTone="cyan">
             <input
               required
               min="0"
               step="0.1"
               type="number"
+              placeholder="0.00"
               value={f.weight}
               onChange={(e) => setF({ ...f, weight: e.target.value })}
             />
           </Field>
-          <Field label="Currency">
+          <Field label="Currency" icon="money" iconTone="green">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -6786,7 +7436,7 @@ function CargoForm({
               ))}
             </select>
           </Field>
-          <section className="cargo-rate-card">
+          <section className="cargo-rate-card wide">
             <div className="cargo-rate-head">
               <div>
                 <span>Customer rate for this shipment</span>
@@ -6865,12 +7515,10 @@ function CargoForm({
               </strong>
             </div>
           </section>
-          <section className="cargo-payment-section">
-            <div className="section-heading">
-              <span className="eyebrow">Customer payment</span>
-            </div>
+        </FormSection>
+        <FormSection icon="wallet" title="Customer Payment" tone="orange">
           {!current && (
-            <Field label="Payment choice">
+            <Field label="Payment choice" icon="wallet" iconTone="orange">
               <select
                 value={f.paymentOption}
                 onChange={(e) =>
@@ -6973,7 +7621,7 @@ function CargoForm({
           </Field>
           )}
           {!current && f.paymentOption !== "later" && (
-            <Field label="Payment reference">
+            <Field label="Payment reference" icon="receipt" iconTone="orange">
               <input
                 value={f.paymentReference}
                 onChange={(e) =>
@@ -6983,14 +7631,13 @@ function CargoForm({
               />
             </Field>
           )}
-          </section>
           {current && (
             <Field label="Cargo status">
               <div className="readonly-value">{cargoStatusLabel(f.status)}</div>
             </Field>
           )}
           {cargoStatusKey(f.status) === "delivered" && (
-            <Field label="Date delivered">
+            <Field label="Date delivered" icon="calendar" iconTone="violet">
               <input
                 type="date"
                 value={f.dateDelivered}
@@ -6998,13 +7645,14 @@ function CargoForm({
               />
             </Field>
           )}
-          <Field label="Notes" wide>
+          <Field label="Notes" wide icon="edit" iconTone="gray">
             <textarea
+              placeholder="Add any additional notes here…"
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
-        </div>
+        </FormSection>
         <div className="modal-actions">
           <button type="button" className="button ghost" onClick={onClose}>
             Cancel
@@ -7264,41 +7912,28 @@ function Receivables({
           detail="Reading customer balances from MongoDB."
         />
       ) : rows.length ? (
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Service</th>
-              <th>Customer responsible</th>
-              <th>Branch</th>
-              <th>Date</th>
-              <th>Total charge</th>
-              <th>Total Paid</th>
-              <th>Remaining Balance</th>
-              <th>Status</th>
-              <th>Aging</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td>
-                  <strong>{row.reference}</strong>
-                </td>
-                <td>{row.service}</td>
-                <td>
-                  <strong>{row.customer}</strong>
-                  {!row.payerResolved && <small>Needs payer resolution</small>}
-                </td>
-                <td><BranchName data={data} branch={row.branch} /></td>
-                <td>{dateLabel(row.transactionDate)}</td>
-                <td>{money(row.totalCharge, row.currency)}</td>
-                <td>{money(row.totalPaid, row.currency)}</td>
-                <td className={row.balanceDue > 0 ? "negative" : "positive"}>
-                  {money(row.balanceDue, row.currency)}
-                </td>
-                <td>
+        <RecordList>
+          {rows.map((row) => (
+            <RecordCard
+              key={row.id}
+              title={row.reference}
+              subtitle={
+                <>
+                  <BranchName data={data} branch={row.branch} /> ·{" "}
+                  {dateLabel(row.transactionDate)}
+                </>
+              }
+              cells={[
+                { label: "Customer", value: row.customer, strong: true },
+                { label: "Service", value: row.service },
+                {
+                  label: "Balance",
+                  value: money(row.balanceDue, row.currency),
+                  strong: true,
+                },
+              ]}
+              badges={
+                <>
                   <Badge
                     tone={
                       row.paymentStatus === "paid"
@@ -7310,27 +7945,47 @@ function Receivables({
                   >
                     {row.paymentStatus}
                   </Badge>
-                </td>
-                <td>
-                  {row.ageDays} days -{" "}
-                  {row.aging === "current" ? "Current" : `${row.aging} days`}
-                </td>
-                <td>
-                  {row.balanceDue > 0 && row.payerResolved && (
-                    <div className="row-actions">
-                      <button type="button" onClick={() => setPaying(row)}>
-                        Receive Payment
-                      </button>
-                    </div>
-                  )}
-                  {row.balanceDue <= 0 && (
-                    <span className="paid-in-full">Paid in Full</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </TableShell>
+                  <Badge tone="neutral">
+                    {row.aging === "current" ? "Current" : `${row.aging} days`}
+                  </Badge>
+                </>
+              }
+              details={[
+                { label: "Reference", value: row.reference },
+                { label: "Service", value: row.service },
+                {
+                  label: "Customer responsible",
+                  value: (
+                    <>
+                      {row.customer}
+                      {!row.payerResolved && " · Needs payer resolution"}
+                    </>
+                  ),
+                },
+                { label: "Branch", value: <BranchName data={data} branch={row.branch} /> },
+                { label: "Date", value: dateLabel(row.transactionDate) },
+                { label: "Total charge", value: money(row.totalCharge, row.currency) },
+                { label: "Total paid", value: money(row.totalPaid, row.currency) },
+                { label: "Remaining balance", value: money(row.balanceDue, row.currency) },
+                {
+                  label: "Aging",
+                  value: `${row.ageDays} days - ${row.aging === "current" ? "Current" : `${row.aging} days`}`,
+                },
+              ]}
+              actions={
+                row.balanceDue > 0 && row.payerResolved ? (
+                  <div className="row-actions">
+                    <button type="button" onClick={() => setPaying(row)}>
+                      Receive Payment
+                    </button>
+                  </div>
+                ) : row.balanceDue <= 0 ? (
+                  <span className="paid-in-full">Paid in Full</span>
+                ) : undefined
+              }
+            />
+          ))}
+        </RecordList>
       ) : (
         <Empty
           title={
@@ -7411,9 +8066,11 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
     approved: rows.filter((visa) => visa.status === "approved").length,
     refused: rows.filter((visa) => visa.status === "refused").length,
     delivered: rows.filter((visa) => visa.status === "delivered").length,
+    cancelled: rows.filter((visa) => visa.status === "cancelled").length,
   };
+  const activeDecisionRows = rows.filter((visa) => visa.status !== "cancelled");
   const approvedVisas = visaCounts.approved + visaCounts.delivered;
-  const approvalRate = rows.length ? Math.round((approvedVisas / rows.length) * 100) : 0;
+  const approvalRate = activeDecisionRows.length ? Math.round((approvedVisas / activeDecisionRows.length) * 100) : 0;
   const updateStatus = async (visa: Visa, status: Visa["status"]) => {
     const normallyAllowed = (visaNextStatuses[visa.status] || []).includes(
       status,
@@ -7465,7 +8122,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
             <MetricCard icon="file" label="Submitted" value={visaCounts.submitted} tone="violet" foot="Awaiting decision" />
             <MetricCard icon="check" label="Approved" value={approvedVisas} tone="green" foot="Approved or delivered" />
             <MetricCard icon="clock" label="Pending" value={visaCounts.submitted} tone="orange" foot="In progress" />
-            <MetricCard icon="alert" label="Refused" value={visaCounts.refused} tone="red" foot="Closed as refused" />
+            <MetricCard icon="alert" label="Closed" value={visaCounts.refused + visaCounts.cancelled} tone="red" foot="Refused or cancelled" />
           </div>
           <Toolbar
             query={query}
@@ -7474,6 +8131,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
             setOffice={setOffice}
             branches={branches}
             allowAll={!roleOffice}
+            showBranch={false}
           />
         </div>
         <Panel title="Approval Rate">
@@ -7481,98 +8139,66 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
             total={`${approvalRate}%`}
             centerLabel="Approval Rate"
             segments={[
-              { value: rows.length ? (approvedVisas / rows.length) * 100 : 0, color: "#16a34a", label: "Approved", amount: String(approvedVisas) },
-              { value: rows.length ? (visaCounts.refused / rows.length) * 100 : 0, color: "#ef4444", label: "Refused", amount: String(visaCounts.refused) },
-              { value: rows.length ? (visaCounts.submitted / rows.length) * 100 : 0, color: "#f59e0b", label: "Pending", amount: String(visaCounts.submitted) },
+              { value: activeDecisionRows.length ? (approvedVisas / activeDecisionRows.length) * 100 : 0, color: "#16a34a", label: "Approved", amount: String(approvedVisas) },
+              { value: activeDecisionRows.length ? (visaCounts.refused / activeDecisionRows.length) * 100 : 0, color: "#ef4444", label: "Refused", amount: String(visaCounts.refused) },
+              { value: activeDecisionRows.length ? (visaCounts.submitted / activeDecisionRows.length) * 100 : 0, color: "#f59e0b", label: "Pending", amount: String(visaCounts.submitted) },
             ]}
           />
         </Panel>
       </div>
       {rows.length ? (
         <Panel title="Visa Register" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Applicant</th>
-              <th>Destination</th>
-              <th>Office</th>
-              {financial && (
-                <>
-                  <th>Sale / refund</th>
-                  <th>Profit / loss</th>
-                </>
-              )}
-              <th>Payment</th>
-              <th>Progress</th>
-              {canWrite && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((x) => {
-              const profit =
-                x.type === "Refund" ? -x.amount : x.amount - x.cost;
-              return (
-                <tr key={x.id}>
-                  <td>
-                    <strong>{x.ref}</strong>
-                    <small>{dateLabel(x.appDate)}</small>
-                  </td>
-                  <td>
-                    {x.applicant}
-                    <small>{x.phone}</small>
-                  </td>
-                  <td>
-                    {x.destination}
-                    <small>{x.visaType}</small>
-                  </td>
-                  <td>
-                    <BranchBadge data={data} office={x.office} />
-                  </td>
-                  {financial && (
-                    <>
-                      <td>
-                        {money(
-                          (x.type === "Refund" ? -1 : 1) * x.amount,
-                          x.currency,
-                        )}
-                      </td>
-                      <td className={profit < 0 ? "negative" : "positive"}>
-                        {money(profit, x.currency)}
-                      </td>
-                    </>
-                  )}
-                  <td>
-                    <Badge
-                      tone={
-                        x.type === "Refund"
-                          ? x.paymentStatus === "paid"
-                            ? "success"
-                            : "danger"
-                          : x.paymentStatus === "paid"
-                            ? "success"
-                            : x.paymentStatus === "partial"
-                              ? "blue"
-                              : "warning"
-                      }
-                    >
-                      {x.type === "Refund"
-                        ? x.paymentStatus === "paid"
-                          ? "Refunded"
-                          : "Refund due"
-                        : x.paymentStatus === "paid"
-                          ? "Paid"
-                          : x.paymentStatus === "partial"
-                            ? "Part paid"
-                            : "Unpaid"}
-                    </Badge>
-                    <small>
-                      {x.paymentStatus === "partial"
-                        ? `${money(x.amountPaid || 0, x.currency)} paid`
-                        : x.paymentMethod}
-                    </small>
-                  </td>
-                  <td>
+        <RecordList>
+          {rows.map((x) => {
+            const profit =
+              x.type === "Refund" ? -x.amount : x.paymentStatus === "paid" ? x.amount - x.cost : 0;
+            const refunded = refundedAmount(data, "visa", x);
+            const payStatusTone =
+              x.type === "Refund"
+                ? x.paymentStatus === "paid"
+                  ? "success"
+                  : "danger"
+                : x.paymentStatus === "paid"
+                  ? "success"
+                  : x.paymentStatus === "partial"
+                    ? "blue"
+                    : "warning";
+            const payStatusLabel =
+              x.type === "Refund"
+                ? x.paymentStatus === "paid"
+                  ? "Refunded"
+                  : "Refund due"
+                : x.paymentStatus === "paid"
+                  ? "Paid"
+                  : x.paymentStatus === "partial"
+                    ? "Part paid"
+                    : "Unpaid";
+            return (
+              <RecordCard
+                key={x.id}
+                title={x.ref}
+                subtitle={
+                  <>
+                    <BranchName data={data} branch={x.office} /> ·{" "}
+                    {dateLabel(x.appDate)}
+                  </>
+                }
+                cells={[
+                  { label: "Applicant", value: x.applicant, strong: true },
+                  { label: "Destination", value: x.destination },
+                  {
+                    label: "Sale / refund",
+                    value: money(
+                      (x.type === "Refund" ? -1 : 1) * x.amount,
+                      x.currency,
+                    ),
+                    hide: !financial,
+                  },
+                ]}
+                badges={
+                  <>
+                    {refunded <= 0 && <Badge tone={payStatusTone}>{payStatusLabel}</Badge>}
+                    {refunded > 0 && <Badge tone="success">Refunded {money(refunded, x.currency)}</Badge>}
                     {canWrite ? (
                       <select
                         className={`inline-status ${x.status}`}
@@ -7590,6 +8216,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                                 "approved",
                                 "refused",
                                 "delivered",
+                                "cancelled",
                               ] as const)
                             : visaNextStatuses[x.status] || []),
                         ]
@@ -7608,7 +8235,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                         tone={
                           x.status === "delivered" || x.status === "approved"
                             ? "success"
-                            : x.status === "refused"
+                            : x.status === "refused" || x.status === "cancelled"
                               ? "danger"
                               : "blue"
                         }
@@ -7616,14 +8243,69 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                         {serviceStatusLabel(x.status)}
                       </Badge>
                     )}
-                  </td>
-                  {canWrite && (
-                    <td>
+                  </>
+                }
+                details={[
+                  { label: "Reference", value: x.ref },
+                  { label: "Applicant", value: x.applicant },
+                  { label: "Phone", value: x.phone },
+                  { label: "Branch", value: <BranchName data={data} branch={x.office} /> },
+                  { label: "Destination", value: x.destination },
+                  { label: "Visa type", value: x.visaType },
+                  { label: "Application date", value: dateLabel(x.appDate) },
+                  {
+                    label: "Payment method",
+                    value:
+                      refunded > 0
+                        ? `Refunded ${money(refunded, x.currency)}`
+                        : x.paymentStatus === "partial"
+                        ? `${x.paymentMethod} · ${money(x.amountPaid || 0, x.currency)} paid`
+                        : x.paymentMethod,
+                  },
+                  {
+                    label: "Sale / refund",
+                    value: money(
+                      (x.type === "Refund" ? -1 : 1) * x.amount,
+                      x.currency,
+                    ),
+                    hide: !financial,
+                  },
+                  ...(refunded > 0 ? [{ label: "Refunded to customer", value: money(refunded, x.currency) }] : []),
+                  {
+                    label: "Profit / loss",
+                    value: money(profit, x.currency),
+                    hide: !financial,
+                  },
+                ]}
+                actions={
+                  <>
+                    {x.type !== "Refund" && (
+                      <button
+                        type="button"
+                        className="receipt-chip"
+                        title={`Generate receipt for ${x.ref}`}
+                        onClick={() =>
+                          generateReceipt(
+                            visaReceiptData(
+                              x,
+                              data.agencyName,
+                              paidViaLabel(data, "visa", x.id, x.paymentMethod),
+                            ),
+                            "/Som-way2.png",
+                          )
+                        }
+                      >
+                        <Icon name="receipt" size={14} />
+                        <span>Receipt</span>
+                      </button>
+                    )}
+                    {canWrite && (
                       <Actions
+                        refundAction={<CancellationRefundAction type="visa" record={x} data={data} onSaved={(next) => replaceData?.(next)} />}
                         onEdit={() => setEditing(x)}
                         onDelete={canDelete ? () => setDeleting(x) : undefined}
                         onPayment={
-                          (x.balance ?? x.amount) > 0
+                          !isCancelledService(x) && (x.balance ?? x.amount) > 0
                             ? () => setPaying(x)
                             : undefined
                         }
@@ -7633,13 +8315,13 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                             : "Record payment"
                         }
                       />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
+                    )}
+                  </>
+                }
+              />
+            );
+          })}
+        </RecordList>
         </Panel>
       ) : (
         <Empty
@@ -7653,8 +8335,8 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
           data={data}
           user={user}
           onClose={() => setEditing(undefined)}
-          onSave={(r) => {
-            save(
+          onSave={async (r) => {
+            const saved = await save(
               (d) => ({
                 ...d,
                 visas: editing
@@ -7666,6 +8348,7 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                 detail: `${editing ? "Updated" : "Created"} ${r.ref}`,
               },
             );
+            if (!saved) return;
             setEditing(undefined);
             notify(
               `Visa ${r.ref} ${editing ? "updated" : "created"} for ${r.applicant || "applicant"}`,
@@ -7695,9 +8378,9 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
       )}
       {deleting && (
         <Confirm
-          title="Archive visa case?"
-          detail={`${deleting.ref} will leave active registers while its history remains retained.`}
-          confirmLabel="Archive Visa"
+          title="Delete visa case?"
+          detail={`${deleting.ref} and all related receivables, payables, customer payments and supplier payments will be permanently deleted. This cannot be undone.`}
+          confirmLabel="Delete Visa"
           onClose={() => setDeleting(null)}
           onConfirm={() => {
             save(
@@ -7705,10 +8388,10 @@ function Visas({ data, user, save, notify, replaceData, scopeBranchId, focusRef 
                 ...d,
                 visas: d.visas.filter((x) => x.id !== deleting.id),
               }),
-              { entity: "Visa", detail: `Archived ${deleting.ref}` },
+              { entity: "Visa", detail: `Deleted ${deleting.ref}` },
             );
             setDeleting(null);
-            notify("Visa case archived");
+            notify("Visa case deleted");
           }}
         />
       )}
@@ -7727,7 +8410,7 @@ function VisaForm({
   data: AgencyData;
   user: User;
   onClose: () => void;
-  onSave: (r: Visa) => void;
+  onSave: (r: Visa) => void | Promise<void>;
 }) {
   const branches = branchOptions(data, user);
   const legacyOffice = officeForRole(user.role);
@@ -7767,12 +8450,46 @@ function VisaForm({
     notes: current?.notes || "",
   });
   return (
-    <Modal title={current ? "Edit Visa" : "Create Visa"} onClose={onClose}>
+    <Modal
+      title={current ? "Edit Visa" : "Create Visa"}
+      subtitle="Record the application, payment and margin details."
+      onClose={onClose}
+      side={
+        <div className="form-summary-card">
+          <p className="summary-eyebrow">Profit Summary</p>
+          <div className="form-summary-row">
+            <span>{f.type === "Refund" ? "Refund Amount" : "Sale Amount"}</span>
+            <strong>{money(Number(f.amount) || 0, f.currency as Currency)}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-row">
+            <span>Agency Cost</span>
+            <strong>{money(Number(f.cost) || 0, f.currency as Currency)}</strong>
+          </div>
+          <hr />
+          <div className="form-summary-total green">
+            <span>Gross Profit</span>
+            <strong>
+              {money(
+                f.type === "Refund"
+                  ? -(Number(f.amount) || 0)
+                  : (Number(f.amount) || 0) - (Number(f.cost) || 0),
+                f.currency as Currency,
+              )}
+            </strong>
+          </div>
+          <p className="form-summary-note">
+            Gross Profit = Sale Amount − Agency Cost. Values update
+            automatically.
+          </p>
+        </div>
+      }
+    >
       <form
         className="modal-form"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          onSave({
+          await onSave({
             id: current?.id || uid("visa"),
             ref: current?.ref || "",
             branchId: f.branchId,
@@ -7798,7 +8515,7 @@ function VisaForm({
           });
         }}
       >
-        <div className="form-grid">
+        <FormSection icon="passport" title="Application Details" tone="violet">
           <Field label="Branch">
             <BranchSelect
               options={branches}
@@ -7834,28 +8551,47 @@ function VisaForm({
               <option>Refund</option>
             </select>
           </Field>
-          <Field label="Application date">
+          <Field label="Application date" icon="calendar" iconTone="violet">
             <input
               type="date"
               value={f.appDate}
               onChange={(e) => setF({ ...f, appDate: e.target.value })}
             />
           </Field>
-          <Field label="Applicant">
+          <Field label="Destination" icon="globe" iconTone="cyan">
             <input
               required
+              placeholder="Enter destination"
+              value={f.destination}
+              onChange={(e) => setF({ ...f, destination: e.target.value })}
+            />
+          </Field>
+          <Field label="Visa type" icon="file" iconTone="violet">
+            <input
+              placeholder="e.g. Tourist, Work, Student"
+              value={f.visaType}
+              onChange={(e) => setF({ ...f, visaType: e.target.value })}
+            />
+          </Field>
+        </FormSection>
+        <FormSection icon="user" title="Applicant Details" tone="blue">
+          <Field label="Applicant" icon="user" iconTone="blue">
+            <input
+              required
+              placeholder="Enter applicant name"
               value={f.applicant}
               onChange={(e) => setF({ ...f, applicant: e.target.value })}
             />
           </Field>
-          <Field label="Phone">
+          <Field label="Phone" icon="phone" iconTone="green">
             <input
               required
+              placeholder="Enter phone number"
               value={f.phone}
               onChange={(e) => setF({ ...f, phone: e.target.value })}
             />
           </Field>
-          <Field label="Email (for status updates)">
+          <Field label="Email (for status updates)" icon="mail" iconTone="cyan" wide>
             <input
               type="email"
               value={f.email}
@@ -7863,20 +8599,9 @@ function VisaForm({
               placeholder="client@example.com"
             />
           </Field>
-          <Field label="Destination">
-            <input
-              required
-              value={f.destination}
-              onChange={(e) => setF({ ...f, destination: e.target.value })}
-            />
-          </Field>
-          <Field label="Visa type">
-            <input
-              value={f.visaType}
-              onChange={(e) => setF({ ...f, visaType: e.target.value })}
-            />
-          </Field>
-          <Field label="Currency">
+        </FormSection>
+        <FormSection icon="money" title="Pricing & Payment" tone="green">
+          <Field label="Currency" icon="money" iconTone="green">
             <select
               value={f.currency}
               onChange={(e) => {
@@ -7892,26 +8617,28 @@ function VisaForm({
               ))}
             </select>
           </Field>
-          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"}>
+          <Field label={f.type === "Refund" ? "Refund amount" : "Sale amount"} icon="money" iconTone="green">
             <input
               required
               type="number"
               min="0"
+              placeholder="Enter sale amount"
               value={f.amount}
               onChange={(e) => setF({ ...f, amount: e.target.value })}
             />
           </Field>
           {user.role === "owner" && f.type !== "Refund" && (
-            <Field label="Agency cost">
+            <Field label="Agency cost" icon="wallet" iconTone="orange">
               <input
                 type="number"
                 min="0"
+                placeholder="Enter agency cost"
                 value={f.cost}
                 onChange={(e) => setF({ ...f, cost: e.target.value })}
               />
             </Field>
           )}
-          <Field label="Payment method">
+          <Field label="Payment method" icon="wallet" iconTone="orange">
             <select
               required
               value={f.paymentMethod}
@@ -7924,13 +8651,14 @@ function VisaForm({
               ))}
             </select>
           </Field>
-          <Field label="Notes" wide>
+          <Field label="Notes" wide icon="edit" iconTone="gray">
             <textarea
+              placeholder="Add any notes (optional)"
               value={f.notes}
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
-        </div>
+        </FormSection>
         <div className="modal-actions">
           <button type="button" className="button ghost" onClick={onClose}>
             Cancel
@@ -7944,90 +8672,7 @@ function VisaForm({
   );
 }
 
-/**
- * Splits a stored route into its legs so the design's "NBO → DXB" treatment can
- * be drawn. Only unambiguous separators are honoured: a route typed as one word
- * is left exactly as the operator entered it rather than guessed at.
- */
-const routeLegs = (value: string) =>
-  String(value || "")
-    .split(/\s*(?:→|->|—|–|\/|\bto\b)\s*/i)
-    .map((leg) => leg.trim())
-    .filter(Boolean);
-
-/** A checklist line derived from the day's real records, never hand-entered. */
-type ClosingStep = {
-  label: string;
-  state: "done" | "pending" | "waiting";
-  at?: string;
-};
-
-/**
- * Two-series bar chart (collections against expenses). Shares BarChart's tick
- * logic so both charts round to the same readable scale.
- */
-function GroupedBars({
-  labels,
-  series,
-  axisLabel,
-}: {
-  labels: string[];
-  series: { name: string; color: string; values: number[] }[];
-  axisLabel?: string;
-}) {
-  const max = Math.max(...series.flatMap((entry) => entry.values), 1);
-  const step = Math.pow(10, Math.floor(Math.log10(max)));
-  const niceMax = Math.max(step, Math.ceil(max / step) * step);
-  const ticks = [1, 0.75, 0.5, 0.25, 0].map((fraction) => niceMax * fraction);
-  return (
-    <div className="grouped-bars">
-      <div className="grouped-bars-legend">
-        {series.map((entry) => (
-          <span key={entry.name}>
-            <i style={{ background: entry.color }} />
-            {entry.name}
-          </span>
-        ))}
-      </div>
-      <div
-        className="bar-chart-wrap"
-        role="img"
-        aria-label={axisLabel || "Collections against expenses"}
-      >
-        <div className="bar-chart-axis" aria-hidden="true">
-          {ticks.map((tick) => (
-            <span key={tick}>{compactTick(tick)}</span>
-          ))}
-        </div>
-        <div className="bar-chart">
-          <div className="bar-chart-grid" aria-hidden="true">
-            {ticks.map((tick) => (
-              <i key={tick} />
-            ))}
-          </div>
-          {labels.map((label, index) => (
-            <div className="bar-group" key={`${label}-${index}`}>
-              <div className="bar-pair">
-                {series.map((entry) => (
-                  <i
-                    key={entry.name}
-                    style={{
-                      height: `${Math.max(2, ((entry.values[index] || 0) / niceMax) * 100)}%`,
-                      background: entry.color,
-                    }}
-                  />
-                ))}
-              </div>
-              <span>{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
+function DailyClose({ data, user, notify, scopeBranchId }: ModuleProps) {
   const branches = branchOptions(data, user);
   const lockedBranchId =
     user.role === "operator" ? String(user.assignedBranchId || "") : "";
@@ -8037,8 +8682,6 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
   useBranchScope(scopeBranchId, (id) => setBranchId(id || lockedBranchId));
   const [currency, setCurrency] = useState("");
   const [rows, setRows] = useState<DailySummaryRow[]>([]);
-  const [previousRows, setPreviousRows] = useState<DailySummaryRow[]>([]);
-  const [openMetric, setOpenMetric] = useState("");
   const [settings, setSettings] = useState({
     timezone: "Africa/Mogadishu",
     businessDayStart: "07:00",
@@ -8047,14 +8690,6 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
-
-  // The business day before the one on screen, for every "vs Yesterday" figure.
-  const previousDate = (() => {
-    const stamp = new Date(`${date}T12:00:00Z`);
-    if (Number.isNaN(stamp.getTime())) return "";
-    stamp.setUTCDate(stamp.getUTCDate() - 1);
-    return stamp.toISOString().slice(0, 10);
-  })();
 
   useEffect(() => {
     let active = true;
@@ -8090,28 +8725,12 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
       } finally {
         if (active) setLoading(false);
       }
-      // The comparison day is a nicety. If it cannot be read the page still
-      // renders in full, simply without the "vs Yesterday" percentages.
-      if (!previousDate) {
-        if (active) setPreviousRows([]);
-        return;
-      }
-      try {
-        const response = await fetch(
-          `/api/daily-close/summary?${queryFor(previousDate)}`,
-          { cache: "no-store" },
-        );
-        const payload = await response.json();
-        if (active) setPreviousRows(response.ok ? payload.rows || [] : []);
-      } catch {
-        if (active) setPreviousRows([]);
-      }
     };
     void load();
     return () => {
       active = false;
     };
-  }, [date, previousDate, branchId, currency, refresh]);
+  }, [date, branchId, currency, refresh]);
 
   const selectedBranch = branchById(data, branchId);
   const currencies = selectedBranch
@@ -8119,9 +8738,6 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
     : Array.from(
         new Set(branches.flatMap((branch) => branchCurrencies(branch))),
       );
-  const currencyCodes = (["KES", "USD"] as Currency[]).filter((code) =>
-    rows.some((row) => row.currency === code),
-  );
   const totalFor = (
     list: DailySummaryRow[],
     field: keyof DailySummaryRow,
@@ -8133,280 +8749,29 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
         ? sum + value
         : sum;
     }, 0);
-  const metric = (field: keyof DailySummaryRow) =>
-    currencyCodes.length ? (
-      currencyCodes.map((code) => (
-        <strong key={code}>{money(totalFor(rows, field, code), code)}</strong>
+  // Render a field's per-currency values for any subset of rows, so the same
+  // card markup works for the combined view and for each branch group.
+  const metricFor = (
+    list: DailySummaryRow[],
+    field: keyof DailySummaryRow,
+    // When a branch has no rows for the day we still want to show its own
+    // currencies at zero rather than a bare "No activity", so a quiet branch
+    // reads e.g. "USD 0" instead of disappearing.
+    fallbackCurrencies?: Currency[],
+  ) => {
+    const present = (["KES", "USD"] as Currency[]).filter((code) =>
+      list.some((row) => row.currency === code),
+    );
+    const codes = present.length ? present : fallbackCurrencies || [];
+    return codes.length ? (
+      codes.map((code) => (
+        <strong key={code}>{money(totalFor(list, field, code), code)}</strong>
       ))
     ) : (
       <strong>No activity</strong>
     );
-  // Business-day analytics. Currencies are never summed together, so the charts
-  // report the currency with the most activity (or the one being filtered on).
-  const analyticsCurrency = ((): Currency => {
-    if (currency) return currency as Currency;
-    const byCurrency = rows.reduce<Record<string, number>>((totals, row) => {
-      totals[row.currency] =
-        (totals[row.currency] || 0) + row.revenue + row.moneyReceived;
-      return totals;
-    }, {});
-    const ranked = Object.entries(byCurrency).sort((a, b) => b[1] - a[1]);
-    return (
-      (ranked[0]?.[0] as Currency) || (rows[0]?.currency as Currency) || "USD"
-    );
-  })();
-  const analyticsRows = rows.filter((row) => row.currency === analyticsCurrency);
-  const donutColors = ["#0b66e3", "#00a9c7", "#3bbf63", "#f59e0b", "#7c3aed"];
-
-  // Percentage movement against the same figure yesterday, read in the busiest
-  // currency because currencies are never added together.
-  const deltaFor = (field: keyof DailySummaryRow) => {
-    if (!previousRows.length) return null;
-    const before = totalFor(previousRows, field, analyticsCurrency);
-    if (!before) return null;
-    const now = totalFor(rows, field, analyticsCurrency);
-    const percent = ((now - before) / Math.abs(before)) * 100;
-    return { percent, up: percent >= 0 };
   };
-
-  const serviceTotals = analyticsRows
-    .flatMap((row) => row.revenueByService || [])
-    .reduce<Record<string, number>>((totals, entry) => {
-      totals[entry.service] = (totals[entry.service] || 0) + entry.revenue;
-      return totals;
-    }, {});
-  const serviceRevenueTotal = Object.values(serviceTotals).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
-  const serviceSegments = Object.entries(serviceTotals)
-    .filter(([, value]) => value > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, value], index) => ({
-      value: serviceRevenueTotal ? (value / serviceRevenueTotal) * 100 : 0,
-      color: donutColors[index % donutColors.length],
-      label: label.charAt(0).toUpperCase() + label.slice(1),
-      amount: money(value, analyticsCurrency),
-    }));
-
-  const methodTotals = analyticsRows
-    .flatMap((row) => row.paymentsByMethod || [])
-    .reduce<Record<string, number>>((totals, entry) => {
-      totals[entry.paymentMethod] =
-        (totals[entry.paymentMethod] || 0) + entry.received;
-      return totals;
-    }, {});
-  const methodReceivedTotal = Object.values(methodTotals).reduce(
-    (sum, value) => sum + value,
-    0,
-  );
-  const methodSegments = Object.entries(methodTotals)
-    .filter(([, value]) => value > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, value], index) => ({
-      value: methodReceivedTotal ? (value / methodReceivedTotal) * 100 : 0,
-      color: donutColors[index % donutColors.length],
-      label,
-      amount: money(value, analyticsCurrency),
-    }));
-
-  // Revenue and profit per branch for the business day, with yesterday's
-  // revenue alongside so the movement column is a real comparison. Every branch
-  // is listed in its own currency: restricting this to the chart currency hid
-  // whole branches, and a single total across currencies would be meaningless.
-  const branchPerformance = rows
-    .map((row) => ({
-      branch: row.branch,
-      currency: row.currency,
-      revenue: row.revenue,
-      profit: row.profit,
-      before: previousRows
-        .filter(
-          (previous) =>
-            previous.branch === row.branch &&
-            previous.currency === row.currency,
-        )
-        .reduce((sum, previous) => sum + previous.revenue, 0),
-    }))
-    .sort((a, b) => b.revenue - a.revenue);
-  const performanceTotals = currencyCodes.map((code) => ({
-    currency: code,
-    revenue: branchPerformance
-      .filter((entry) => entry.currency === code)
-      .reduce((sum, entry) => sum + entry.revenue, 0),
-    profit: branchPerformance
-      .filter((entry) => entry.currency === code)
-      .reduce((sum, entry) => sum + entry.profit, 0),
-  }));
-
-  // With a single branch in view the flow chart compares payment channels;
-  // across branches it compares the branches themselves.
-  const flowRows = branchId
-    ? analyticsRows
-        .flatMap((row) => row.paymentsByMethod || [])
-        .map((method) => ({
-          label: method.paymentMethod,
-          collections: method.received,
-          expenses: method.expenses + method.supplierPaid,
-        }))
-    : analyticsRows.map((row) => ({
-        label: row.branch,
-        collections: row.moneyReceived,
-        expenses: row.expenses,
-      }));
-  const flowHasValues = flowRows.some(
-    (row) => row.collections > 0 || row.expenses > 0,
-  );
-
-  // Client and route leaders come straight from the day's own transactions.
-  const inScope = (recordBranchId?: string | null) =>
-    !branchId || String(recordBranchId || "") === branchId;
-  const dayTickets = data.tickets.filter(
-    (ticket) =>
-      ticket.saleDate.slice(0, 10) === date &&
-      ticket.currency === analyticsCurrency &&
-      inScope(ticket.branchId),
-  );
-  const dayVisas = data.visas.filter(
-    (visa) =>
-      visa.appDate.slice(0, 10) === date &&
-      visa.currency === analyticsCurrency &&
-      inScope(visa.branchId),
-  );
-  const dayCargo = data.cargo.filter(
-    (item) =>
-      item.dateIn.slice(0, 10) === date &&
-      item.currency === analyticsCurrency &&
-      String(item.status || "").toLowerCase() !== "cancelled" &&
-      inScope(item.originBranchId),
-  );
-  const clientRevenue = new Map<string, number>();
-  const addClientRevenue = (
-    clientId: string | null | undefined,
-    amount: number,
-  ) => {
-    const name = data.clients.find((client) => client.id === clientId)?.name;
-    if (!name || !amount) return;
-    clientRevenue.set(name, (clientRevenue.get(name) || 0) + amount);
-  };
-  dayTickets.forEach((ticket) =>
-    addClientRevenue(
-      ticket.clientId,
-      (ticket.type === "Refund" ? -1 : 1) * (ticket.amount || 0),
-    ),
-  );
-  dayVisas.forEach((visa) =>
-    addClientRevenue(
-      visa.clientId,
-      (visa.type === "Refund" ? -1 : 1) * (visa.amount || 0),
-    ),
-  );
-  dayCargo.forEach((item) =>
-    addClientRevenue(
-      item.payerClientId || item.senderClientId,
-      (item.weight || 0) * (item.rate || 0),
-    ),
-  );
-  const clientRevenueTotal = Array.from(clientRevenue.values())
-    .filter((value) => value > 0)
-    .reduce((sum, value) => sum + value, 0);
-  const topClients = Array.from(clientRevenue.entries())
-    .filter(([, value]) => value > 0)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-
-  const routeStats = new Map<string, { bookings: number; amount: number }>();
-  dayTickets
-    .filter((ticket) => ticket.type !== "Refund")
-    .forEach((ticket) => {
-      const key = String(ticket.route || "").trim();
-      if (!key) return;
-      const entry = routeStats.get(key) || { bookings: 0, amount: 0 };
-      entry.bookings += 1;
-      entry.amount += ticket.amount || 0;
-      routeStats.set(key, entry);
-    });
-  const topRoutes = Array.from(routeStats.entries())
-    .sort((a, b) => b[1].bookings - a[1].bookings)
-    .slice(0, 5);
-
-  // Closing checklist. Every line is a condition read from real records, so it
-  // reports what the day has actually done rather than a list someone ticks.
-  const dayCloses = data.closes.filter(
-    (close) => close.date.slice(0, 10) === date && inScope(close.branchId),
-  );
-  const closingSteps: ClosingStep[] = [
-    {
-      label: "Opening balance carried",
-      state: rows.some((row) => row.openingBalance > 0) ? "done" : "waiting",
-    },
-    {
-      label: "Collections recorded",
-      state: rows.some((row) => row.moneyReceived > 0) ? "done" : "waiting",
-    },
-    {
-      label: "Expenses recorded",
-      state: rows.some((row) => row.expenses > 0) ? "done" : "waiting",
-    },
-    {
-      label: "Receivables collected",
-      state: rows.some((row) => row.accountsReceivable > 0) ? "pending" : "done",
-    },
-    {
-      label: "Payables settled",
-      state: rows.some((row) => row.accountsPayable > 0) ? "pending" : "done",
-    },
-    {
-      label: "Cash counted",
-      state: dayCloses.length ? "done" : "pending",
-      at: dayCloses[0]?.closedAt,
-    },
-    {
-      label: "Count reviewed by owner",
-      state: !dayCloses.length
-        ? "waiting"
-        : dayCloses.every((close) => close.reviewed)
-          ? "done"
-          : "pending",
-    },
-    {
-      label: "Business day closed",
-      state:
-        rows.length && rows.every((row) => row.state === "closed")
-          ? "done"
-          : "pending",
-    },
-  ];
-  const stepsDone = closingSteps.filter((step) => step.state === "done").length;
-
-  const clockTime = (value?: string) => {
-    if (!value) return "";
-    const stamp = new Date(value);
-    if (Number.isNaN(stamp.getTime())) return "";
-    return stamp
-      .toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-        timeZone: settings.timezone,
-      })
-      .toUpperCase();
-  };
-  const timeline = data.activities
-    .filter((activity) => activity.at.slice(0, 10) === date)
-    .sort((a, b) => a.at.localeCompare(b.at))
-    .slice(0, 8);
-  // Names the dot colour only. Deliberately not "tone-*": those are global
-  // classes that also paint a background, which tinted the whole timeline row.
-  const timelineTone = (activity: Activity) => {
-    const text = `${activity.action} ${activity.entity}`.toLowerCase();
-    if (/payment|collect|receipt/.test(text)) return "green";
-    if (/expense|payable|supplier/.test(text)) return "orange";
-    if (/delete|void|reopen|cancel/.test(text)) return "red";
-    if (/summary|close|balance/.test(text)) return "blue";
-    return "violet";
-  };
-
+  const metric = (field: keyof DailySummaryRow) => metricFor(rows, field);
   const states = new Set(rows.map((row) => row.state));
   const stateLabel = states.has("live")
     ? "Live / In Progress"
@@ -8499,17 +8864,44 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
     { field: "accountsPayable", label: "Accounts Payable", icon: "briefcase", tone: "pink", foot: "Owed to suppliers" },
     { field: "expectedClosing", label: "Expected Closing", icon: "database", tone: "blue", foot: "After debts settle" },
   ] as const;
-  const openCard = kpiCards.find((card) => card.field === openMetric);
-  // Panel titles read "(Today)" as the design does, but name the day instead
-  // whenever a past business date is being reviewed.
-  const dayTag =
-    date === today()
-      ? "Today"
-      : new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
+  // When "All branches" is selected the KPIs are grouped per branch instead of
+  // being summed into one confusing total. Each group carries that branch's own
+  // rows (one per currency). A single branch in view keeps the flat layout.
+  const showBranchGroups = !branchId;
+  const branchGroups = (() => {
+    if (!showBranchGroups) return [];
+    // Group the returned rows by branch first.
+    const groups = new Map<
+      string,
+      { branchId: string; branch: string; rows: DailySummaryRow[] }
+    >();
+    for (const row of rows) {
+      const key = String(row.branchId || row.branch || "unassigned");
+      if (!groups.has(key))
+        groups.set(key, {
+          branchId: row.branchId,
+          branch: row.branch,
+          rows: [],
         });
-
+      groups.get(key)!.rows.push(row);
+    }
+    // Every active branch in scope must appear even with no activity today, so
+    // "All branches" always lists both offices instead of hiding a quiet one.
+    for (const branch of branches) {
+      if (!groups.has(branch.id))
+        groups.set(branch.id, {
+          branchId: branch.id,
+          branch: branch.name,
+          rows: [],
+        });
+    }
+    // Order branches by their busiest revenue so the most active leads.
+    return [...groups.values()].sort(
+      (a, b) =>
+        b.rows.reduce((s, r) => s + (r.revenue || 0), 0) -
+        a.rows.reduce((s, r) => s + (r.revenue || 0), 0),
+    );
+  })();
   return (
     <>
       <PageHeader
@@ -8560,6 +8952,11 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
               <Badge tone={states.has("live") ? "success" : "blue"}>
                 {stateLabel}
               </Badge>
+              {user.role === "owner" && rows.some((row) => row.state === "closed" && row.version) && (
+                <button type="button" className="text-button" onClick={() => void recalculateDay()}>
+                  Recalculate Day
+                </button>
+              )}
               <button
                 type="button"
                 className="text-button ds-export"
@@ -8579,486 +8976,75 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
             />
           ) : rows.length ? (
             <>
-              <section className="daily-summary-kpis metrics-grid">
-                {kpiCards.map((card) => {
-                  const delta = deltaFor(card.field);
-                  const open = openMetric === card.field;
-                  return (
-                    <div
-                      className={`metric-card card-hover${open ? " is-open" : ""}`}
-                      key={card.field}
+              {showBranchGroups ? (
+                <div className="ds-branch-groups">
+                  {branchGroups.map((group) => {
+                    // A branch with no activity today still shows its own
+                    // currencies at zero rather than vanishing from the list.
+                    const groupCurrencies = branchCurrencies(
+                      branchById(data, group.branchId),
+                    );
+                    return (
+                    <section
+                      className="ds-branch-group"
+                      key={group.branchId || group.branch}
                     >
-                      <div className={`metric-icon tone-${card.tone}`}>
-                        <Icon name={card.icon} size={22} />
-                      </div>
-                      <div className="metric-main">
-                        <span className="eyebrow-soft">{card.label}</span>
-                        <div className="metric-values">{metric(card.field)}</div>
-                        <div className="metric-foot">
-                          {delta && (
-                            <span
-                              className={delta.up ? "positive" : "negative"}
-                            >
-                              {`${delta.up ? "↑" : "↓"} ${Math.abs(delta.percent).toFixed(1)}%`}
-                            </span>
-                          )}
-                          <span>
-                            {delta
-                              ? // The comparison is read in one currency, so it
-                                // is named whenever the card shows more than one.
-                                `vs Yesterday${currencyCodes.length > 1 ? ` (${analyticsCurrency})` : ""}`
-                              : card.foot}
-                          </span>
+                      <header className="ds-branch-group-head">
+                        <h3>
+                          <BranchName data={data} branch={group.branch} />
+                        </h3>
+                        <div className="ds-branch-group-totals">
+                          {metricFor(group.rows, "revenue", groupCurrencies)}
+                          <span>revenue today</span>
                         </div>
+                      </header>
+                      <div className="daily-summary-kpis metrics-grid">
+                        {kpiCards.map((card) => (
+                          <div className="metric-card" key={card.field}>
+                            <div className={`metric-icon tone-${card.tone}`}>
+                              <Icon name={card.icon} size={20} />
+                            </div>
+                            <div className="metric-main">
+                              <span className="eyebrow-soft">{card.label}</span>
+                              <div className="metric-values">
+                                {metricFor(group.rows, card.field, groupCurrencies)}
+                              </div>
+                              <div className="metric-foot">
+                                <span>{card.foot}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <button
-                        type="button"
-                        className="ds-kpi-more"
-                        aria-expanded={open}
-                        aria-label={`${open ? "Hide" : "Show"} ${card.label} by branch`}
-                        onClick={() => setOpenMetric(open ? "" : card.field)}
+                    </section>
+                    );
+                  })}
+                </div>
+              ) : (
+                <section className="daily-summary-kpis metrics-grid">
+                  {kpiCards.map((card) => {
+                    return (
+                      <div
+                        className="metric-card"
+                        key={card.field}
                       >
-                        <Icon name="chevron" size={15} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </section>
+                        <div className={`metric-icon tone-${card.tone}`}>
+                          <Icon name={card.icon} size={22} />
+                        </div>
+                        <div className="metric-main">
+                          <span className="eyebrow-soft">{card.label}</span>
+                          <div className="metric-values">{metric(card.field)}</div>
+                          <div className="metric-foot">
+                            <span>{card.foot}</span>
+                          </div>
+                        </div>
 
-              {openCard && (
-                <Panel
-                  className="ds-kpi-detail"
-                  title={`${openCard.label} by branch`}
-                  subtitle={`${date} · ${openCard.foot}`}
-                  actions={
-                    <button
-                      type="button"
-                      className="text-button"
-                      onClick={() => setOpenMetric("")}
-                    >
-                      Hide
-                    </button>
-                  }
-                >
-                  <TableShell>
-                    <thead>
-                      <tr>
-                        <th>Branch</th>
-                        <th>Currency</th>
-                        <th>{openCard.label}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row) => (
-                        <tr key={`${row.branchId}-${row.currency}-detail`}>
-                          <td>
-                            <strong><BranchName data={data} branch={row.branch} /></strong>
-                          </td>
-                          <td>{row.currency}</td>
-                          <td>
-                            {money(
-                              (row[openCard.field] as number) || 0,
-                              row.currency,
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </TableShell>
-                </Panel>
+                      </div>
+                    );
+                  })}
+                </section>
               )}
 
-              <div className="ds-charts">
-                <Panel
-                  title={`Revenue by Service (${dayTag})`}
-                  actions={
-                    go && (
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => go("reports")}
-                      >
-                        View Report
-                      </button>
-                    )
-                  }
-                >
-                  {serviceSegments.length ? (
-                    <Donut
-                      total={money(serviceRevenueTotal, analyticsCurrency)}
-                      centerLabel="Total Revenue"
-                      segments={serviceSegments}
-                      detailed
-                    />
-                  ) : (
-                    <Empty
-                      title="No service revenue"
-                      detail="Service revenue appears once the day records activity."
-                    />
-                  )}
-                </Panel>
-                <Panel
-                  title="Collections vs Expenses"
-                  actions={
-                    go && (
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => go("reports")}
-                      >
-                        View Report
-                      </button>
-                    )
-                  }
-                >
-                  {flowHasValues ? (
-                    <GroupedBars
-                      labels={flowRows.map((row) => row.label)}
-                      series={[
-                        {
-                          name: `Collections (${analyticsCurrency})`,
-                          color: "#0b66e3",
-                          values: flowRows.map((row) => row.collections),
-                        },
-                        {
-                          name: `Expenses (${analyticsCurrency})`,
-                          color: "#f59e0b",
-                          values: flowRows.map((row) => row.expenses),
-                        },
-                      ]}
-                      axisLabel={`Collections against expenses in ${analyticsCurrency}`}
-                    />
-                  ) : (
-                    <Empty
-                      title="No money movement"
-                      detail="Collections and expenses appear here as they are recorded."
-                    />
-                  )}
-                </Panel>
-                <Panel
-                  title={`Branch Performance (${dayTag})`}
-                  actions={
-                    go && (
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => go("reports")}
-                      >
-                        View Report
-                      </button>
-                    )
-                  }
-                >
-                  <TableShell>
-                    <thead>
-                      <tr>
-                        <th>Branch</th>
-                        <th>Revenue</th>
-                        <th>Profit</th>
-                        <th>Change</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {branchPerformance.map((entry) => {
-                        const move = entry.before
-                          ? ((entry.revenue - entry.before) /
-                              Math.abs(entry.before)) *
-                            100
-                          : null;
-                        return (
-                          <tr key={`${entry.branch}-${entry.currency}`}>
-                            <td>
-                              <strong>
-                                <BranchName data={data} branch={entry.branch} />
-                              </strong>
-                              <small>{entry.currency}</small>
-                            </td>
-                            <td>{amount(entry.revenue)}</td>
-                            <td className={entry.profit < 0 ? "negative" : ""}>
-                              {amount(entry.profit)}
-                            </td>
-                            <td
-                              className={
-                                move === null
-                                  ? ""
-                                  : move >= 0
-                                    ? "positive"
-                                    : "negative"
-                              }
-                            >
-                              {move === null
-                                ? "—"
-                                : `${move >= 0 ? "▲" : "▼"} ${Math.abs(move).toFixed(1)}%`}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {performanceTotals.map((total) => (
-                        <tr className="ds-total-row" key={total.currency}>
-                          <td>Total {total.currency}</td>
-                          <td>{amount(total.revenue)}</td>
-                          <td>{amount(total.profit)}</td>
-                          <td />
-                        </tr>
-                      ))}
-                    </tbody>
-                  </TableShell>
-                </Panel>
-              </div>
-
-              <div className="ds-charts">
-                <Panel
-                  title={`Payment Method Breakdown (${dayTag})`}
-                >
-                  {methodSegments.length ? (
-                    <Donut
-                      total={money(methodReceivedTotal, analyticsCurrency)}
-                      centerLabel="Total Received"
-                      segments={methodSegments}
-                      detailed
-                    />
-                  ) : (
-                    <Empty
-                      title="No payments yet"
-                      detail="Collections appear here as payments are recorded."
-                    />
-                  )}
-                </Panel>
-                <Panel
-                  title="Top Clients (By Revenue)"
-                  actions={
-                    go && (
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => go("clients")}
-                      >
-                        View All
-                      </button>
-                    )
-                  }
-                >
-                  {topClients.length ? (
-                    <div className="ds-rank-list">
-                      {topClients.map(([name, value]) => (
-                        <div className="ds-rank-row" key={name}>
-                          <span className="ds-avatar" aria-hidden="true">
-                            {name
-                              .split(/\s+/)
-                              .slice(0, 2)
-                              .map((part) => part.charAt(0).toUpperCase())
-                              .join("")}
-                          </span>
-                          <span className="ds-rank-name">{name}</span>
-                          <b>{money(value, analyticsCurrency)}</b>
-                          <em>
-                            {clientRevenueTotal
-                              ? `${((value / clientRevenueTotal) * 100).toFixed(1)}%`
-                              : "—"}
-                          </em>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <Empty
-                      title="No client revenue"
-                      detail="Clients appear here once the day records a sale against them."
-                    />
-                  )}
-                </Panel>
-                <Panel
-                  title="Top Routes (By Bookings)"
-                  actions={
-                    go && (
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => go("tickets")}
-                      >
-                        View All
-                      </button>
-                    )
-                  }
-                >
-                  {topRoutes.length ? (
-                    <div className="ds-rank-list">
-                      {topRoutes.map(([route, entry]) => (
-                        <div className="ds-rank-row" key={route}>
-                          <span className="ds-route-icon" aria-hidden="true">
-                            <Icon name="route" size={14} />
-                          </span>
-                          <span className="ds-rank-name">
-                            {routeLegs(route).map((leg, index) => (
-                              <span key={`${leg}-${index}`}>
-                                {index > 0 && (
-                                  <i className="ds-route-arrow" aria-hidden="true">
-                                    →
-                                  </i>
-                                )}
-                                {leg}
-                              </span>
-                            ))}
-                          </span>
-                          <em>
-                            {entry.bookings}{" "}
-                            {entry.bookings === 1 ? "Booking" : "Bookings"}
-                          </em>
-                          <b>{money(entry.amount, analyticsCurrency)}</b>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <Empty
-                      title="No routes yet"
-                      detail="Routes appear here once tickets are sold on this business day."
-                    />
-                  )}
-                </Panel>
-              </div>
-
-              <Panel
-                title="Business Day by Branch"
-                subtitle="Every branch and currency in the selected day"
-              >
-                <TableShell className="metric-table">
-                  <thead>
-                    <tr>
-                      <th>Branch</th>
-                      <th>Currency</th>
-                      <th>Revenue</th>
-                      <th>Money Received</th>
-                      <th>Direct Cost</th>
-                      <th>Profit</th>
-                      <th>Expenses</th>
-                      <th>Customer Debt</th>
-                      <th>Payables</th>
-                      <th>Status</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={`${row.branchId}-${row.currency}`}>
-                        <td>
-                          <strong><BranchName data={data} branch={row.branch} /></strong>
-                        </td>
-                        <td>{row.currency}</td>
-                        <td>{money(row.revenue, row.currency)}</td>
-                        <td>{money(row.moneyReceived, row.currency)}</td>
-                        <td>{money(row.directCost, row.currency)}</td>
-                        <td
-                          className={row.profit < 0 ? "negative" : "positive"}
-                        >
-                          {money(row.profit, row.currency)}
-                        </td>
-                        <td>{money(row.expenses, row.currency)}</td>
-                        <td>{money(row.accountsReceivable, row.currency)}</td>
-                        <td>{money(row.accountsPayable, row.currency)}</td>
-                        <td>
-                          <Badge
-                            tone={row.state === "live" ? "success" : "blue"}
-                          >
-                            {row.state === "closed"
-                              ? "Closed Automatically"
-                              : row.state}
-                          </Badge>
-                        </td>
-                        <td>
-                          {user.role === "owner" &&
-                            row.state === "closed" &&
-                            row.version && (
-                              <button
-                                className="text-button"
-                                onClick={() => void correct(row)}
-                              >
-                                Recalculate
-                              </button>
-                            )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </TableShell>
-              </Panel>
-
-              <div className="daily-summary-details">
-                <Panel
-                  title="Revenue by Service"
-                  subtitle="Per branch, currency and service"
-                >
-                  <TableShell>
-                    <thead>
-                      <tr>
-                        <th>Branch / Currency / Service</th>
-                        <th>Transactions</th>
-                        <th>Revenue</th>
-                        <th>Direct Cost</th>
-                        <th>Profit</th>
-                        <th>Customer Debt</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.flatMap((row) =>
-                        row.revenueByService.map((service) => (
-                          <tr
-                            key={`${row.branchId}-${row.currency}-${service.service}`}
-                          >
-                            <td>
-                              <BranchName data={data} branch={row.branch} /> ·{" "}
-                              {row.currency} · {service.service}
-                            </td>
-                            <td>{service.transactions}</td>
-                            <td>{money(service.revenue, row.currency)}</td>
-                            <td>{money(service.directCost, row.currency)}</td>
-                            <td>{money(service.profit, row.currency)}</td>
-                            <td>
-                              {money(service.accountsReceivable, row.currency)}
-                            </td>
-                          </tr>
-                        )),
-                      )}
-                    </tbody>
-                  </TableShell>
-                </Panel>
-                <Panel
-                  title="Payments by Method"
-                  subtitle="Opening float through to closing balance"
-                >
-                  <TableShell>
-                    <thead>
-                      <tr>
-                        <th>Branch / Currency / Method</th>
-                        <th>Opening</th>
-                        <th>Received</th>
-                        <th>Refunds</th>
-                        <th>Expenses</th>
-                        <th>Payables Paid</th>
-                        <th>Closing</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.flatMap((row) =>
-                        row.paymentsByMethod.map((method) => (
-                          <tr
-                            key={`${row.branchId}-${row.currency}-${method.paymentMethodId}`}
-                          >
-                            <td>
-                              <BranchName data={data} branch={row.branch} /> ·{" "}
-                              {row.currency} · {method.paymentMethod}
-                            </td>
-                            <td>{money(method.opening, row.currency)}</td>
-                            <td>{money(method.received, row.currency)}</td>
-                            <td>{money(method.refunds, row.currency)}</td>
-                            <td>{money(method.expenses, row.currency)}</td>
-                            <td>{money(method.supplierPaid, row.currency)}</td>
-                            <td>{money(method.closing, row.currency)}</td>
-                          </tr>
-                        )),
-                      )}
-                    </tbody>
-                  </TableShell>
-                </Panel>
-              </div>
             </>
           ) : (
             <Empty
@@ -9068,109 +9054,7 @@ function DailyClose({ data, user, notify, scopeBranchId, go }: ModuleProps) {
           )}
         </div>
 
-        <aside className="ds-rail">
-          <section className="panel ds-checklist">
-            <div className="panel-head">
-              <div>
-                <h3>Daily Closing Checklist</h3>
-              </div>
-              <div>
-                <span className="ds-progress-count">
-                  {stepsDone} / {closingSteps.length} Completed
-                </span>
-              </div>
-            </div>
-            <div
-              className="ds-progress"
-              role="progressbar"
-              aria-valuenow={stepsDone}
-              aria-valuemin={0}
-              aria-valuemax={closingSteps.length}
-            >
-              <i style={{ width: `${(stepsDone / closingSteps.length) * 100}%` }} />
-            </div>
-            <ul className="ds-check-list">
-              {closingSteps.map((step) => (
-                <li key={step.label} className={`is-${step.state}`}>
-                  <span className="ds-check-box" aria-hidden="true">
-                    <Icon name="check" size={12} />
-                  </span>
-                  <span className="ds-check-label">{step.label}</span>
-                  {step.at && <time>{clockTime(step.at)}</time>}
-                  <span className="ds-check-state" aria-hidden="true">
-                    {step.state === "done" ? (
-                      <Icon name="check" size={15} />
-                    ) : step.state === "pending" ? (
-                      <Icon name="clock" size={15} />
-                    ) : (
-                      <Icon name="more" size={15} />
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <div className="ds-checklist-foot">
-              {user.role === "owner" &&
-              rows.some((row) => row.state === "closed" && row.version) ? (
-                <button
-                  type="button"
-                  className="button ghost"
-                  onClick={() => void recalculateDay()}
-                >
-                  Recalculate Day
-                </button>
-              ) : (
-                <span>
-                  {stepsDone === closingSteps.length
-                    ? "Every closing step is complete."
-                    : "Outstanding steps clear themselves as the day is recorded."}
-                </span>
-              )}
-            </div>
-          </section>
 
-          <section className="panel ds-timeline-panel">
-            <div className="panel-head">
-              <div>
-                <h3>{dayTag === "Today" ? "Today's" : `${dayTag}`} Activity Timeline</h3>
-              </div>
-              {go && (
-                <div>
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() => go("activity")}
-                  >
-                    View All
-                  </button>
-                </div>
-              )}
-            </div>
-            {timeline.length ? (
-              <ol className="ds-timeline">
-                {timeline.map((activity) => (
-                  <li
-                    key={activity.id}
-                    className={`ds-dot-${timelineTone(activity)}`}
-                  >
-                    <time>{clockTime(activity.at)}</time>
-                    <span className="ds-timeline-action">
-                      {activity.action}
-                    </span>
-                    <span className="ds-timeline-actor">
-                      {activity.userName || "System"}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <Empty
-                title="No activity yet"
-                detail="Actions recorded on this business day appear here."
-              />
-            )}
-          </section>
-        </aside>
       </div>
     </>
   );
@@ -9664,6 +9548,13 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         .includes(query.toLowerCase()),
   );
   const activeExpenseRows = rows.filter((expense) => (expense.recordStatus || "active") !== "void");
+  // Only show the scoped branch's currencies so a USD-only branch never
+  // displays a stray "KES 0" in the expense totals.
+  const expenseScopeBranch =
+    office === "All" ? undefined : branchById(data, branchIdForOffice(data, office));
+  const expenseScopeCurrencies = expenseScopeBranch
+    ? branchCurrencies(expenseScopeBranch)
+    : (["KES", "USD"] as Currency[]);
   const categoryTotals = Object.entries(
     activeExpenseRows.reduce<Record<string, number>>((totals, expense) => {
       totals[expense.category || "Other"] = (totals[expense.category || "Other"] || 0) + expense.amount;
@@ -9712,9 +9603,9 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         }
       />
       <div className="metrics-grid">
-        <MetricCard icon="wallet" label="Total Expenses" value={moneyByCurrency(activeExpenseRows, (expense) => expense.currency, (expense) => expense.amount)} tone="blue" foot="Selected filters" />
-        <MetricCard icon="check" label="Paid Expenses" value={moneyByCurrency(activeExpenseRows.filter((expense) => expense.paid), (expense) => expense.currency, (expense) => expense.amount)} tone="green" foot="Payment completed" />
-        <MetricCard icon="clock" label="Pending Payment" value={moneyByCurrency(activeExpenseRows.filter((expense) => !expense.paid), (expense) => expense.currency, (expense) => expense.amount)} tone="orange" foot="Still outstanding" />
+        <MetricCard icon="wallet" label="Total Expenses" value={moneyByCurrency(activeExpenseRows, (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="blue" foot="Selected filters" />
+        <MetricCard icon="check" label="Paid Expenses" value={moneyByCurrency(activeExpenseRows.filter((expense) => expense.paid), (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="green" foot="Payment completed" />
+        <MetricCard icon="clock" label="Pending Payment" value={moneyByCurrency(activeExpenseRows.filter((expense) => !expense.paid), (expense) => expense.currency, (expense) => expense.amount, expenseScopeCurrencies)} tone="orange" foot="Still outstanding" />
         <MetricCard icon="briefcase" label="Most Used Category" value={categoryTotals[0]?.[0] || "No expenses"} tone="violet" foot={categoryTotals[0] ? new Intl.NumberFormat("en-KE").format(categoryTotals[0][1]) : "No recorded amount"} />
       </div>
       <div className="split-3" style={{ marginTop: 14 }}>
@@ -9729,6 +9620,7 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
         setOffice={setOffice}
         branches={branches}
         allowAll={!roleOffice}
+        showBranch={false}
       />
       <div className="expense-filters">
         <select
@@ -9774,18 +9666,27 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
           <option value="void">Voided</option>
           <option value="all">All statuses</option>
         </select>
-        <input
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          aria-label="From date"
-        />
-        <input
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          aria-label="To date"
-        />
+        <div className="expense-date-range" aria-label="Expense date range">
+          <span className="expense-date-range-title">Date range</span>
+          <label>
+            <span>From</span>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              aria-label="From date"
+            />
+          </label>
+          <label>
+            <span>To</span>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              aria-label="To date"
+            />
+          </label>
+        </div>
       </div>
       {rows.length ? (
         <TableShell>
@@ -9837,10 +9738,12 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
                       onDelete={
                         canDelete
                           ? () => {
-                              const reason = window.prompt(
-                                "Reason for voiding this expense",
-                              );
-                              if (!reason?.trim()) return;
+                              if (
+                                !window.confirm(
+                                  `Delete this expense (${x.description})? This permanently removes it and cannot be undone.`,
+                                )
+                              )
+                                return;
                               void save(
                                 (d) => ({
                                   ...d,
@@ -9850,10 +9753,10 @@ function Expenses({ data, user, save, notify, scopeBranchId }: ModuleProps) {
                                 }),
                                 {
                                   entity: "Expense",
-                                  detail: `Voided ${x.description}: ${reason.trim()}`,
+                                  detail: `Deleted ${x.description}`,
                                 },
                               );
-                              notify("Expense voided");
+                              notify("Expense deleted");
                             }
                           : undefined
                       }
@@ -10185,88 +10088,70 @@ function Suppliers({ data, user, save, notify, replaceData }: ModuleProps) {
       </Panel>
       {bills.length ? (
         <Panel title="Payables" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Branch</th>
-              <th>Payable to</th>
-              <th>Description</th>
-              <th>Due</th>
-              <th>Billed</th>
-              <th>Paid</th>
-              <th>Balance</th>
-              <th>Status</th>
-              {canWrite && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {bills.map((x) => {
-              const paid = paidFor(x);
-              const b = balanceFor(x);
-              return (
-                <tr key={x.id}>
-                  <td>{dateLabel(x.date)}</td>
-                  <td><BranchName data={data} branch={branchName(data, x.branchId, "Unassigned")} /></td>
-                  <td>
-                    <strong>{x.supplier}</strong>
-                  </td>
-                  <td>{x.description}</td>
-                  <td>{dateLabel(x.dueDate)}</td>
-                  <td>{money(x.billed, x.currency)}</td>
-                  <td>{money(paid, x.currency)}</td>
-                  <td className={b > 0 ? "negative" : "positive"}>
-                    {money(b, x.currency)}
-                  </td>
-                  <td>
-                    <Badge
-                      tone={
-                        b <= 0 ? "success" : paid > 0 ? "warning" : "danger"
-                      }
-                    >
-                      {b <= 0 ? "Paid" : paid > 0 ? "Partial" : "Unpaid"}
-                    </Badge>
-                  </td>
-                  {canWrite && (
-                    <td>
-                      <div className="row-actions">
-                        {b > 0 && x.recordStatus !== "cancelled" && (
-                          <button type="button" onClick={() => setPaying(x)}>
-                            Pay
-                          </button>
-                        )}
-                        {x.recordStatus !== "cancelled" && (
-                          <Actions
-                            onEdit={() => setEditing(x)}
-                            onDelete={() => {
-                              const reason = window.prompt(
-                                "Reason for cancelling this payable",
-                              );
-                              if (!reason?.trim()) return;
-                              void save(
-                                (d) => ({
-                                  ...d,
-                                  suppliers: d.suppliers.filter(
-                                    (y) => y.id !== x.id,
-                                  ),
-                                }),
-                                {
-                                  entity: "Supplier",
-                                  detail: `Cancelled ${x.supplier} bill: ${reason.trim()}`,
-                                },
-                              );
-                              notify("Payable cancelled");
-                            }}
-                          />
-                        )}
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
+        <RecordList>
+          {bills.map((x) => {
+            const paid = paidFor(x);
+            const b = balanceFor(x);
+            return (
+              <RecordCard
+                key={x.id}
+                title={x.supplier}
+                subtitle={
+                  <>
+                    <BranchName
+                      data={data}
+                      branch={branchName(data, x.branchId, "Unassigned")}
+                    />{" "}
+                    · {dateLabel(x.date)}
+                  </>
+                }
+                cells={[
+                  { label: "Description", value: x.description },
+                  { label: "Billed", value: money(x.billed, x.currency) },
+                  { label: "Balance", value: money(b, x.currency), strong: true },
+                  { label: "Due", value: dateLabel(x.dueDate) },
+                ]}
+                badges={
+                  <Badge
+                    tone={b <= 0 ? "success" : paid > 0 ? "warning" : "danger"}
+                  >
+                    {b <= 0 ? "Paid" : paid > 0 ? "Partial" : "Unpaid"}
+                  </Badge>
+                }
+                details={[
+                  { label: "Date", value: dateLabel(x.date) },
+                  {
+                    label: "Branch",
+                    value: (
+                      <BranchName
+                        data={data}
+                        branch={branchName(data, x.branchId, "Unassigned")}
+                      />
+                    ),
+                  },
+                  { label: "Payable to", value: x.supplier },
+                  { label: "Description", value: x.description },
+                  { label: "Due date", value: dateLabel(x.dueDate) },
+                  { label: "Billed", value: money(x.billed, x.currency) },
+                  { label: "Paid", value: money(paid, x.currency) },
+                  { label: "Balance", value: money(b, x.currency) },
+                ]}
+                actions={
+                  canWrite ? (
+                    <div className="row-actions">
+                      {b > 0 && x.recordStatus !== "cancelled" && (
+                        <button type="button" onClick={() => setPaying(x)}>
+                          Pay
+                        </button>
+                      )}
+
+                    </div>
+                  ) : undefined
+                }
+              />
+            );
+          })}
+        </RecordList>
         </Panel>
       ) : (
         <Empty
@@ -10462,22 +10347,36 @@ function clientStats(data: AgencyData, client: Client) {
   const phoneKeys = [client.normalizedPhone, client.phone]
     .filter(Boolean)
     .map(String);
+  // A person is identified by their clientId. The phone-key fallback applies
+  // ONLY to records that were never linked to any client, so that two different
+  // people who share a phone number never show each other's activity. Cancelled
+  // services are excluded — they carry no ticket count, cargo count or spend.
   const tickets = data.tickets.filter(
     (x) =>
-      (x.clientId && ids.includes(String(x.clientId))) ||
-      phoneKeys.includes(String(x.normalizedPhone || x.phone)),
+      !isCancelledService(x) &&
+      (x.clientId
+        ? ids.includes(String(x.clientId))
+        : phoneKeys.includes(String(x.normalizedPhone || x.phone))),
   );
-  const cargo = data.cargo.filter(
-    (x) =>
-      (x.senderClientId && ids.includes(String(x.senderClientId))) ||
-      (x.receiverClientId && ids.includes(String(x.receiverClientId))) ||
+  const cargo = data.cargo.filter((x) => {
+    if (isCancelledService(x)) return false;
+    if (x.senderClientId || x.receiverClientId) {
+      return (
+        (x.senderClientId && ids.includes(String(x.senderClientId))) ||
+        (x.receiverClientId && ids.includes(String(x.receiverClientId)))
+      );
+    }
+    return (
       phoneKeys.includes(String(x.senderNormalizedPhone || x.senderPhone)) ||
-      phoneKeys.includes(String(x.receiverNormalizedPhone || x.receiverPhone)),
-  );
+      phoneKeys.includes(String(x.receiverNormalizedPhone || x.receiverPhone))
+    );
+  });
   const visas = data.visas.filter(
     (x) =>
-      (x.clientId && ids.includes(String(x.clientId))) ||
-      phoneKeys.includes(String(x.normalizedPhone || x.phone)),
+      !isCancelledService(x) &&
+      (x.clientId
+        ? ids.includes(String(x.clientId))
+        : phoneKeys.includes(String(x.normalizedPhone || x.phone))),
   );
   const spend = (c: Currency) =>
     tickets.filter((x) => x.currency === c).reduce((s, x) => s + x.amount, 0) +
@@ -10763,85 +10662,146 @@ function Clients({ data, user, save, notify }: ModuleProps) {
       </div>
       {rows.length ? (
         <Panel title="Client Directory" actions={<StatusBadge tone="blue">Live</StatusBadge>}>
-        <TableShell>
-          <thead>
-            <tr>
-              <th>Client</th>
-              <th>Home office</th>
-              <th>Type</th>
-              <th>Tickets</th>
-              <th>Cargo</th>
-              <th>Visas</th>
-              {financial && (
-                <>
-                  <th>Spend KES</th>
-                  <th>Spend USD</th>
-                </>
-              )}
-              <th>Last activity</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((x) => {
-              const s = clientStats(data, x);
-              return (
-                <tr key={x.id}>
-                  <td>
-                    <strong>{x.name}</strong>
-                    <small>
+        <RecordList>
+          {rows.map((x) => {
+            const s = clientStats(data, x);
+            return (
+              <RecordCard
+                key={x.id}
+                title={x.name}
+                subtitle={
+                  <>
+                    <a
+                      className="linkish"
+                      href={`tel:${(x.normalizedPhone || x.phone || "").replace(/\s+/g, "")}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {x.phone}
-                      {x.normalizedPhone ? ` · ${x.normalizedPhone}` : ""}
-                      {x.email ? ` · ${x.email}` : ""}
-                    </small>
-                  </td>
-                  <td>
-                    <BranchBadge data={data} office={x.homeOffice} />
-                  </td>
-                  <td>{x.type}</td>
-                  <td>{s.tickets}</td>
-                  <td>{s.cargo}</td>
-                  <td>{s.visas}</td>
-                  {financial && (
-                    <>
-                      <td>{money(s.spendKES, "KES")}</td>
-                      <td>{money(s.spendUSD, "USD")}</td>
-                    </>
-                  )}
-                  <td>{dateLabel(s.last)}</td>
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        aria-label="View client"
-                        onClick={() => void openClient(x)}
+                    </a>
+                    {x.email ? (
+                      <>
+                        {" · "}
+                        <a
+                          className="linkish"
+                          href={`mailto:${x.email}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {x.email}
+                        </a>
+                      </>
+                    ) : (
+                      ""
+                    )}
+                  </>
+                }
+                cells={[
+                  {
+                    label: "Home office",
+                    value: <BranchName data={data} branch={x.homeOffice} />,
+                  },
+                  {
+                    label: "Type",
+                    value: (
+                      <StatusBadge
+                        tone={x.type === "Corporate" ? "violet" : "cyan"}
                       >
-                        <Icon name="eye" size={16} />
-                      </button>
-                      {canWrite && (
-                        <>
+                        {x.type}
+                      </StatusBadge>
+                    ),
+                  },
+                  { label: "Last activity", value: dateLabel(s.last) },
+                ]}
+                badges={
+                  <>
+                    <Badge tone="blue">
+                      {s.tickets} ticket{s.tickets === 1 ? "" : "s"}
+                    </Badge>
+                    <Badge tone="blue">
+                      {s.cargo} cargo
+                    </Badge>
+                    <Badge tone="neutral">
+                      {s.visas} visa{s.visas === 1 ? "" : "s"}
+                    </Badge>
+                  </>
+                }
+                details={[
+                  { label: "Phone", value: x.phone },
+                  {
+                    label: "Normalized phone",
+                    value: x.normalizedPhone || "—",
+                    hide: !x.normalizedPhone,
+                  },
+                  { label: "Email", value: x.email || "—", hide: !x.email },
+                  {
+                    label: "Home office",
+                    value: <BranchName data={data} branch={x.homeOffice} />,
+                  },
+                  {
+                    label: "Type",
+                    value: (
+                      <StatusBadge
+                        tone={x.type === "Corporate" ? "violet" : "cyan"}
+                      >
+                        {x.type}
+                      </StatusBadge>
+                    ),
+                  },
+                  { label: "Tickets", value: s.tickets },
+                  { label: "Cargo", value: s.cargo },
+                  { label: "Visas", value: s.visas },
+                  {
+                    label: "Spend KES",
+                    value: money(s.spendKES, "KES"),
+                    // Only show a currency the client has actually transacted in
+                    // (unless neither has activity, so at least one still shows).
+                    hide:
+                      !financial ||
+                      (s.spendKES === 0 && s.spendUSD !== 0),
+                  },
+                  {
+                    label: "Spend USD",
+                    value: money(s.spendUSD, "USD"),
+                    hide:
+                      !financial ||
+                      (s.spendUSD === 0 && s.spendKES !== 0),
+                  },
+                  { label: "Last activity", value: dateLabel(s.last) },
+                ]}
+                actions={
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="small-icon"
+                      onClick={() => void openClient(x)}
+                    >
+                      <Icon name="clock" size={16} /> Activity
+                    </button>
+                    {canWrite && (
+                      <>
+                        <button
+                          className="small-icon edit-action"
+                          aria-label="Edit"
+                          onClick={() => setEditing(x)}
+                        >
+                          <Icon name="edit" size={16} />
+                        </button>
+                        {canDelete && (
                           <button
-                            aria-label="Edit"
-                            onClick={() => setEditing(x)}
+                            className="small-icon delete-action"
+                            aria-label="Delete"
+                            onClick={() => setDeleting(x)}
                           >
-                            <Icon name="edit" size={16} />
+                            <Icon name="trash" size={16} />
                           </button>
-                          {canDelete && (
-                            <button
-                              aria-label="Delete"
-                              onClick={() => setDeleting(x)}
-                            >
-                              <Icon name="trash" size={16} />
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
+                        )}
+                      </>
+                    )}
+                  </div>
+                }
+              />
+            );
+          })}
+        </RecordList>
         </Panel>
       ) : (
         <Empty
@@ -11128,260 +11088,40 @@ function ClientForm({
 
 function Receipt({ data }: { data: AgencyData }) {
   const [ref, setRef] = useState("");
-  const ticket = data.tickets.find(
-    (x) => x.ref.toLowerCase() === ref.trim().toLowerCase(),
-  );
-  const visa = data.visas.find(
-    (x) => x.ref.toLowerCase() === ref.trim().toLowerCase(),
-  );
-  const cargo = data.cargo.find(
-    (x) => x.tracking.toLowerCase() === ref.trim().toLowerCase(),
-  );
-  const item = ticket
-    ? {
-        ref: ticket.ref,
-        date: ticket.saleDate,
-        client: ticket.passenger,
-        description: `Flight ${ticket.route}${ticket.airlinePnr ? ` · ${ticket.airlinePnr}` : ""}`,
-        amount: ticket.amount,
-        cost: ticket.cost,
-        profit: ticket.amount - ticket.cost,
-        currency: ticket.currency,
-        method: ticket.paymentMethod,
-        paymentStatus: ticket.paymentStatus || (ticket.paid ? "paid" : "unpaid"),
-        amountPaid: ticket.amountPaid || 0,
-        balance: ticket.balance ?? Math.max(0, ticket.amount - (ticket.amountPaid || 0)),
-        branch: ticket.office,
-        status: ticket.status || "booked",
-        served: ticket.servedBy,
-        notes: ticket.notes,
-      }
-    : visa
-      ? {
-          ref: visa.ref,
-          date: visa.appDate,
-          client: visa.applicant,
-          description: `${visa.visaType} visa · ${visa.destination}`,
-          amount: visa.amount,
-          cost: visa.cost,
-          profit: visa.amount - visa.cost,
-          currency: visa.currency,
-          method: visa.paymentMethod,
-          paymentStatus: visa.paymentStatus || (visa.paid ? "paid" : "unpaid"),
-          amountPaid: visa.amountPaid || 0,
-          balance: visa.balance ?? Math.max(0, visa.amount - (visa.amountPaid || 0)),
-          branch: visa.office,
-          status: visa.status,
-          served: visa.servedBy,
-          notes: visa.notes,
-        }
-      : cargo
-        ? {
-            ref: cargo.tracking,
-            date: cargo.dateIn,
-            client: cargo.sender,
-            description: `Cargo ${cargo.origin} → ${cargo.destination} · ${cargo.weight} kg @ ${money(cargo.rate, cargo.currency)} / kg`,
-            amount: cargo.customerCharge ?? cargo.weight * cargo.rate,
-            cost: cargo.cost,
-            profit:
-              (cargo.customerCharge ?? cargo.weight * cargo.rate) -
-              (cargo.cost || 0),
-            currency: cargo.currency,
-            method: cargo.paymentMethod,
-            paymentStatus: cargo.paymentStatus || (cargo.paid ? "paid" : "unpaid"),
-            amountPaid: cargo.amountPaid || 0,
-            balance:
-              cargo.balance ??
-              Math.max(
-                0,
-                (cargo.customerCharge ?? cargo.weight * cargo.rate) -
-                  (cargo.amountPaid || 0),
-              ),
-            branch: cargo.paidByOffice,
-            status: cargoStatusLabel(cargo.status),
-            served:
-              data.users.find((u) => u.id === cargo.createdBy)?.name ||
-              "Agency team",
-            notes: cargo.notes,
-          }
-        : null;
-  /**
-   * The receipt PDF is the receipt itself, not a transcription of it. The
-   * hand-rolled PDF writer used elsewhere can only place Helvetica text, so
-   * it produced a plain list with no logo, flag, colour or alignment. Printing
-   * the styled card instead means the saved PDF is exactly what is on screen.
-   * The document title becomes the suggested filename in the save dialog.
-   */
-  const download = () => {
-    if (!item) return;
-    const previousTitle = document.title;
-    document.title = `receipt-${item.ref}`;
-    const restore = () => {
-      document.title = previousTitle;
-      window.removeEventListener("afterprint", restore);
-    };
-    window.addEventListener("afterprint", restore);
-    window.print();
-    // Safari and some Android browsers never fire afterprint.
-    setTimeout(restore, 60000);
-  };
+  const query = ref.trim().toLowerCase();
+  const ticket = data.tickets.find((row) => row.ref.toLowerCase() === query);
+  const visa = data.visas.find((row) => row.ref.toLowerCase() === query);
+  const cargo = data.cargo.find((row) => row.tracking.toLowerCase() === query);
+  const item = ticket ? ticketReceiptData(ticket, data.agencyName)
+    : visa ? visaReceiptData(visa, data.agencyName)
+    : cargo ? cargoReceiptData(cargo, data.agencyName, data.users.find((u) => u.id === cargo.createdBy)?.name || "Agency team")
+    : null;
   const downloadTextCopy = () => {
     if (!item) return;
     downloadPdf(`receipt-${item.ref}.pdf`, data.agencyName, [
-      `OFFICIAL RECEIPT - ${item.ref}`,
-      "",
-      `Date: ${dateLabel(item.date)}`,
-      `Client: ${item.client}`,
-      `Service: ${item.description}`,
-      `Branch: ${item.branch}`,
-      `Sale price: ${money(item.amount, item.currency)}`,
-      ...(item.cost !== undefined
-        ? [`Agency cost: ${money(item.cost, item.currency)}`]
-        : []),
-      `Profit: ${money(item.profit, item.currency)}`,
-      `Payment status: ${item.paymentStatus}`,
-      `Payment method: ${item.method}`,
-      `Paid: ${money(item.amountPaid, item.currency)}`,
-      `Balance: ${money(item.balance, item.currency)}`,
-      `Service status: ${item.status}`,
-      ...(item.notes ? [`Notes: ${item.notes}`] : []),
-      "",
-      `Served by: ${item.served}`,
-      "Thank you for your business.",
+      `RECEIPT - ${item.ref}`, `Date: ${item.date}`, `Client: ${item.client}`,
+      ...item.details.map(([label, value]) => `${label}: ${value}`),
+      `Total amount: ${money(item.amount, item.currency)}`,
+      `Payment status: ${item.paymentStatus}`, `Payment method: ${item.method}`,
+      `Served by: ${item.served}`, "Thank you for choosing SomWay.",
     ]);
   };
-  return (
-    <>
-      <PageHeader
-        eyebrow="Client document"
-        title="Receipt Builder"
-        detail="Find any ticket, visa or cargo transaction, then print it or download a PDF receipt."
-      />
-      <div className="receipt-layout">
-        <section className="panel lookup-panel">
-          <h2>Find a transaction</h2>
-          <p>References are generated when records are created.</p>
-          <label className="lookup-input">
-            <Icon name="search" />
-            <input
-              autoFocus
-              value={ref}
-              onChange={(e) => setRef(e.target.value)}
-              placeholder="TKT-N-… / VIS-M-… / NBO-…"
-            />
-          </label>
-          {ref && !item && (
-            <p className="form-error">No matching record found.</p>
-          )}
-          <div className="lookup-help">
-            <strong>Accepted records</strong>
-            <span>Ticket booking reference</span>
-            <span>Visa application reference</span>
-            <span>Cargo tracking number</span>
-          </div>
-        </section>
-        <section className={`receipt-card ${item ? "ready" : "empty-receipt"}`}>
-          {item ? (
-            <>
-              <header>
-                <BrandLogo className="receipt-brand-logo" />
-                <div>
-                  <h2>{data.agencyName}</h2>
-                  <p>Nairobi · Mogadishu</p>
-                </div>
-                <Badge tone="success">Receipt</Badge>
-              </header>
-              <div className="receipt-ref">
-                <span>Receipt number</span>
-                <strong>{item.ref}</strong>
-              </div>
-              <dl>
-                <div>
-                  <dt>Date</dt>
-                  <dd>{dateLabel(item.date)}</dd>
-                </div>
-                <div>
-                  <dt>Client</dt>
-                  <dd>{item.client}</dd>
-                </div>
-                <div>
-                  <dt>Description</dt>
-                  <dd>{item.description}</dd>
-                </div>
-                <div>
-                  <dt>Branch</dt>
-                  <dd>
-                    <BranchName data={data} branch={item.branch} />
-                  </dd>
-                </div>
-                <div>
-                  <dt>Paid via</dt>
-                  <dd>{item.method}</dd>
-                </div>
-                <div>
-                  <dt>Payment status</dt>
-                  <dd>{item.paymentStatus}</dd>
-                </div>
-                <div>
-                  <dt>Service status</dt>
-                  <dd>{item.status}</dd>
-                </div>
-              </dl>
-              <div className="receipt-total">
-                <span>Sale price</span>
-                <strong>{money(item.amount, item.currency)}</strong>
-              </div>
-              <div className="receipt-finance-grid">
-                {item.cost !== undefined && (
-                  <div>
-                    <span>Agency cost</span>
-                    <strong>{money(item.cost, item.currency)}</strong>
-                  </div>
-                )}
-                <div>
-                  <span>Profit</span>
-                  <strong className={item.profit < 0 ? "negative" : "positive"}>
-                    {money(item.profit, item.currency)}
-                  </strong>
-                </div>
-                <div>
-                  <span>Paid</span>
-                  <strong>{money(item.amountPaid, item.currency)}</strong>
-                </div>
-                <div>
-                  <span>Balance</span>
-                  <strong>{money(item.balance, item.currency)}</strong>
-                </div>
-              </div>
-              {item.notes && <p className="receipt-notes">{item.notes}</p>}
-              <footer>
-                <p>Thank you for your business.</p>
-                <span>Served by {item.served}</span>
-              </footer>
-              <div className="receipt-actions print-hide">
-                <button
-                  className="button ghost"
-                  onClick={downloadTextCopy}
-                  title="Plain-text copy for systems that cannot open a styled PDF"
-                >
-                  <Icon name="file" /> Text copy
-                </button>
-                <button className="button primary" onClick={download}>
-                  <Icon name="receipt" /> Download PDF
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <Icon name="receipt" size={42} />
-              <h3>Your receipt will appear here</h3>
-              <p>Search for a valid transaction reference to generate it.</p>
-            </>
-          )}
-        </section>
-      </div>
-    </>
-  );
+  return <>
+    <PageHeader eyebrow="Client document" title="Receipt Builder" detail="Find a ticket, visa or cargo reference to preview and print its receipt." />
+    <div className="receipt-layout">
+      <section className="panel lookup-panel">
+        <h2>Find a transaction</h2>
+        <label className="lookup-input"><Icon name="search" /><input aria-label="Transaction reference" autoFocus value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Ticket, visa or cargo reference" /></label>
+        {ref && !item && <p className="form-error">No matching record found.</p>}
+        {item && <div className="receipt-actions print-hide">
+          <button className="button ghost" onClick={downloadTextCopy}><Icon name="file" /> Text copy</button>
+          <button className="button primary" onClick={() => generateReceipt(item)}><Icon name="receipt" /> Print / Save PDF</button>
+        </div>}
+      </section>
+      {item ? <iframe title={`${item.kind} receipt preview`} sandbox="" srcDoc={buildReceiptHtml(item)} style={{ width: "100%", height: 1180, border: 0, borderRadius: 16 }} />
+        : <section className="panel empty-receipt"><Icon name="receipt" size={42} /><h3>Your receipt will appear here</h3><p>Search for a valid transaction reference.</p></section>}
+    </div>
+  </>;
 }
 
 function Tracking({
@@ -11414,41 +11154,59 @@ function Tracking({
   };
   const download = () => {
     if (cargo)
-      downloadPdf(`cargo-status-${cargo.tracking}.pdf`, BRAND_NAME, [
-        "CARGO STATUS UPDATE",
-        "",
-        `Tracking number: ${cargo.tracking}`,
-        `Current status: ${cargo.status}`,
-        `Route: ${cargo.origin} to ${cargo.destination}`,
-        `Date received: ${dateLabel(cargo.dateIn)}`,
-        `Sender: ${cargo.sender}`,
-        `Receiver: ${cargo.receiver}`,
-        `Contents: ${cargo.contents}`,
-        `Weight: ${cargo.weight} kg`,
-        cargo.dateDelivered
-          ? `Date delivered: ${dateLabel(cargo.dateDelivered)}`
-          : "",
-        "",
-        `Generated: ${new Date().toLocaleString("en-GB")}`,
-        "WhatsApp: +252 61 563 3609",
-        "Email: Macruuftravelcargo@gmail.com",
-      ]);
+      generateStatusSheet({
+        kind: "cargo",
+        title: "Shipment status",
+        refLabel: "Tracking number",
+        reference: cargo.tracking,
+        status: cargoStatusLabel(cargo.status),
+        route: `${cargo.origin} → ${cargo.destination}`,
+        stages: ["In Transit", "Arrived", "Delivered"],
+        currentStage:
+          cargoStatusKey(cargo.status) === "delivered"
+            ? 2
+            : ["arrived", "ready_for_collection"].includes(
+                  String(cargoStatusKey(cargo.status)),
+                )
+              ? 1
+              : 0,
+        failed: ["claim", "cancelled"].includes(
+          String(cargoStatusKey(cargo.status)),
+        ),
+        details: [
+          ["Status", cargoStatusLabel(cargo.status)],
+          ["Received", dateLabel(cargo.dateIn)],
+          ["Sender", cargo.sender],
+          ["Receiver", cargo.receiver],
+          ["Contents", cargo.contents],
+          ["Weight", `${cargo.weight} kg`],
+          ["Delivered", dateLabel(cargo.dateDelivered)],
+        ],
+        logoUrl: "/Som-way2.png",
+      });
     if (visa)
-      downloadPdf(`visa-status-${visa.ref}.pdf`, BRAND_NAME, [
-        "VISA APPLICATION STATUS UPDATE",
-        "",
-        `Application reference: ${visa.ref}`,
-        `Current status: ${visa.status}`,
-        `Applicant: ${visa.applicant}`,
-        `Destination: ${visa.destination}`,
-        `Application type: ${visa.visaType || "Visa application"}`,
-        `Application date: ${dateLabel(visa.appDate)}`,
-        `Office: ${visa.office}`,
-        "",
-        `Generated: ${new Date().toLocaleString("en-GB")}`,
-        "WhatsApp: +252 61 563 3609",
-        "Email: Macruuftravelcargo@gmail.com",
-      ]);
+      generateStatusSheet({
+        kind: "visa",
+        title: "Visa status",
+        refLabel: "Application reference",
+        reference: visa.ref,
+        status: serviceStatusLabel(visa.status),
+        route: `${visa.destination} · ${visa.visaType || "Visa application"}`,
+        stages: ["Submitted", "Approved", "Delivered"],
+        currentStage: ["submitted", "approved", "delivered"].indexOf(
+          String(visa.status),
+        ),
+        failed: String(visa.status) === "refused",
+        details: [
+          ["Status", serviceStatusLabel(visa.status)],
+          ["Application date", dateLabel(visa.appDate)],
+          ["Applicant", visa.applicant],
+          ["Destination", visa.destination],
+          ["Application type", visa.visaType || "Visa application"],
+          ["Office", String(visa.office)],
+        ],
+        logoUrl: "/Som-way2.png",
+      });
   };
   const email = async () => {
     if (!item) return;
@@ -11503,8 +11261,8 @@ function Tracking({
           />
         </div>
         {item ? (
-          <div className="tracking-result">
-            <header>
+          <div className="tracking-result tracking-pro">
+            <header className="tracking-pro-head">
               <div>
                 <p className="eyebrow">
                   {kind === "cargo"
@@ -11512,102 +11270,182 @@ function Tracking({
                     : "Application reference"}
                 </p>
                 <h2>{cargo?.tracking || visa?.ref}</h2>
-                <span>
-                  {cargo
-                    ? `${cargo.origin} → ${cargo.destination}`
-                    : `${visa?.destination} · ${visa?.visaType || "Visa application"}`}
+                <span className="tracking-pro-route">
+                  {cargo ? (
+                    <>
+                      <Icon name="plane" size={15} /> {cargo.origin}
+                      <em>→</em>
+                      <Icon name="building" size={15} /> {cargo.destination}
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="globe" size={15} /> {visa?.destination}
+                      <em>·</em>
+                      {visa?.visaType || "Visa application"}
+                    </>
+                  )}
                 </span>
               </div>
               <Badge
                 tone={
-                  cargo?.status === "Delivered" ||
-                  visa?.status === "delivered" ||
-                  visa?.status === "approved"
-                    ? "success"
-                    : cargo?.status === "Claim" || visa?.status === "refused"
-                      ? "danger"
-                      : cargo?.status === "Arrived"
-                        ? "warning"
+                  cargo
+                    ? cargoStatusTone(cargo.status)
+                    : visa?.status === "delivered" ||
+                        visa?.status === "approved"
+                      ? "success"
+                      : visa?.status === "refused"
+                        ? "danger"
                         : "blue"
                 }
               >
-                {cargo?.status || serviceStatusLabel(visa?.status || "")}
+                {cargo
+                  ? cargoStatusLabel(cargo.status)
+                  : serviceStatusLabel(visa?.status || "")}
               </Badge>
             </header>
             {cargo && (
               <>
-                <div className="status-track">
-                  {["In Transit", "Arrived", "Delivered"].map(
-                    (stage, index) => {
-                      const active =
-                        cargo.status !== "Claim" &&
-                        index <=
-                          ["In Transit", "Arrived", "Delivered"].indexOf(
-                            cargo.status,
-                          );
-                      return (
-                        <div key={stage} className={active ? "active" : ""}>
-                          <i>{active ? "✓" : index + 1}</i>
-                          <span>{stage}</span>
-                        </div>
-                      );
-                    },
-                  )}
+                <div className="status-track status-track-pro">
+                  {(
+                    [
+                      { stage: "In Transit", icon: "plane" },
+                      { stage: "Arrived", icon: "building" },
+                      { stage: "Delivered", icon: "check" },
+                    ] as const
+                  ).map(({ stage, icon }, index) => {
+                    const key = cargoStatusKey(cargo.status);
+                    const failed = key === "claim" || key === "cancelled";
+                    // Map every cargo status onto the 3-stage customer timeline:
+                    // received/in_transit -> 0, arrived/ready_for_collection -> 1,
+                    // delivered -> 2. Falls back to In Transit for anything else.
+                    const current =
+                      key === "delivered"
+                        ? 2
+                        : key === "arrived" || key === "ready_for_collection"
+                          ? 1
+                          : 0;
+                    const active = !failed && index <= current;
+                    const done = !failed && index < current;
+                    return (
+                      <div
+                        key={stage}
+                        className={`${active ? "active" : ""} ${
+                          done ? "done" : ""
+                        }`.trim()}
+                      >
+                        <i>
+                          {done ? (
+                            <Icon name="check" size={18} />
+                          ) : (
+                            <Icon name={icon} size={18} />
+                          )}
+                        </i>
+                        <span>{stage}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-                {cargo.status === "Claim" && (
+                {cargoStatusKey(cargo.status) === "claim" && (
                   <div className="claim-alert">
                     <strong>Claim opened</strong>
                     <span>Please contact the agency office for an update.</span>
                   </div>
                 )}
-                <div className="tracking-details">
+                <div className="tracking-details tracking-details-pro">
                   <div>
-                    <span>Received</span>
-                    <strong>{dateLabel(cargo.dateIn)}</strong>
+                    <span className="td-chip">
+                      <Icon name="calendar" size={18} />
+                    </span>
+                    <div>
+                      <small>Received</small>
+                      <strong>{dateLabel(cargo.dateIn)}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Sender</span>
-                    <strong>{cargo.sender}</strong>
+                    <span className="td-chip">
+                      <Icon name="user" size={18} />
+                    </span>
+                    <div>
+                      <small>Sender</small>
+                      <strong>{cargo.sender}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Receiver</span>
-                    <strong>{cargo.receiver}</strong>
+                    <span className="td-chip">
+                      <Icon name="users" size={18} />
+                    </span>
+                    <div>
+                      <small>Receiver</small>
+                      <strong>{cargo.receiver}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Contents</span>
-                    <strong>{cargo.contents}</strong>
+                    <span className="td-chip">
+                      <Icon name="box" size={18} />
+                    </span>
+                    <div>
+                      <small>Contents</small>
+                      <strong>{cargo.contents}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Weight</span>
-                    <strong>{cargo.weight} kg</strong>
+                    <span className="td-chip">
+                      <Icon name="briefcase" size={18} />
+                    </span>
+                    <div>
+                      <small>Weight</small>
+                      <strong>{cargo.weight} kg</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Delivered</span>
-                    <strong>{dateLabel(cargo.dateDelivered)}</strong>
+                    <span className="td-chip">
+                      <Icon name="check" size={18} />
+                    </span>
+                    <div>
+                      <small>Delivered</small>
+                      <strong>{dateLabel(cargo.dateDelivered)}</strong>
+                    </div>
                   </div>
                 </div>
               </>
             )}
             {visa && (
               <>
-                <div className="status-track visa-status-track">
-                  {(["submitted", "approved", "delivered"] as const).map(
-                    (stage, index) => {
-                      const active =
-                        visa.status !== "refused" &&
-                        index <=
-                          ["submitted", "approved", "delivered"].indexOf(
-                            visa.status as
-                              "submitted" | "approved" | "delivered",
-                          );
-                      return (
-                        <div key={stage} className={active ? "active" : ""}>
-                          <i>{active ? "✓" : index + 1}</i>
-                          <span>{serviceStatusLabel(stage)}</span>
-                        </div>
-                      );
-                    },
-                  )}
+                <div className="status-track status-track-pro visa-status-track">
+                  {(
+                    [
+                      { stage: "submitted", icon: "file" },
+                      { stage: "approved", icon: "check" },
+                      { stage: "delivered", icon: "passport" },
+                    ] as const
+                  ).map(({ stage, icon }, index) => {
+                    const current = [
+                      "submitted",
+                      "approved",
+                      "delivered",
+                    ].indexOf(
+                      visa.status as "submitted" | "approved" | "delivered",
+                    );
+                    const active = visa.status !== "refused" && index <= current;
+                    const done = visa.status !== "refused" && index < current;
+                    return (
+                      <div
+                        key={stage}
+                        className={`${active ? "active" : ""} ${
+                          done ? "done" : ""
+                        }`.trim()}
+                      >
+                        <i>
+                          {done ? (
+                            <Icon name="check" size={18} />
+                          ) : (
+                            <Icon name={icon} size={18} />
+                          )}
+                        </i>
+                        <span>{serviceStatusLabel(stage)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
                 {visa.status === "refused" && (
                   <div className="claim-alert">
@@ -11618,32 +11456,62 @@ function Tracking({
                     </span>
                   </div>
                 )}
-                <div className="tracking-details">
+                <div className="tracking-details tracking-details-pro">
                   <div>
-                    <span>Application date</span>
-                    <strong>{dateLabel(visa.appDate)}</strong>
+                    <span className="td-chip">
+                      <Icon name="calendar" size={18} />
+                    </span>
+                    <div>
+                      <small>Application date</small>
+                      <strong>{dateLabel(visa.appDate)}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Applicant</span>
-                    <strong>{visa.applicant}</strong>
+                    <span className="td-chip">
+                      <Icon name="user" size={18} />
+                    </span>
+                    <div>
+                      <small>Applicant</small>
+                      <strong>{visa.applicant}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Destination</span>
-                    <strong>{visa.destination}</strong>
+                    <span className="td-chip">
+                      <Icon name="globe" size={18} />
+                    </span>
+                    <div>
+                      <small>Destination</small>
+                      <strong>{visa.destination}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Application type</span>
-                    <strong>{visa.visaType || "Visa application"}</strong>
+                    <span className="td-chip">
+                      <Icon name="passport" size={18} />
+                    </span>
+                    <div>
+                      <small>Application type</small>
+                      <strong>{visa.visaType || "Visa application"}</strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Office</span>
-                    <strong>
-                      <BranchName data={data} branch={visa.office} />
-                    </strong>
+                    <span className="td-chip">
+                      <Icon name="building" size={18} />
+                    </span>
+                    <div>
+                      <small>Office</small>
+                      <strong>
+                        <BranchName data={data} branch={visa.office} />
+                      </strong>
+                    </div>
                   </div>
                   <div>
-                    <span>Email</span>
-                    <strong>{visa.email || "Not recorded"}</strong>
+                    <span className="td-chip">
+                      <Icon name="mail" size={18} />
+                    </span>
+                    <div>
+                      <small>Email</small>
+                      <strong>{visa.email || "Not recorded"}</strong>
+                    </div>
                   </div>
                 </div>
               </>
@@ -12126,10 +11994,13 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
   );
   const [to, setTo] = useState(today());
   const [branchId, setBranchId] = useState("");
-  // Follow the global branch scope chosen in the top bar.
-  useBranchScope(scopeBranchId, (id) => setBranchId(id));
   const [currency, setCurrency] = useState<"" | Currency>("");
   const [trendCurrency, setTrendCurrency] = useState<"" | Currency>("");
+  // Follow the global branch scope chosen in the top bar.
+  useBranchScope(scopeBranchId, (id) => {
+    setBranchId(id);
+    setCurrency("");
+  });
   const [report, setReport] = useState<FinanceReport | null>(null);
   const [loading, setLoading] = useState(true);
   const branches = activeBranches(data);
@@ -12137,6 +12008,9 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
 
   useEffect(() => {
     let active = true;
+    queueMicrotask(() => {
+      if (active) { setLoading(true); setReport(null); }
+    });
     void fetch(
       `/api/reports/finance?branchId=${encodeURIComponent(branchId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
       { cache: "no-store" },
@@ -12154,7 +12028,7 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
     return () => {
       active = false;
     };
-  }, [branchId, from, to]);
+  }, [branchId, from, to, data]);
 
   const availableCurrencies = (
     selectedBranch
@@ -12228,6 +12102,62 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
       };
     });
 
+  // Group the per-branch/currency service rows into one block per branch, each
+  // carrying that branch's currency sub-groups. Each sub-group aggregates its
+  // services into branch-level KPI figures (charges, payments, cost, profit)
+  // and keeps the per-service breakdown for the service KPI cards.
+  const branchReportGroups = Array.from(
+    serviceGroups
+      .reduce(
+        (map, group) => {
+          const totals = group.services.reduce(
+            (summary, service) => ({
+              customerCharges: summary.customerCharges + service.customerCharges,
+              paymentsReceived:
+                summary.paymentsReceived + service.paymentsReceived,
+              directCost: summary.directCost + service.directCost,
+              profit: summary.profit + service.profit,
+            }),
+            { customerCharges: 0, paymentsReceived: 0, directCost: 0, profit: 0 },
+          );
+          const existing = map.get(group.branchId) || {
+            branchId: group.branchId,
+            branch: group.branch,
+            currencies: [] as Array<{
+              currency: Currency;
+              totals: typeof totals;
+              services: typeof group.services;
+            }>,
+          };
+          existing.currencies.push({
+            currency: group.currency as Currency,
+            totals,
+            services: group.services,
+          });
+          map.set(group.branchId, existing);
+          return map;
+        },
+        new Map<
+          string,
+          {
+            branchId: string;
+            branch: string;
+            currencies: Array<{
+              currency: Currency;
+              totals: {
+                customerCharges: number;
+                paymentsReceived: number;
+                directCost: number;
+                profit: number;
+              };
+              services: (typeof serviceGroups)[number]["services"];
+            }>;
+          }
+        >(),
+      )
+      .values(),
+  );
+
   const trendCurrencies = selectedBranch
     ? branchCurrencies(selectedBranch)
     : availableCurrencies;
@@ -12292,36 +12222,9 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
       <PageHeader
         eyebrow="Protected financial view"
         title="Financial Reports"
-        detail={`${titleScope} / ${currency || "all currencies separately"} / ${dateLabel(from)} to ${dateLabel(to)}`}
+        detail={`${titleScope} / each currency shown separately / ${dateLabel(from)} to ${dateLabel(to)}`}
         actions={
           <div className="report-actions">
-            <select
-              value={branchId}
-              onChange={(event) => {
-                setBranchId(event.target.value);
-                setCurrency("");
-              }}
-              aria-label="Report branch"
-            >
-              <option value="">All Branches</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={currency}
-              onChange={(event) =>
-                setCurrency(event.target.value as "" | Currency)
-              }
-              aria-label="Report currency"
-            >
-              <option value="">All Currencies</option>
-              {availableCurrencies.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
             <div className="date-range">
               <input
                 type="date"
@@ -12347,129 +12250,135 @@ function Reports({ data, user, scopeBranchId }: { data: AgencyData; user: User; 
           </div>
         }
       />
-      {performanceSummary.map((summary) => (
-        <section key={`summary-${summary.currency}`} className="report-summary-block">
+      {selectedBranch && performanceSummary.length > 0 && (
+        <section className="report-summary-block">
           <p className="eyebrow">
-            Service performance summary{performanceSummary.length > 1 ? ` · ${summary.currency}` : ""}
+            {titleScope} · financial performance
           </p>
-          <div className="metrics-grid six">
-            <MetricCard icon="receipt" tone="blue" label="Customer Charges" value={money(summary.customerCharges, summary.currency)} foot="Billed to customers" />
-            <MetricCard icon="money" tone="green" label="Payments Received" value={money(summary.paymentsReceived, summary.currency)} foot="Collected in period" />
-            <MetricCard icon="expense" tone="orange" label="Direct Cost" value={money(summary.directCost, summary.currency)} foot="Cost of service" />
-            <MetricCard icon="report" tone="violet" label="Profit" value={money(summary.profit, summary.currency)} foot="Charges less cost" />
-            <MetricCard icon="logout" tone="pink" label="Refunds" value={money(summary.refunds, summary.currency)} foot="Returned to customers" />
-            <MetricCard icon="wallet" tone="cyan" label="Net Revenue" value={money(summary.netReceived, summary.currency)} foot="Received less refunds" />
-          </div>
+          {performanceSummary.map((summary) => (
+            <div key={`summary-${summary.currency}`}>
+              {performanceSummary.length > 1 && (
+                <p className="branch-report-subhead">{summary.currency}</p>
+              )}
+              <div className="metrics-grid six">
+                <MetricCard icon="receipt" tone="blue" label="Customer Charges" value={money(summary.customerCharges, summary.currency)} foot="Billed to customers" />
+                <MetricCard icon="money" tone="green" label="Payments Received" value={money(summary.paymentsReceived, summary.currency)} foot="Collected in period" />
+                <MetricCard icon="expense" tone="orange" label="Direct Cost" value={money(summary.directCost, summary.currency)} foot="Cost of service" />
+                <MetricCard icon="report" tone="violet" label="Profit" value={money(summary.profit, summary.currency)} foot="Charges less cost" />
+                <MetricCard icon="logout" tone="pink" label="Refunds" value={money(summary.refunds, summary.currency)} foot="Returned to customers" />
+                <MetricCard icon="wallet" tone="cyan" label="Net Revenue" value={money(summary.netReceived, summary.currency)} foot="Received less refunds" />
+              </div>
+            </div>
+          ))}
         </section>
-      ))}
+      )}
 
       <section className="service-performance-section">
         <header className="service-performance-header">
-          <p className="eyebrow">Service performance</p>
-          <h2>Charges, payments and profit by service</h2>
+          <p className="eyebrow">
+            {selectedBranch ? "Service performance" : "Branch & service performance"}
+          </p>
+          <h2>
+            {selectedBranch
+              ? `${titleScope} — charges, payments and profit by service`
+              : "Each branch, then its services, by charges, payments and profit"}
+          </h2>
         </header>
-        {serviceGroups.length ? (
-          <div className="service-performance-groups">
-            {serviceGroups.map((group) => {
-              const groupTotals = group.services.reduce(
-                (summary, service) => ({
-                  customerCharges:
-                    summary.customerCharges + service.customerCharges,
-                  paymentsReceived:
-                    summary.paymentsReceived + service.paymentsReceived,
-                  directCost: summary.directCost + service.directCost,
-                  profit: summary.profit + service.profit,
-                }),
-                {
-                  customerCharges: 0,
-                  paymentsReceived: 0,
-                  directCost: 0,
-                  profit: 0,
-                },
-              );
-              return (
-                <article
-                  className="service-performance-group"
-                  key={`${group.branchId}-${group.currency}`}
-                >
-                  <div className="service-group-heading">
-                    <h3>
-                      <BranchName data={data} branch={group.branch} />
-                    </h3>
-                    <Badge
-                      tone={group.currency === "USD" ? "blue" : "success"}
-                    >
-                      {group.currency}
-                    </Badge>
-                  </div>
-                  <div className="service-group-summary">
-                    {(
-                      [
-                        ["Customer Charges", "customerCharges"],
-                        ["Payments Received", "paymentsReceived"],
-                        ["Direct Cost", "directCost"],
-                        ["Profit", "profit"],
-                      ] as const
-                    ).map(([label, metric]) => (
-                      <div key={metric}>
-                        <span className={`metric-icon tone-${metricLook(metric).tone}`}>
-                          <Icon name={metricLook(metric).icon} size={17} />
-                        </span>
-                        <span className="service-metric-label">{label}</span>
-                        <strong
-                          className={
-                            metric === "profit" && groupTotals[metric] < 0
-                              ? "negative"
-                              : ""
-                          }
-                        >
-                          {money(groupTotals[metric], group.currency)}
-                        </strong>
-                      </div>
+        {branchReportGroups.length ? (
+          <div className="branch-report-blocks">
+            {branchReportGroups.map((branch) => (
+              <article
+                className="branch-report-block"
+                key={branch.branchId || branch.branch}
+              >
+                <div className="branch-report-head">
+                  <h3>
+                    <BranchName data={data} branch={branch.branch} />
+                  </h3>
+                  <div className="record-badges">
+                    {branch.currencies.map((sub) => (
+                      <Badge
+                        key={sub.currency}
+                        tone={sub.currency === "USD" ? "blue" : "success"}
+                      >
+                        {sub.currency}
+                      </Badge>
                     ))}
                   </div>
-                  <TableShell>
-                    <thead>
-                      <tr>
-                        <th>Service</th>
-                        <th>Transactions</th>
-                        <th>Customer Charges</th>
-                        <th>Payments Received</th>
-                        <th>Direct Cost</th>
-                        <th>Profit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.services.map((service) => (
-                        <tr key={service.service}>
-                          <td>
-                            <strong>
-                              {service.service[0].toUpperCase() +
-                                service.service.slice(1)}
-                            </strong>
-                          </td>
-                          <td>{service.transactions}</td>
-                          <td>
-                            {money(service.customerCharges, group.currency)}
-                          </td>
-                          <td>
-                            {money(service.paymentsReceived, group.currency)}
-                          </td>
-                          <td>{money(service.directCost, group.currency)}</td>
-                          <td
-                            className={
-                              service.profit < 0 ? "negative" : "positive"
-                            }
-                          >
-                            {money(service.profit, group.currency)}
-                          </td>
-                        </tr>
+                </div>
+
+                {branch.currencies.map((sub) => (
+                  <div key={`${branch.branchId}-${sub.currency}`}>
+                    <p className="branch-report-subhead">
+                      Branch performance
+                      {branch.currencies.length > 1 ? ` · ${sub.currency}` : ""}
+                    </p>
+                    <div className="metrics-grid">
+                      <MetricCard
+                        icon="receipt"
+                        tone="blue"
+                        label="Customer Charges"
+                        value={money(sub.totals.customerCharges, sub.currency)}
+                        foot="Billed to customers"
+                      />
+                      <MetricCard
+                        icon="money"
+                        tone="green"
+                        label="Payments Received"
+                        value={money(sub.totals.paymentsReceived, sub.currency)}
+                        foot="Collected in period"
+                      />
+                      <MetricCard
+                        icon="expense"
+                        tone="orange"
+                        label="Direct Cost"
+                        value={money(sub.totals.directCost, sub.currency)}
+                        foot="Cost of service"
+                      />
+                      <MetricCard
+                        icon="report"
+                        tone="violet"
+                        label="Profit"
+                        value={money(sub.totals.profit, sub.currency)}
+                        foot="Charges less cost"
+                      />
+                    </div>
+
+                    <p className="branch-report-subhead">
+                      Service performance
+                      {branch.currencies.length > 1 ? ` · ${sub.currency}` : ""}
+                    </p>
+                    <div className="metrics-grid">
+                      {sub.services.map((service) => (
+                        <MetricCard
+                          key={service.service}
+                          icon={
+                            service.service === "cargo"
+                              ? "box"
+                              : service.service === "visa"
+                                ? "passport"
+                                : "ticket"
+                          }
+                          tone={
+                            service.service === "cargo"
+                              ? "cyan"
+                              : service.service === "visa"
+                                ? "violet"
+                                : "blue"
+                          }
+                          label={
+                            service.service[0].toUpperCase() +
+                            service.service.slice(1)
+                          }
+                          value={money(service.profit, sub.currency)}
+                          foot={`${service.transactions} txns · ${money(service.paymentsReceived, sub.currency)} received`}
+                        />
                       ))}
-                    </tbody>
-                  </TableShell>
-                </article>
-              );
-            })}
+                    </div>
+                  </div>
+                ))}
+              </article>
+            ))}
           </div>
         ) : (
           <Empty
@@ -12635,19 +12544,70 @@ function Team({ data, user, notify }: ModuleProps) {
         loginUrl: result.user.loginUrl,
       });
   };
+  const remove = async (member: User) => {
+    if (
+      !window.confirm(
+        `Permanently delete ${member.name} (${member.username})? This removes the account and signs it out of every device. This cannot be undone.`,
+      )
+    )
+      return;
+    setBusy(member.id);
+    const response = await fetch(
+      `/api/admin/users/${encodeURIComponent(member.id)}`,
+      { method: "DELETE" },
+    );
+    const result = await response.json();
+    setBusy("");
+    if (!response.ok)
+      return notify(result.error || "Account could not be deleted");
+    setMembers((current) => current.filter((item) => item.id !== member.id));
+    notify(`${member.name} deleted`);
+  };
   const copy = async (value: string, label: string) => {
-    await navigator.clipboard.writeText(value);
-    notify(`${label} copied`);
+    // navigator.clipboard only exists in a secure context (HTTPS or localhost).
+    // The app is also served over plain HTTP (e.g. http://169.58.173.197:8080),
+    // where navigator.clipboard is undefined and copying silently failed. Try
+    // the async Clipboard API first, then fall back to a hidden textarea +
+    // document.execCommand("copy"), which works over HTTP too.
+    let ok = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+        ok = true;
+      }
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      try {
+        const area = document.createElement("textarea");
+        area.value = value;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.top = "0";
+        area.style.left = "0";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        area.setSelectionRange(0, value.length);
+        ok = document.execCommand("copy");
+        document.body.removeChild(area);
+      } catch {
+        ok = false;
+      }
+    }
+    notify(ok ? `${label} copied` : `Could not copy ${label} — copy it manually`);
   };
   return (
     <>
       <PageHeader
         eyebrow="Owner administration"
         title="Team & Role Access"
-        detail="Generate staff usernames, temporary passwords and dedicated access links. Accounts work across browsers."
+        detail="Create Owner and Operator user accounts with an email login, temporary passwords and dedicated access links. Accounts work across browsers."
         actions={
           <button className="button primary" onClick={() => setAdding(true)}>
-            <Icon name="plus" /> New Staff
+            <Icon name="plus" /> New User
           </button>
         }
       />
@@ -12670,11 +12630,19 @@ function Team({ data, user, notify }: ModuleProps) {
         {members.map((x) => (
           <article key={x.id}>
             <div className="user-avatar large">
-              {x.name
-                .split(" ")
-                .map((n) => n[0])
-                .slice(0, 2)
-                .join("")}
+              {x.avatarUrl ? (
+                <img
+                  className="user-avatar-photo"
+                  src={x.avatarUrl}
+                  alt=""
+                />
+              ) : (
+                x.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join("")
+              )}
             </div>
             <div>
               <strong>
@@ -12716,6 +12684,13 @@ function Team({ data, user, notify }: ModuleProps) {
                     Copy link
                   </button>
                 )}
+                <button
+                  className="delete-action"
+                  disabled={busy === x.id}
+                  onClick={() => void remove(x)}
+                >
+                  Delete
+                </button>
               </div>
             )}
           </article>
@@ -12761,10 +12736,10 @@ function Team({ data, user, notify }: ModuleProps) {
               <strong>{credentials.name}</strong>
             </p>
             <p>
-              <span>Username</span>
+              <span>Email</span>
               <strong>{credentials.username}</strong>
               <button
-                onClick={() => void copy(credentials.username, "Username")}
+                onClick={() => void copy(credentials.username, "Email")}
               >
                 Copy
               </button>
@@ -12827,8 +12802,8 @@ function UserForm({
   });
   return (
     <Modal
-      title="Create Staff"
-      subtitle="Leave username and password blank to generate both automatically."
+      title="Create User"
+      subtitle="Create an Owner or Operator account. Set a password of at least 10 characters with letters, numbers and a symbol."
       onClose={onClose}
     >
       <form
@@ -12868,18 +12843,22 @@ function UserForm({
               />
             </Field>
           )}
-          <Field label="Username (optional)">
+          <Field label="Email">
             <input
+              type="email"
+              required
               value={f.username}
               onChange={(e) => setF({ ...f, username: e.target.value })}
-              placeholder="Generated from the name"
+              placeholder="name@somway.com"
             />
           </Field>
-          <Field label="Password (optional)">
+          <Field label="Password" hint="At least 10 characters with letters, numbers and a symbol.">
             <PasswordInput
               value={f.password}
               onChange={(e) => setF({ ...f, password: e.target.value })}
-              placeholder="Secure password generated"
+              required
+              minLength={10}
+              placeholder="Set a secure password"
             />
           </Field>
         </div>
@@ -12889,11 +12868,14 @@ function UserForm({
           </button>
           <button
             disabled={
-              !f.name.trim() || (f.role === "operator" && !f.assignedBranchId)
+              !f.name.trim() ||
+              !f.username.trim() ||
+              f.password.trim().length < 10 ||
+              (f.role === "operator" && !f.assignedBranchId)
             }
             className="button primary"
           >
-            Create Staff
+            Create User
           </button>
         </div>
       </form>
@@ -13138,7 +13120,15 @@ function BranchManager({
               {branch.isActive && (
                 <button
                   className="delete-action"
-                  onClick={() => void deactivate(branch)}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Deactivate ${branch.name}? It will be hidden from new tickets, cargo, visas and reports until reactivated.`,
+                      )
+                    )
+                      return;
+                    void deactivate(branch);
+                  }}
                 >
                   Deactivate
                 </button>
@@ -13333,6 +13323,159 @@ function BackupPanel({
   );
 }
 
+function OperatorAccessPanel({ owner }: { owner: boolean }) {
+  const [access, setAccess] = useState({ route: "", url: "" });
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/operator-access", { cache: "no-store" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Could not load operator URL.");
+        if (active) { setAccess(payload); setDraft(current => current || payload.url); }
+      } catch (e) { if (active) setError(e instanceof Error ? e.message : "Could not load operator URL."); }
+    };
+    void load();
+    window.addEventListener("focus", load);
+    return () => { active = false; window.removeEventListener("focus", load); };
+  }, []);
+  const save = async (regenerate: boolean) => {
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await fetch("/api/operator-access", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(regenerate ? { regenerate: true } : { address: draft }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Could not update operator route.");
+      setAccess(payload); setDraft(payload.url); setMessage("Operator URL updated. Share the new URL with your operators.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not update operator route."); }
+    finally { setBusy(false); }
+  };
+  const copy = async () => {
+    setError(""); setMessage("");
+    try {
+      // Re-read before copying so another Owner tab cannot leave a stale link.
+      const response = await fetch("/api/operator-access", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Could not load operator URL.");
+      setAccess(payload);
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(payload.url);
+      else {
+        const area = document.createElement("textarea");
+        area.value = payload.url; area.style.position = "fixed"; area.style.opacity = "0";
+        document.body.appendChild(area);
+        try { area.select(); if (!document.execCommand("copy")) throw new Error("Select and copy the URL manually."); }
+        finally { area.remove(); }
+      }
+      setMessage("Operator URL copied.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Select and copy the URL manually."); }
+  };
+  return <article className="panel">
+    <div className="panel-head"><h2>Operator login URL</h2></div>
+    <p>{owner ? "Use a domain or a full URL. A domain without a path opens operator login on the homepage. Owner login stays at /admin." : "Your current login URL. Only the Owner can change this address."}</p>
+    <Field label="Active operator URL"><input readOnly value={access.url} /></Field>
+    <div className="button-row"><button className="button secondary" disabled={!access.url || busy} onClick={() => void copy()}>Copy operator URL</button></div>
+    {owner && <>
+      <p>The domain must already point to this server. Saving here does not register or connect a domain.</p>
+      <Field label="New login address"><input value={draft} maxLength={2048} placeholder="staff.example.com or https://example.com/staff" onChange={e => setDraft(e.target.value)} /></Field>
+      <div className="button-row">
+        <button className="button primary" disabled={busy || !access.url || draft === access.url} onClick={() => void save(false)}>Save login URL</button>
+        <button className="button secondary" disabled={busy || !access.url} onClick={() => void save(true)}>Generate new path</button>
+      </div>
+    </>}
+    {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
+    {message && <p role="status">{message}</p>}
+  </article>;
+}
+
+function LoginLinkPanel({ notify }: { notify: (message: string) => void }) {
+  const [value, setValue] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const response = await fetch("/api/admin/settings", {
+        cache: "no-store",
+      });
+      const payload = await response.json();
+      if (active && response.ok && payload.settings) {
+        setValue(payload.settings.publicBaseUrl || "");
+        setLoaded(true);
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+  const save = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publicBaseUrl: value.trim() }),
+      });
+      const payload = await response.json();
+      if (!response.ok)
+        throw new Error(payload.error || "Login link base could not be saved");
+      notify(
+        value.trim()
+          ? "Login link address updated"
+          : "Login link address cleared — links now follow the site address",
+      );
+    } catch (caught) {
+      notify(
+        caught instanceof Error
+          ? caught.message
+          : "Login link base could not be saved",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <article className="panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Staff access</p>
+          <h2>Login link address</h2>
+        </div>
+      </div>
+      <div className="form-grid compact-form">
+        <Field
+          label="Public site address"
+          wide
+          hint="The address staff use to open the site, including the port if any (e.g. http://169.58.173.197:8080). Staff login links are built from this. Leave blank to follow the address the site is opened from."
+        >
+          <input
+            type="url"
+            inputMode="url"
+            placeholder="http://169.58.173.197:8080"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
+        </Field>
+      </div>
+      <div className="button-row">
+        <button
+          className="button primary"
+          disabled={busy || !loaded}
+          onClick={() => void save()}
+        >
+          Save login link address
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function BusinessHoursPanel({ notify }: { notify: (message: string) => void }) {
   const [form, setForm] = useState({
     timezone: "Africa/Mogadishu",
@@ -13433,7 +13576,7 @@ function BusinessHoursPanel({ notify }: { notify: (message: string) => void }) {
   );
 }
 
-function Settings({ data, save, notify, replaceData }: ModuleProps) {
+function Settings({ data, user, save, notify, replaceData }: ModuleProps) {
   const [agency, setAgency] = useState(data.agencyName);
   const settingsBranches = activeBranches(data);
   const initialSettingsBranch = settingsBranches[0];
@@ -13457,6 +13600,7 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
     currency: initialSettingsCurrency,
     amount: "",
   });
+  if (user.role !== "owner") return <><PageHeader eyebrow="Operator workspace" title="Settings" detail="Your operator access URL." /><OperatorAccessPanel owner={false} /></>;
   return (
     <>
       <PageHeader
@@ -13505,6 +13649,7 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
           </div>
         </article>
         <OwnerSecurity notify={notify} />
+        <OperatorAccessPanel owner />
         <BusinessHoursPanel notify={notify} />
         <BranchManager data={data} notify={notify} />
         <BackupPanel notify={notify} replaceData={replaceData} />
@@ -13629,12 +13774,27 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
                 <span>{x.currency}</span>
                 <b>{money(x.rate, x.currency)} / kg</b>
                 <button
-                  onClick={() =>
-                    save((d) => ({
-                      ...d,
-                      rates: d.rates.filter((y) => y.id !== x.id),
-                    }))
-                  }
+                  aria-label="Remove cargo rate"
+                  title="Remove cargo rate"
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Remove the ${x.origin} → ${x.destination} ${x.currency} cargo rate of ${money(x.rate, x.currency)}/kg? This cannot be undone.`,
+                      )
+                    )
+                      return;
+                    save(
+                      (d) => ({
+                        ...d,
+                        rates: d.rates.filter((y) => y.id !== x.id),
+                      }),
+                      {
+                        entity: "Settings",
+                        detail: `Removed ${x.origin} to ${x.destination} ${x.currency} cargo rate`,
+                      },
+                    );
+                    notify("Cargo rate removed");
+                  }}
                 >
                   ×
                 </button>
@@ -13752,14 +13912,29 @@ function Settings({ data, save, notify, replaceData }: ModuleProps) {
                 <span>{x.currency}</span>
                 <b>{money(x.amount, x.currency)}</b>
                 <button
-                  onClick={() =>
-                    save((d) => ({
-                      ...d,
-                      startingBalances: d.startingBalances.filter(
-                        (y) => y.id !== x.id,
-                      ),
-                    }))
-                  }
+                  aria-label="Remove starting balance"
+                  title="Remove starting balance"
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Remove the ${x.office} ${x.method} ${x.currency} starting balance of ${money(x.amount, x.currency)}? This cannot be undone.`,
+                      )
+                    )
+                      return;
+                    save(
+                      (d) => ({
+                        ...d,
+                        startingBalances: d.startingBalances.filter(
+                          (y) => y.id !== x.id,
+                        ),
+                      }),
+                      {
+                        entity: "Settings",
+                        detail: `Removed ${x.office} ${x.method} ${x.currency} starting balance`,
+                      },
+                    );
+                    notify("Starting balance removed");
+                  }}
                 >
                   ×
                 </button>
@@ -13898,3 +14073,4 @@ function ActivityLog({ data }: { data: AgencyData }) {
     </>
   );
 }
+

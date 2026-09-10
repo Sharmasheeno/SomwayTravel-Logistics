@@ -9,6 +9,7 @@ import {
   cargoCustomerCharge,
   deriveCustomerFinanceSummary,
 } from "./finance.js";
+import { isCancelledService } from "./serviceRelationships.js";
 
 const moneyRound = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const id = (value) => value?.toString?.() || String(value || "");
@@ -73,11 +74,8 @@ export const deriveReceivables = ({
     payerResolved = true,
   }) => {
     if (record.type === "Refund") return;
-    if (
-      service === "Cargo" &&
-      ["cancelled", "canceled"].includes(String(record.status || "").toLowerCase())
-    )
-      return;
+    // A cancelled ticket, visa or cargo raises no receivable.
+    if (isCancelledService(record)) return;
     if (asOf && dateOnly(transactionDate) > dateOnly(asOf)) return;
     const transactionType = service.toLowerCase();
     const summary = deriveCustomerFinanceSummary({

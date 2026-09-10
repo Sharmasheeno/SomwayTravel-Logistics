@@ -1,5 +1,7 @@
+import mongoose from "mongoose";
 import Cargo from "../models/Cargo.js";
 import { assertActiveBranch } from "./branches.js";
+import { purgeServiceFinance } from "./serviceDeletion.js";
 
 export const CARGO_STATUSES = [
   "received",
@@ -267,6 +269,12 @@ export const transitionCargoStatus = async ({
     );
     error.status = 409;
     throw error;
+  }
+  // Cancelling reverses the shipment's finance after the status update wins.
+  // That blocks any later payment attempt and lets the purge remove payments
+  // created just before the cancellation was saved.
+  if (nextStatus === "cancelled" && mongoose.connection.readyState !== 0) {
+    await purgeServiceFinance("cargo", id);
   }
   return updated;
 };

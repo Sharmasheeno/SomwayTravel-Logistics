@@ -1,6 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+test("cancelled sale keeps cash until refunded and then nets to zero in reports", async () => {
+  const payments = [doc({ transactionType: "ticket", transactionId: "cancelled-paid", branchId: mog, currency: "USD", amount: 80, flow: "inbound", paymentDate: "2026-08-31", paymentMethod: "EVC Plus", status: "active" })];
+  await withFinanceMocks({ branchPaymentMethods: config,
+    tickets: [doc({ id: "cancelled-paid", status: "cancelled", branchId: mog, saleDate: "2026-08-31", currency: "USD", amount: 120, cost: 60 })], payments,
+  }, async () => {
+    let rows = await buildFinanceReport({ branchId: mog, from: "2026-08-01", to: "2026-09-30" });
+    assert.equal(rows[0].collections, 80);
+    assert.equal(rows[0].revenue, 0);
+    assert.equal(rows[0].outstanding, 0);
+    payments.push(doc({ ...payments[0], flow: "outbound", paymentDate: "2026-09-01" }));
+    rows = await buildFinanceReport({ branchId: mog, from: "2026-08-01", to: "2026-09-30" });
+    assert.equal(rows[0].collections, 0);
+    assert.equal(rows[0].grossProfit, 0);
+    const refundDay = await buildFinanceReport({ branchId: mog, from: "2026-09-01", to: "2026-09-01" });
+    assert.equal(refundDay[0].collections, -80);
+  });
+});
+
 import Branch from "../server/models/Branch.js";
 import BranchPaymentMethod from "../server/models/BranchPaymentMethod.js";
 import Cargo from "../server/models/Cargo.js";
@@ -154,6 +172,35 @@ test("customer payment ledger derives partial and paid states and blocks overpay
   });
 });
 
+test("customer payments are rejected for cancelled services", async () => {
+  await withFinanceMocks({
+    branchPaymentMethods: config,
+    tickets: [
+      doc({
+        id: "cancelled-ticket",
+        branchId: nbo,
+        currency: "KES",
+        amount: 20000,
+        status: "cancelled",
+      }),
+    ],
+  }, async ({ payments }) => {
+    await assert.rejects(
+      () =>
+        createCustomerPayment({
+          transactionType: "ticket",
+          transactionId: "cancelled-ticket",
+          amount: 1000,
+          paymentMethod: "Cash",
+          paymentDate: "2026-08-31",
+          user: nboOperator,
+        }),
+      /cancelled services cannot receive payments/i,
+    );
+    assert.equal(payments.length, 0);
+  });
+});
+
 test("refund payments are stored as outbound cash movements", async () => {
   await withFinanceMocks({
     branchPaymentMethods: config,
@@ -220,5 +267,18 @@ test("refunds reduce revenue, profit and collections without creating customer d
     assert.equal(usd.grossProfit, -150);
     assert.equal(usd.collections, -150);
     assert.equal(usd.outstanding, 0);
+  });
+});
+
+test("partial customer payment leaves the exact remaining receivable", async () => {
+  await withFinanceMocks({
+    branchPaymentMethods: config,
+    tickets: [doc({ id: "partial-300", branchId: mog, saleDate: "2026-08-31", currency: "USD", amount: 300, cost: 220 })],
+    payments: [doc({ transactionType: "ticket", transactionId: "partial-300", branchId: mog, currency: "USD", amount: 200, paymentDate: "2026-08-31", paymentMethod: "EVC Plus", status: "active" })],
+  }, async () => {
+    const summary = await customerFinanceSummary("ticket", { id: "partial-300", amount: 300 });
+    assert.equal(summary.amountPaid, 200);
+    assert.equal(summary.balance, 100);
+    assert.equal(summary.paymentStatus, "partial");
   });
 });

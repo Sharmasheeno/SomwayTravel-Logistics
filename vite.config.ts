@@ -46,7 +46,16 @@ export default defineConfig(async () => {
   return {
     server: {
       host: "0.0.0.0",
-      allowedHosts: ["terminal.local"],
+      allowedHosts: ["terminal.local", ".e2b.app"],
+      // Same-origin API calls ("/api/...") are forwarded to the Express server
+      // running alongside Vite. This lets the browser reach the API through the
+      // one public preview URL instead of a localhost port it cannot see.
+      proxy: {
+        "/api": {
+          target: process.env.API_PROXY_TARGET || "http://127.0.0.1:5000",
+          changeOrigin: true,
+        },
+      },
       ...(isCodexSeatbeltSandbox
         ? { watch: { useFsEvents: false, usePolling: true } }
         : {}),

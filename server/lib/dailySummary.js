@@ -18,6 +18,7 @@ import {
   cargoCustomerCharge,
   deriveCustomerFinanceSummary,
 } from "./finance.js";
+import { isCancelledService } from "./serviceRelationships.js";
 
 export const DEFAULT_BUSINESS_TIME = {
   timezone: "Africa/Mogadishu",
@@ -70,32 +71,38 @@ export const businessDayState = ({
 };
 
 const serviceRows = ({ tickets, visas, cargo }) => [
-  ...tickets.map((record) => ({
-    service: "Tickets",
-    transactionType: "ticket",
-    transactionId: record.id,
-    branchId: id(record.branchId),
-    date: dateOnly(record.saleDate),
-    currency: record.currency,
-    charge: (record.type === "Refund" ? -1 : 1) * (Number(record.amount) || 0),
-    receivableCharge: record.type === "Refund" ? 0 : Number(record.amount) || 0,
-    directCost: record.type === "Refund" ? 0 : Number(record.cost) || 0,
-  })),
-  ...visas.map((record) => ({
-    service: "Visas",
-    transactionType: "visa",
-    transactionId: record.id,
-    branchId: id(record.branchId),
-    date: dateOnly(record.appDate),
-    currency: record.currency,
-    charge: (record.type === "Refund" ? -1 : 1) * (Number(record.amount) || 0),
-    receivableCharge: record.type === "Refund" ? 0 : Number(record.amount) || 0,
-    directCost: record.type === "Refund" ? 0 : Number(record.cost) || 0,
-  })),
+  ...tickets
+    .filter((record) => !isCancelledService(record))
+    .map((record) => ({
+      service: "Tickets",
+      transactionType: "ticket",
+      transactionId: record.id,
+      branchId: id(record.branchId),
+      date: dateOnly(record.saleDate),
+      currency: record.currency,
+      charge:
+        (record.type === "Refund" ? -1 : 1) * (Number(record.amount) || 0),
+      receivableCharge:
+        record.type === "Refund" ? 0 : Number(record.amount) || 0,
+      directCost: record.type === "Refund" ? 0 : Number(record.cost) || 0,
+    })),
+  ...visas
+    .filter((record) => !isCancelledService(record))
+    .map((record) => ({
+      service: "Visas",
+      transactionType: "visa",
+      transactionId: record.id,
+      branchId: id(record.branchId),
+      date: dateOnly(record.appDate),
+      currency: record.currency,
+      charge:
+        (record.type === "Refund" ? -1 : 1) * (Number(record.amount) || 0),
+      receivableCharge:
+        record.type === "Refund" ? 0 : Number(record.amount) || 0,
+      directCost: record.type === "Refund" ? 0 : Number(record.cost) || 0,
+    })),
   ...cargo
-    .filter(
-      (record) => String(record.status || "").toLowerCase() !== "cancelled",
-    )
+    .filter((record) => !isCancelledService(record))
     .map((record) => ({
       service: "Cargo",
       transactionType: "cargo",
@@ -199,9 +206,23 @@ export const buildDailySummaryRows = ({
               return sum + summary.accountsReceivable;
             }, 0),
           );
-          const revenue = round(rows.reduce((sum, row) => sum + row.charge, 0));
+          const revenue = round(rows.reduce((sum, row) => {
+            const summary = deriveCustomerFinanceSummary({
+              totalCharge: row.receivableCharge,
+              payments: paymentsByTransaction.get(`${row.transactionType}:${row.transactionId}`) || [],
+              asOf: businessDate,
+            });
+            return sum + (row.charge < 0 || summary.paymentStatus === "paid" ? row.charge : 0);
+          }, 0));
           const directCost = round(
-            rows.reduce((sum, row) => sum + row.directCost, 0),
+            rows.reduce((sum, row) => {
+              const summary = deriveCustomerFinanceSummary({
+                totalCharge: row.receivableCharge,
+                payments: paymentsByTransaction.get(`${row.transactionType}:${row.transactionId}`) || [],
+                asOf: businessDate,
+              });
+              return sum + (summary.paymentStatus === "paid" ? row.directCost : 0);
+            }, 0),
           );
           return {
             service: serviceName,
@@ -299,14 +320,14 @@ export const buildDailySummaryRows = ({
             balance.currency === currency &&
             id(balance.paymentMethodId) === methodId,
         );
-        // Rule 1: today opens on yesterday close for this method. Every
-        // channel carries forward, not just the cash drawer - money sitting in
-        // EVC Plus or the bank is still held overnight. Only on a branch first
-        // day, with no prior summary, does the float configured in Advanced
-        // Settings supply the opening figure.
-        const opening = round(
-          previousMethods.get(methodId)?.closing ?? configured?.amount ?? 0,
-        );
+        // Rule 1: today opens on yesterday's close for this method, or on the
+        // float configured in Advanced Settings on a branch's first day. Only
+        // physical-cash channels carry a balance overnight, so a method that is
+        // not marked as physical cash always opens at zero regardless of any
+        // stored closing or configured float.
+        const opening = link.countsAsPhysicalCash
+          ? round(previousMethods.get(methodId)?.closing ?? configured?.amount ?? 0)
+          : 0;
         return {
           paymentMethodId: methodId,
           paymentMethod: method?.name || link.paymentMethod || "Payment method",
@@ -464,6 +485,31 @@ const loadSummarySource = async () => {
     startingBalances,
     previousSummaries,
   };
+};
+
+// Rebuild in date order so later opening balances use corrected earlier days.
+export const rebuildStoredDailySummaries = async () => {
+  if (!await DailySummary.exists({})) return;
+  const source = await loadSummarySource();
+  // Include inactive branches when correcting their historical summaries.
+  source.branches = await Branch.find({}).lean();
+  const previous = [...source.previousSummaries].sort((a, b) => a.businessDate.localeCompare(b.businessDate));
+  source.previousSummaries = [];
+  for (const existing of previous) {
+    const next = buildDailySummaryRows({
+      ...source,
+      branches: source.branches.filter((branch) => id(branch._id) === id(existing.branchId)),
+      businessDate: existing.businessDate,
+      now: new Date(),
+    }).find((row) => row.currency === existing.currency);
+    if (!next) {
+      await DailySummary.deleteOne({ id: existing.id });
+      continue;
+    }
+    const updated = { ...next, id: existing.id, status: "corrected", version: (existing.version || 1) + 1, closedAt: existing.closedAt, correctionHistory: [] };
+    await DailySummary.updateOne({ id: existing.id }, { $set: updated });
+    source.previousSummaries.push(updated);
+  }
 };
 
 export const getDailySummary = async ({

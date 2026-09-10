@@ -41,7 +41,7 @@ export const runPhase3Migration = async () => {
   const tickets = stats();
   for (const row of await Ticket.find({})) {
     tickets.scanned += 1;
-    if (row.clientId) {
+    if (row.clientId && await Client.exists({ _id: row.clientId })) {
       tickets.skipped += 1;
       continue;
     }
@@ -56,7 +56,7 @@ export const runPhase3Migration = async () => {
   const visas = stats();
   for (const row of await Visa.find({})) {
     visas.scanned += 1;
-    if (row.clientId) {
+    if (row.clientId && await Client.exists({ _id: row.clientId })) {
       visas.skipped += 1;
       continue;
     }
@@ -72,7 +72,7 @@ export const runPhase3Migration = async () => {
   for (const row of await Cargo.find({})) {
     cargo.scanned += 1;
     let changed = false;
-    if (!row.senderClientId) {
+    if (!row.senderClientId || !await Client.exists({ _id: row.senderClientId })) {
       const result = await linkOne({ row, name: row.sender, phone: row.senderPhone, email: row.senderEmail, office: row.origin, branchId: row.originBranchId, field: "senderClientId", normalizedField: "senderNormalizedPhone" });
       if (result.status === "linked") {
         cargo.linked += 1;
@@ -82,7 +82,7 @@ export const runPhase3Migration = async () => {
         changed = true;
       } else cargo.unresolved.push(`${row.tracking || row.id}:sender`);
     }
-    if (row.receiverPhone && !row.receiverClientId) {
+    if (row.receiverPhone && (!row.receiverClientId || !await Client.exists({ _id: row.receiverClientId }))) {
       const result = await linkOne({ row, name: row.receiver, phone: row.receiverPhone, email: row.receiverEmail, office: row.destination, branchId: row.destinationBranchId, field: "receiverClientId", normalizedField: "receiverNormalizedPhone" });
       if (result.status === "linked") {
         cargo.linked += 1;

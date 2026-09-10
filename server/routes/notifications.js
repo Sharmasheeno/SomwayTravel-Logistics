@@ -71,8 +71,8 @@ router.post("/status", requireUser, async (req, res) => {
   }
 
   const lines = summary.split("\n");
-  const html = `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#153f45"><div style="padding:24px;background:#0f3d44;color:#fff;border-radius:18px 18px 0 0"><h1 style="margin:0;font-size:23px">Macruf Travel and Cargo Agency</h1><p style="margin:7px 0 0;color:#cce2df">Status update</p></div><div style="padding:26px;border:1px solid #dce7e4;border-top:0;border-radius:0 0 18px 18px"><p>Hello ${escapeHtml(customer)},</p><p>Your ${kind === "cargo" ? "cargo shipment" : "visa application"} has an updated status.</p><div style="padding:18px;background:#f1f8f6;border-radius:13px"><div style="font-size:12px;color:#6b7f81">Reference</div><strong style="display:block;font-size:20px;margin:4px 0 15px">${escapeHtml(reference)}</strong><div style="font-size:12px;color:#6b7f81">Current status</div><strong style="display:block;font-size:20px;margin-top:4px;color:#12877d">${escapeHtml(status)}</strong></div>${lines.map((line) => `<p style="margin:13px 0 0">${escapeHtml(line)}</p>`).join("")}<p style="margin-top:24px;color:#6b7f81">Questions? WhatsApp +252 61 563 3609 or email Macruuftravelcargo@gmail.com.</p></div></div>`;
-  const text = `Hello ${customer},\n\nYour ${kind === "cargo" ? "cargo shipment" : "visa application"} status is ${status}.\nReference: ${reference}\n${summary}\n\nMacruf Travel and Cargo Agency\nWhatsApp: +252 61 563 3609`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#153f45"><div style="padding:24px;background:#0f3d44;color:#fff;border-radius:18px 18px 0 0"><h1 style="margin:0;font-size:23px">SomWay Travel & Logistics</h1><p style="margin:7px 0 0;color:#cce2df">Status update</p></div><div style="padding:26px;border:1px solid #dce7e4;border-top:0;border-radius:0 0 18px 18px"><p>Hello ${escapeHtml(customer)},</p><p>Your ${kind === "cargo" ? "cargo shipment" : "visa application"} has an updated status.</p><div style="padding:18px;background:#f1f8f6;border-radius:13px"><div style="font-size:12px;color:#6b7f81">Reference</div><strong style="display:block;font-size:20px;margin:4px 0 15px">${escapeHtml(reference)}</strong><div style="font-size:12px;color:#6b7f81">Current status</div><strong style="display:block;font-size:20px;margin-top:4px;color:#12877d">${escapeHtml(status)}</strong></div>${lines.map((line) => `<p style="margin:13px 0 0">${escapeHtml(line)}</p>`).join("")}<p style="margin-top:24px;color:#6b7f81">Questions? WhatsApp +252 61 563 3609 or email Macruuftravelcargo@gmail.com.</p></div></div>`;
+  const text = `Hello ${customer},\n\nYour ${kind === "cargo" ? "cargo shipment" : "visa application"} status is ${status}.\nReference: ${reference}\n${summary}\n\nSomWay Travel & Logistics\nWhatsApp: +252 61 563 3609`;
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -81,7 +81,7 @@ router.post("/status", requireUser, async (req, res) => {
       from: MACRUF_FROM_EMAIL,
       to: [recipient],
       reply_to: "Macruuftravelcargo@gmail.com",
-      subject: `Macruf status update: ${reference}`,
+      subject: `SomWay status update: ${reference}`,
       html,
       text,
     }),

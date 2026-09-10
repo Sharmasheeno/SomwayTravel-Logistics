@@ -3,13 +3,19 @@ import { requireUser } from "../middleware/auth.js";
 import { buildFinanceReport } from "../lib/finance.js";
 import { getAccountsReceivableSummary } from "../lib/receivables.js";
 import { calendarMonthRange } from "../lib/reportingPeriod.js";
+import { getUserBranchScope } from "../lib/branches.js";
 
 const router = express.Router();
 
 router.get("/finance", requireUser, async (req, res, next) => {
   try {
-    if (!["owner", "consultant"].includes(req.user.role)) return res.status(403).json({ error: "Financial reports are restricted." });
-    const branchId = String(req.query.branchId || "");
+    const scope = getUserBranchScope(req.user);
+    if (scope.kind === "none")
+      return res.status(403).json({ error: "Financial reports are restricted." });
+    // Operators only ever see their own branch's figures; owners and
+    // consultants may request any branch (or all branches).
+    const branchId =
+      scope.kind === "branch" ? scope.branchId : String(req.query.branchId || "");
     const from = String(req.query.from || "0000-00-00");
     const to = String(req.query.to || "9999-99-99");
     const [rows, accountsReceivable] = await Promise.all([

@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+test("cancelled service refund reduces closing cash without creating revenue or debt", () => {
+  const receipt = { transactionType: "ticket", transactionId: "cancelled", branchId, currency: "USD", paymentMethodId: methodId, amount: 80, paymentDate: "2026-09-09", flow: "inbound" };
+  const input = { ...source, businessDate: "2026-09-09", startingBalances: [], tickets: [{ id: "cancelled", status: "cancelled", branchId, currency: "USD", amount: 120, saleDate: "2026-09-09" }], payments: [receipt] };
+  const before = buildDailySummaryRows(input)[0];
+  assert.equal(before.closedAmount, 80);
+  const after = buildDailySummaryRows({ ...input, payments: [receipt, { ...receipt, flow: "outbound" }] })[0];
+  assert.equal(after.closedAmount, 0);
+  assert.equal(after.revenue, 0);
+  assert.equal(after.accountsReceivable, 0);
+  assert.equal(after.paymentsByMethod[0].refunds, 80);
+});
+
 import {
   buildDailySummaryRows,
   businessDayState,
@@ -135,11 +147,13 @@ test("daily summary separates revenue, cash, debt, payable, expense and profit",
   });
 
   assert.equal(row.openingBalance, 100);
-  assert.equal(row.revenue, 200);
+  // The cargo charge is only partially paid, so it remains receivable and is
+  // excluded from recognized revenue and profit until the balance is settled.
+  assert.equal(row.revenue, 0);
   assert.equal(row.moneyReceived, 120);
   assert.equal(row.accountsReceivable, 80);
-  assert.equal(row.directCost, 80);
-  assert.equal(row.profit, 120);
+  assert.equal(row.directCost, 0);
+  assert.equal(row.profit, 0);
   assert.equal(row.expenses, 20);
   assert.equal(row.accountsPayable, 40);
   // Cash actually in the drawer at close: opening 100, plus the 120
@@ -149,6 +163,32 @@ test("daily summary separates revenue, cash, debt, payable, expense and profit",
   // What the branch is projected to hold once both sides settle: that 80
   // comes in and that 40 goes out.
   assert.equal(row.expectedClosing, 240);
+});
+
+test("a cancelled ticket contributes no revenue to the daily summary", () => {
+  const [row] = buildDailySummaryRows({
+    ...source,
+    businessDate: "2026-09-01",
+    now: new Date("2026-09-01T10:00:00.000Z"),
+    tickets: [
+      {
+        id: "ticket_cancelled",
+        ref: "TKT-CANX",
+        branchId,
+        saleDate: "2026-09-01",
+        currency: "USD",
+        type: "Sale",
+        amount: 120,
+        cost: 100,
+        status: "cancelled",
+      },
+    ],
+  });
+
+  // No live services: the summary row for the branch either does not exist or
+  // shows zero revenue/receivable from the cancelled ticket.
+  assert.equal(row?.revenue || 0, 0);
+  assert.equal(row?.accountsReceivable || 0, 0);
 });
 
 test("previous physical closing becomes next business day opening", () => {

@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import express from "express";
 import connectDatabase from "./config/db.js";
 import authRoutes from "./routes/auth.js";
+import operatorAccessRoutes from "./routes/operatorAccess.js";
 import adminRoutes from "./routes/admin.js";
 import dataRoutes from "./routes/data.js";
 import entityRoutes from "./routes/entities.js";
@@ -25,20 +26,40 @@ import { randomToken } from "./utils/tokens.js";
 import { runRegisteredMigration } from "./lib/migrations.js";
 import { runServiceWorkflowMigration } from "./lib/serviceWorkflowMigration.js";
 import { removeLegacyCustomerPaymentSnapshots } from "./lib/accountsReceivableMigration.js";
+import { cleanupDeletedServiceFinance, resumeServiceDeletions } from "./lib/serviceDeletion.js";
+import { runClientNameSplitMigration } from "./lib/clientNameSplitMigration.js";
+import { runCancelledFinancePurgeMigration } from "./lib/cancelledFinancePurgeMigration.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
 
-const configuredOrigins = (
-  process.env.CORS_ALLOWED_ORIGINS ||
-  process.env.PUBLIC_APP_URL ||
-  "http://localhost:5173"
-)
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+// Reduce an origin (or a bare host) to just its lowercase hostname so the
+// allow-list matches whether the value arrived as "https://site.com",
+// "site.com" or "site.com:443". Some hosts (e.g. Render's fromService wiring)
+// inject the frontend URL without a scheme, which would otherwise never match
+// the browser's "https://..." Origin header.
+const originHost = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    return new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.toLowerCase();
+  } catch {
+    return raw.replace(/^.*:\/\//, "").split("/")[0].split(":")[0].toLowerCase();
+  }
+};
+
+const allowedOriginHosts = new Set(
+  (
+    process.env.CORS_ALLOWED_ORIGINS ||
+    process.env.PUBLIC_APP_URL ||
+    "http://localhost:5173"
+  )
+    .split(",")
+    .map(originHost)
+    .filter(Boolean),
+);
 app.set("trust proxy", process.env.TRUST_PROXY === "true" ? 1 : false);
 app.use((req, res, next) => {
   req.requestId = String(
@@ -58,7 +79,7 @@ app.use(
   cors({
     credentials: true,
     origin(origin, callback) {
-      if (!origin || configuredOrigins.includes(origin))
+      if (!origin || allowedOriginHosts.has(originHost(origin)))
         return callback(null, true);
       return callback(new Error("Origin is not allowed."));
     },
@@ -109,6 +130,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/operator-access", operatorAccessRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/data", dataRoutes);
 app.use("/api/entities", entityRoutes);
@@ -158,6 +180,7 @@ app.use((error, req, res, _next) => {
 
 const startServer = async () => {
   await connectDatabase();
+  await resumeServiceDeletions();
   const migration = await runRegisteredMigration(
     "2026-09-01-phase2-branches-v2",
     runPhase2Migration,
@@ -171,6 +194,13 @@ const startServer = async () => {
     "Phase 3 client relationship migration",
     JSON.stringify(clientMigration),
   );
+  // Backfill services created before client linking was deployed. This is
+  // intentionally versioned separately so existing installations run it once.
+  const clientLinkBackfill = await runRegisteredMigration(
+    "2026-09-08-client-links-backfill-v1",
+    runPhase3Migration,
+  );
+  console.log("Client links backfill", JSON.stringify(clientLinkBackfill));
   const cargoMigration = await runRegisteredMigration(
     "2026-09-01-phase4-cargo-v1",
     runPhase4Migration,
@@ -197,6 +227,31 @@ const startServer = async () => {
     runServiceWorkflowMigration,
   );
   console.log("Service workflow migration", JSON.stringify(workflowMigration));
+
+  await runRegisteredMigration("2026-09-08-service-finance-cascade-v1", cleanupDeletedServiceFinance);
+
+  // Repair the "two people share one phone" bug: backfill client names and
+  // re-link any service whose person no longer matches its client (splits e.g.
+  // Ali off Fartun into his own client).
+  const clientSplitMigration = await runRegisteredMigration(
+    "2026-09-08-client-name-split-v1",
+    runClientNameSplitMigration,
+  );
+  console.log(
+    "Client name split migration",
+    JSON.stringify(clientSplitMigration),
+  );
+
+  // Reverse the finance of services cancelled before cancellation purged it, so
+  // existing cancelled tickets/visas stop counting in reports and receivables.
+  const cancelledPurge = await runRegisteredMigration(
+    "2026-09-08-cancelled-finance-purge-v1",
+    runCancelledFinancePurgeMigration,
+  );
+  console.log(
+    "Cancelled service finance purge",
+    JSON.stringify(cancelledPurge),
+  );
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Macruf API running on http://localhost:${PORT}`);

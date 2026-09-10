@@ -1,4 +1,6 @@
+import { withServiceLock } from "./serviceLock.js";
 import mongoose from "mongoose";
+import { deleteServiceRecords, assertServiceNotDeleting } from "./serviceDeletion.js";
 import Activity from "../models/Activity.js";
 import Cargo from "../models/Cargo.js";
 import DailyClose from "../models/DailyClose.js";
@@ -56,6 +58,8 @@ export const servicePayableRecord = (collection, service) => {
   if (!billed) return null;
   return {
     id: `payable_${kind}_${service.id}`,
+    transactionType: kind,
+    transactionId: service.id,
     date:
       collection === "tickets"
         ? service.saleDate || ""
@@ -222,10 +226,10 @@ const assertCanWriteEntity = async (collection, record, user) => {
     throw error;
   }
 
-  if (
-    ["tickets", "visas", "expenses", "closes", "clients"].includes(collection)
-  )
+  if (["tickets", "visas", "expenses", "closes"].includes(collection))
     await assertBranchAccess(user, record.branchId);
+  if (collection === "clients")
+    await assertBranchAccess(user, record.homeBranchId);
   if (collection === "cargo") {
     await assertBranchAccess(user, record.originBranchId);
     await assertActiveBranch(record.destinationBranchId);
@@ -295,12 +299,19 @@ const withServerFields = async (collection, record, user, existing) => {
   }
   if (user.role === "operator" && user.assignedBranchId) {
     const branchId = user.assignedBranchId.toString();
-    if (
-      ["tickets", "visas", "expenses", "closes", "clients"].includes(collection)
-    )
+    const assignedBranch = await assertActiveBranch(branchId);
+    const assignedOffice = assignedBranch?.name || next.office || next.homeOffice || next.origin || "";
+    if (["tickets", "visas", "expenses", "closes"].includes(collection)) {
       next.branchId = branchId;
+      next.office = assignedOffice;
+    }
+    if (collection === "clients") {
+      next.homeBranchId = branchId;
+      next.homeOffice = assignedOffice;
+    }
     if (collection === "cargo") {
       next.originBranchId = branchId;
+      next.origin = assignedOffice;
       if (
         !next.paidByBranchId &&
         (next.paymentMethod || next.paidByOffice)
@@ -442,7 +453,13 @@ const createActivity = async (action, user) => {
   });
 };
 
-export const writeEntity = async ({ collection, id, record, user, action }) => {
+export const writeEntity = (args) => {
+  const type = { tickets: "ticket", visas: "visa", cargo: "cargo" }[args.collection];
+  const id = args.id || args.record?.id;
+  return type && id ? withServiceLock(`${type}:${id}`, () => persistEntity(args)) : persistEntity(args);
+};
+
+const persistEntity = async ({ collection, id, record, user, action }) => {
   assertEntityName(collection);
   if (!record || typeof record !== "object") {
     const error = new Error("Entity payload is required.");
@@ -453,6 +470,16 @@ export const writeEntity = async ({ collection, id, record, user, action }) => {
   const Model = ENTITY_MODELS[collection];
   const lookupId = id || record.id;
   const existing = lookupId ? await Model.findOne({ id: lookupId }) : null;
+  const serviceType = { tickets: "ticket", visas: "visa", cargo: "cargo" }[collection];
+  if (id && !existing)
+    throw Object.assign(new Error("Record not found. Refresh the workspace."), { status: 404 });
+  if (serviceType && lookupId && mongoose.connection.readyState !== 0)
+    await assertServiceNotDeleting(serviceType, lookupId);
+  if (collection === "suppliers" && existing) {
+    throw Object.assign(new Error("Payables cannot be changed directly. Record a payment to settle this bill."), { status: 409 });
+  }
+  if (collection === "suppliers" && (record.transactionType || record.transactionId || /^payable_(ticket|visa|cargo)_/.test(record.id || "")))
+    throw Object.assign(new Error("Service payables are created automatically from their parent service."), { status: 409 });
   let candidate = await withServerFields(
     collection,
     { ...record, ...(lookupId ? { id: lookupId } : {}) },
@@ -476,13 +503,16 @@ export const writeEntity = async ({ collection, id, record, user, action }) => {
     throw error;
   }
   if (collection === "clients" && candidate.normalizedPhone) {
+    // Two different people may share a phone number, so a client is a duplicate
+    // only when BOTH the name and the phone match an existing record.
     const duplicate = await Client.findOne({
       normalizedPhone: candidate.normalizedPhone,
+      normalizedName: candidate.normalizedName,
       id: { $ne: candidate.id },
     });
     if (duplicate) {
       const error = new Error(
-        "A client with this phone number already exists.",
+        "A client with this name and phone number already exists.",
       );
       error.status = 409;
       throw error;
@@ -544,8 +574,31 @@ export const writeCargoWithInitialPayment = async ({
         action: nextAction,
       }),
     createPayment: createCustomerPayment,
-    deleteCargo: (id) => Cargo.deleteOne({ id }),
+    deleteCargo: (id) => deleteServiceRecords("cargo", id),
   });
+};
+
+export const writeTicketWithInitialPayment = async ({ record, initialPayment, user, action }) => {
+  const existing = record?.id ? await Ticket.findOne({ id: record.id }) : null;
+  const key = String(initialPayment?.idempotencyKey || "").trim();
+  if (key) {
+    const previous = await Payment.findOne({ idempotencyKey: key });
+    if (previous && existing) return existing;
+  }
+  const saved = await writeEntity({ collection: "tickets", record, user, action });
+  try {
+    await createCustomerPayment({
+      transactionType: "ticket",
+      transactionId: saved.id,
+      ...initialPayment,
+      idempotencyKey: key,
+      user,
+    });
+  } catch (error) {
+    if (!existing) await deleteServiceRecords("ticket", saved.id);
+    throw error;
+  }
+  return saved;
 };
 
 export const deleteEntity = async ({ collection, id, user, action }) => {
@@ -571,114 +624,52 @@ export const deleteEntity = async ({ collection, id, user, action }) => {
   const actorId = user.id?.toString?.() || user._id?.toString?.() || "";
   const at = new Date().toISOString();
   const reason = String(
-    action?.detail || "Archived from the agency workspace",
+    action?.detail || "Deleted from the agency workspace",
   ).trim();
-  if (collection === "cargo") {
-    const error = new Error(
-      "Cargo history cannot be deleted. Use the Cancel shipment action with a reason.",
-    );
-    error.status = 409;
-    throw error;
-  }
-  if (["closes", "payments", "supplierPayments"].includes(collection)) {
-    const error = new Error(
-      "Financial history cannot be deleted. Use its correction or reopen workflow.",
-    );
-    error.status = 409;
-    throw error;
-  }
-  if (collection === "rates") {
-    await Model.findOneAndUpdate(
-      { id },
-      { $set: { isActive: false } },
-      { new: true, runValidators: true },
-    );
-  } else if (collection === "expenses") {
-    await Model.findOneAndUpdate(
-      { id },
-      {
-        $set: {
-          recordStatus: "void",
-          voidedAt: at,
-          voidedByUserId: actorId,
-          voidReason: reason,
-        },
-      },
-      { new: true, runValidators: true },
-    );
+  void actorId;
+  void at;
+  void reason;
+  // The owner has full control and can permanently delete any record. To keep
+  // the books consistent we cascade: related customer/supplier payments are
+  // removed with the parent, and client references on service records are
+  // unlinked so nothing is left pointing at a deleted client. (Only the owner
+  // reaches this point — the role check above blocks everyone else.)
+  if (["cargo", "tickets", "visas"].includes(collection)) {
+    await deleteServiceRecords({ cargo: "cargo", tickets: "ticket", visas: "visa" }[collection], id);
   } else if (collection === "suppliers") {
-    const hasPayments = await SupplierPayment.exists({
-      supplierBillId: id,
-      status: { $ne: "void" },
-    });
-    if (hasPayments) {
-      const error = new Error(
-        "A payable with payment history cannot be cancelled.",
-      );
-      error.status = 409;
-      throw error;
-    }
-    await Model.findOneAndUpdate(
-      { id },
-      {
-        $set: {
-          recordStatus: "cancelled",
-          cancelledAt: at,
-          cancelledByUserId: actorId,
-          cancellationReason: reason,
-        },
-      },
-      { new: true, runValidators: true },
-    );
+    throw Object.assign(new Error("Payables cannot be deleted directly. Mark the bill as paid, or delete its parent service."), { status: 409 });
   } else if (collection === "clients") {
-    const linked = await Promise.all([
-      Ticket.exists({ clientId: existing._id }),
-      Visa.exists({ clientId: existing._id }),
-      Cargo.exists({
-        $or: [
-          { senderClientId: existing._id },
-          { receiverClientId: existing._id },
-        ],
-      }),
+    // Unlink this client from every service record before removing it so no
+    // ticket/visa/cargo is left referencing a deleted id. The records keep the
+    // stored name/phone strings, so their history still reads correctly.
+    await Promise.all([
+      Ticket.updateMany(
+        { clientId: existing._id },
+        { $set: { clientId: null } },
+      ),
+      Visa.updateMany({ clientId: existing._id }, { $set: { clientId: null } }),
+      Cargo.updateMany(
+        { senderClientId: existing._id },
+        { $set: { senderClientId: null } },
+      ),
+      Cargo.updateMany(
+        { receiverClientId: existing._id },
+        { $set: { receiverClientId: null } },
+      ),
+      Cargo.updateMany(
+        { payerClientId: existing._id },
+        { $set: { payerClientId: null } },
+      ),
+      Payment.updateMany(
+        { clientId: existing._id },
+        { $set: { clientId: null } },
+      ),
     ]);
-    if (linked.some(Boolean)) {
-      const error = new Error(
-        "A client with transaction history cannot be archived.",
-      );
-      error.status = 409;
-      throw error;
-    }
-    await Model.findOneAndUpdate(
-      { id },
-      {
-        $set: {
-          isActive: false,
-          archivedAt: at,
-          archivedByUserId: actorId,
-          archiveReason: reason,
-        },
-      },
-      { new: true, runValidators: true },
-    );
-  } else if (["tickets", "visas"].includes(collection)) {
-    await Model.findOneAndUpdate(
-      { id },
-      {
-        $set: {
-          recordStatus: "archived",
-          archivedAt: at,
-          archivedByUserId: actorId,
-          archiveReason: reason,
-        },
-      },
-      { new: true, runValidators: true },
-    );
+    await Model.deleteOne({ id });
   } else {
-    const error = new Error(
-      "This record cannot be deleted from normal operations.",
-    );
-    error.status = 409;
-    throw error;
+    // expenses, closes, rates, startingBalances, paymentMethods,
+    // branchPaymentMethods — remove permanently.
+    await Model.deleteOne({ id });
   }
   await createActivity(action, user);
 };

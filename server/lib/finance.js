@@ -1,3 +1,7 @@
+import mongoose from "mongoose";
+import { assertServiceNotDeleting } from "./serviceDeletion.js";
+import { withServiceLock } from "./serviceLock.js";
+import { payableService, hasPayableParent, serviceKeys, isCancelledService } from "./serviceRelationships.js";
 import Branch from "../models/Branch.js";
 import BranchPaymentMethod from "../models/BranchPaymentMethod.js";
 import Cargo from "../models/Cargo.js";
@@ -41,25 +45,6 @@ const paymentBranchId = (type, record) =>
 const revenueBranchId = (type, record) =>
   type === "cargo" ? record.originBranchId : record.branchId;
 const modelFor = (type) => ({ ticket: Ticket, visa: Visa, cargo: Cargo })[type];
-const customerPaymentLocks = new Map();
-
-const withCustomerPaymentLock = async (key, work) => {
-  const previous = customerPaymentLocks.get(key) || Promise.resolve();
-  let release;
-  const current = new Promise((resolve) => {
-    release = resolve;
-  });
-  const queued = previous.then(() => current);
-  customerPaymentLocks.set(key, queued);
-  await previous;
-  try {
-    return await work();
-  } finally {
-    release();
-    if (customerPaymentLocks.get(key) === queued) customerPaymentLocks.delete(key);
-  }
-};
-
 export const canonicalPaymentCode = (value) => {
   const text = String(value || "")
     .trim()
@@ -204,7 +189,7 @@ export const deriveCustomerPaymentSummary = ({ total, payments = [], asOf }) => 
 
 export const customerFinanceSummary = async (type, record) => {
   const payments = await activeCustomerPaymentsFor(type, record.id);
-  const total = totalFor(type, record);
+  const total = isCancelledService(record) ? 0 : totalFor(type, record);
   const summary = deriveCustomerFinanceSummary({
     totalCharge: total,
     payments,
@@ -215,6 +200,56 @@ export const customerFinanceSummary = async (type, record) => {
     amountPaid: summary.totalPaid,
     balance: summary.balanceDue,
   };
+};
+
+export const refundableBalance = (payments) => moneyRound(Math.max(0,
+  payments.filter((payment) => isValidCustomerPayment(payment)).reduce(
+    (sum, payment) => sum + (payment.flow === "outbound" ? -1 : 1) * payment.amount, 0,
+  ),
+));
+
+export const refundableAmountForRecord = (record, payments) => {
+  const ledgerBalance = refundableBalance(payments);
+  // Before cancellation refunds were introduced, some paid services kept only
+  // their `paid` flag after the payment ledger was purged. Recover that one
+  // unrefunded charge exactly once; newer records always use the ledger.
+  if (ledgerBalance > 0 || payments.length || !record?.paid) return ledgerBalance;
+  return moneyRound(Math.max(0, totalFor(record.type === "Refund" ? "ticket" : record.transactionType || "ticket", record)));
+};
+
+// Recording an outgoing refund does not initiate a bank/mobile-money transfer.
+export const createCancellationRefund = async ({ transactionType, transactionId, amount,
+  paymentMethod, paymentDate, reference = "", notes = "", user }) => {
+  if (!["owner", "operator"].includes(user.role))
+    throw Object.assign(new Error("You cannot record refunds."), { status: 403 });
+  const Model = modelFor(transactionType);
+  if (!Model) throw Object.assign(new Error("Unknown service."), { status: 400 });
+  return withServiceLock(`${transactionType}:${transactionId}`, async () => {
+    const record = await Model.findOne({ id: transactionId });
+    if (!record) throw Object.assign(new Error("Service not found."), { status: 404 });
+    const branchId = paymentBranchId(transactionType, record);
+    await assertBranchAccess(user, branchId);
+    if (!isCancelledService(record))
+      throw Object.assign(new Error("Cancel the service before recording a refund."), { status: 409 });
+    const payments = await activeCustomerPaymentsFor(transactionType, transactionId);
+    const available = refundableAmountForRecord({ ...record, transactionType }, payments);
+    const value = moneyRound(amount);
+    if (!Number.isFinite(Number(amount)) || value <= 0 || value !== available)
+      throw Object.assign(new Error("Refund must equal the remaining refundable amount. Refresh and try again."), { status: 409 });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate || "") || Number.isNaN(Date.parse(paymentDate)))
+      throw Object.assign(new Error("Choose a valid refund date."), { status: 400 });
+    if (payments.some((payment) => payment.paymentDate > paymentDate))
+      throw Object.assign(new Error("Refund date cannot be before the recorded payments."), { status: 400 });
+    const { method } = await assertBranchPaymentMethod({ branchId, currency: record.currency, paymentMethod });
+    return Payment.create({
+      id: `refund_${randomToken(10)}`, branchId, transactionType, transactionId,
+      idempotencyKey: `cancellation-refund:${transactionType}:${transactionId}`,
+      clientId: record.clientId || record.payerClientId || record.senderClientId || null,
+      amount: value, flow: "outbound", currency: record.currency,
+      paymentMethodId: method._id, paymentMethod: method.name, paymentDate,
+      reference, notes, receivedByUserId: user.id || String(user._id || ""),
+    });
+  });
 };
 
 export const decorateCustomerRecord = async (type, record) => {
@@ -254,6 +289,11 @@ export const createCustomerPayment = async ({
     error.status = 404;
     throw error;
   }
+  if (isCancelledService(transaction)) {
+    const error = new Error("Cancelled services cannot receive payments.");
+    error.status = 409;
+    throw error;
+  }
   const branchId =
     transactionType === "cargo" && requestedBranchId
       ? requestedBranchId
@@ -274,9 +314,19 @@ export const createCustomerPayment = async ({
   const normalizedIdempotencyKey = String(idempotencyKey || "")
     .trim()
     .slice(0, 120);
-  return withCustomerPaymentLock(
+  return withServiceLock(
     `${transactionType}:${transactionId}`,
     async () => {
+      if (mongoose.connection.readyState !== 0)
+        await assertServiceNotDeleting(transactionType, transactionId);
+      const lockedTransaction = await Model.findOne({ id: transactionId });
+      if (!lockedTransaction)
+        throw Object.assign(new Error("Transaction not found."), { status: 404 });
+      if (isCancelledService(lockedTransaction)) {
+        const error = new Error("Cancelled services cannot receive payments.");
+        error.status = 409;
+        throw error;
+      }
       if (normalizedIdempotencyKey) {
         const existingPayment = await Payment.findOne({
           idempotencyKey: normalizedIdempotencyKey,
@@ -393,6 +443,15 @@ export const createSupplierPayment = async ({
     error.status = 404;
     throw error;
   }
+  const parent = payableService(bill);
+  return withServiceLock(parent ? `${parent.type}:${parent.id}` : `supplier:${supplierBillId}`, async () => {
+    if (!await Supplier.findOne({ id: supplierBillId })) throw Object.assign(new Error("Supplier bill not found."), { status: 404 });
+    if (parent && mongoose.connection.readyState !== 0) {
+      await assertServiceNotDeleting(parent.type, parent.id);
+      const parentRecord = await modelFor(parent.type)?.findOne({ id: parent.id });
+      if (!parentRecord) throw Object.assign(new Error("Parent service not found."), { status: 404 });
+      if (isCancelledService(parentRecord)) throw Object.assign(new Error("Cancelled service payables cannot be paid."), { status: 409 });
+    }
   const branchId = bill.branchId || null;
   if (branchId)
     await assertBranchPaymentMethod({
@@ -426,6 +485,7 @@ export const createSupplierPayment = async ({
     reference,
     notes,
     paidByUserId: user.id || user._id?.toString?.() || "",
+  });
   });
 };
 
@@ -640,8 +700,16 @@ export const buildFinanceReport = async ({
     supplierPayments,
   ] = await Promise.all([
     Branch.find({}),
-    Ticket.find({ saleDate: { $lte: to }, recordStatus: { $ne: "archived" } }),
-    Visa.find({ appDate: { $lte: to }, recordStatus: { $ne: "archived" } }),
+    Ticket.find({
+      saleDate: { $lte: to },
+      recordStatus: { $ne: "archived" },
+      status: { $nin: ["cancelled", "Cancelled"] },
+    }),
+    Visa.find({
+      appDate: { $lte: to },
+      recordStatus: { $ne: "archived" },
+      status: { $nin: ["cancelled", "Cancelled"] },
+    }),
     Cargo.find({
       dateIn: { $lte: to },
       status: { $nin: ["cancelled", "Cancelled"] },
@@ -658,6 +726,14 @@ export const buildFinanceReport = async ({
       status: { $ne: "void" },
     }),
   ]);
+  const [allTickets, allVisas, allCargo] = await Promise.all([Ticket.find({}), Visa.find({}), Cargo.find({})]);
+  // Cancelled services raise no charge, but their actual receipts and refunds
+  // remain cash movements attributed to the collecting/paying branch.
+  const parentKeys = serviceKeys({
+    tickets: allTickets,
+    visas: allVisas,
+    cargo: allCargo,
+  });
   const branchNameById = new Map(
     branches.map((branch) => [branch._id.toString(), branch.name]),
   );
@@ -670,6 +746,7 @@ export const buildFinanceReport = async ({
         branch: branchNameById.get(String(bid || "")) || "Unassigned",
         currency,
         customerCharges: 0,
+        recognizedRevenue: 0,
         paymentsReceived: 0,
         profit: 0,
         revenue: 0,
@@ -693,6 +770,7 @@ export const buildFinanceReport = async ({
       row.serviceDetails[type] = {
         transactions: 0,
         customerCharges: 0,
+        recognizedRevenue: 0,
         paymentsReceived: 0,
         directCost: 0,
         profit: 0,
@@ -712,6 +790,7 @@ export const buildFinanceReport = async ({
     ["cargo", cargo],
   ]) {
     for (const item of list) {
+      if (isCancelledService(item)) continue;
       const bid = revenueBranchId(type, item);
       transactionsByKey.set(`${type}:${item.id}`, { type, item, branchId: bid });
       if (!include(bid)) continue;
@@ -719,6 +798,14 @@ export const buildFinanceReport = async ({
       const direction = directionFor(type, item);
       const customerCharge = total * direction;
       const directCost = direction < 0 ? 0 : item.cost || 0;
+      const paymentSummary = deriveCustomerFinanceSummary({
+        totalCharge: customerCharge,
+        payments: paymentsByTransaction.get(`${type}:${item.id}`) || [],
+        asOf: to,
+      });
+      // Revenue and profit are recognized only after the customer's full
+      // charge is settled. Refund records remain immediate negative revenue.
+      const recognized = item.type === "Refund" || paymentSummary.paymentStatus === "paid";
       const transactionDate =
         type === "ticket"
           ? item.saleDate
@@ -729,19 +816,17 @@ export const buildFinanceReport = async ({
         const row = rowFor(bid, item.currency);
         const detail = serviceDetailFor(row, type);
         row.customerCharges += customerCharge;
-        row.directCost += directCost;
-        row.services[type] += customerCharge;
-        row.serviceGrossProfit[type] += customerCharge - directCost;
+        row.recognizedRevenue += recognized ? customerCharge : 0;
+        row.directCost += recognized ? directCost : 0;
+        row.services[type] += recognized ? customerCharge : 0;
+        row.serviceGrossProfit[type] += recognized ? customerCharge - directCost : 0;
         // Unpaid portion of the charges raised in this period, so the figure
         // is scoped the same way as every other column in the row.
-        row.outstanding += deriveCustomerFinanceSummary({
-          totalCharge: customerCharge,
-          payments: paymentsByTransaction.get(`${type}:${item.id}`) || [],
-          asOf: to,
-        }).accountsReceivable;
+        row.outstanding += paymentSummary.accountsReceivable;
         detail.transactions += 1;
         detail.customerCharges += customerCharge;
-        detail.directCost += directCost;
+        detail.recognizedRevenue += recognized ? customerCharge : 0;
+        detail.directCost += recognized ? directCost : 0;
       }
     }
   }
@@ -755,6 +840,7 @@ export const buildFinanceReport = async ({
   ]);
   for (const payment of payments) {
     if (payment.paymentDate < from) continue;
+    if (!parentKeys.has(`${payment.transactionType}:${payment.transactionId}`)) continue;
     const transactionKey = `${payment.transactionType}:${payment.transactionId}`;
     const transactionFlow = transactionDirection.get(transactionKey);
     const direction =
@@ -804,6 +890,7 @@ export const buildFinanceReport = async ({
     );
   }
   for (const bill of suppliers) {
+    if (!hasPayableParent(bill, parentKeys)) continue;
     if (bill.branchId && !include(bill.branchId)) continue;
     rowFor(bill.branchId, bill.currency).supplierExposure += Math.max(
       0,
@@ -813,15 +900,14 @@ export const buildFinanceReport = async ({
   return [...rows.values()].map((row) => ({
     ...row,
     customerCharges: moneyRound(row.customerCharges),
+    recognizedRevenue: moneyRound(row.recognizedRevenue),
     paymentsReceived: moneyRound(row.paymentsReceived),
-    // Profit is accrual based -- charges raised less the cost of delivering
-    // them -- matching the "Charges less cost" label in the report and the
-    // convention already used by the daily summary. `revenue` stays cash
-    // based, so it keeps agreeing with `collections`.
-    profit: moneyRound(row.customerCharges - row.directCost),
-    revenue: moneyRound(row.paymentsReceived),
+    // Recognize revenue and profit only after the customer's full charge is
+    // settled. Outstanding receivables remain visible separately.
+    profit: moneyRound(row.recognizedRevenue - row.directCost),
+    revenue: moneyRound(row.recognizedRevenue),
     directCost: moneyRound(row.directCost),
-    grossProfit: moneyRound(row.customerCharges - row.directCost),
+    grossProfit: moneyRound(row.recognizedRevenue - row.directCost),
     serviceGrossProfit: Object.fromEntries(
       Object.entries(row.serviceGrossProfit).map(([service, value]) => [
         service,
@@ -836,11 +922,13 @@ export const buildFinanceReport = async ({
       Object.entries(row.serviceDetails).map(([service, detail]) => [
         service,
         {
-          ...detail,
+          // Keep the internal recognition accumulator out of the public
+          // service-detail payload; callers use `profit` and `revenue`.
+          transactions: detail.transactions,
           customerCharges: moneyRound(detail.customerCharges),
           paymentsReceived: moneyRound(detail.paymentsReceived),
           directCost: moneyRound(detail.directCost),
-          profit: moneyRound(detail.customerCharges - detail.directCost),
+          profit: moneyRound(detail.recognizedRevenue - detail.directCost),
         },
       ]),
     ),

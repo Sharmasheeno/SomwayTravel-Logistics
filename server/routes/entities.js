@@ -4,10 +4,26 @@ import {
   deleteEntity,
   readVisibleAgencyData,
   writeCargoWithInitialPayment,
+  writeTicketWithInitialPayment,
   writeEntity,
 } from "../lib/entityPersistence.js";
 
 const router = express.Router();
+
+router.post("/tickets/with-payment", requireUser, async (req, res, next) => {
+  try {
+    await writeTicketWithInitialPayment({
+      record: req.body?.record,
+      initialPayment: { ...(req.body?.initialPayment || {}), idempotencyKey: req.get("Idempotency-Key") || req.body?.initialPayment?.idempotencyKey },
+      user: req.user,
+      action: req.body?.action,
+    });
+    return res.status(201).json({ ok: true, data: await readVisibleAgencyData(req.user) });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    return next(error);
+  }
+});
 
 router.post("/cargo/with-payment", requireUser, async (req, res, next) => {
   try {

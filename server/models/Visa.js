@@ -42,7 +42,7 @@ const visaSchema = new mongoose.Schema(
     paymentDate: { type: String, default: "" },
     status: {
       type: String,
-      enum: ["submitted", "approved", "refused", "delivered"],
+      enum: ["submitted", "approved", "refused", "delivered", "cancelled"],
       default: "submitted",
       index: true,
     },

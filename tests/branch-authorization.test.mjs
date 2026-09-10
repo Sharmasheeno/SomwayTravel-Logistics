@@ -74,7 +74,7 @@ test("operator payload branchId is forced to the assigned branch for tickets", a
   const nairobi = objectId();
   const mogadishu = objectId();
   const tickets = makeModel();
-  await withMocks({ tickets }, [{ id: nairobi, isActive: true }, { id: mogadishu, isActive: true }], async () => {
+  await withMocks({ tickets }, [{ id: nairobi, name: "Nairobi Office", isActive: true }, { id: mogadishu, name: "Mogadishu Office", isActive: true }], async () => {
     await writeEntity({
       collection: "tickets",
       record: { id: "ticket-branch", ref: "TKT-HACK", branchId: mogadishu, office: "Mogadishu Office", phone: "+254700000010" },
@@ -82,6 +82,33 @@ test("operator payload branchId is forced to the assigned branch for tickets", a
     });
   });
   assert.equal(String(tickets.docs.get("ticket-branch").branchId), nairobi);
+  assert.equal(tickets.docs.get("ticket-branch").office, "Nairobi Office");
+});
+
+test("operator can create a client only in the assigned home branch", async () => {
+  const nairobi = objectId();
+  const mogadishu = objectId();
+  const clients = makeModel();
+  await withMocks({ clients }, [{ id: nairobi, name: "Nairobi Office", isActive: true }, { id: mogadishu, name: "Mogadishu Office", isActive: true }], async () => {
+    await writeEntity({
+      collection: "clients",
+      record: {
+        id: "client-branch",
+        name: "New Client",
+        phone: "+254700000011",
+        homeBranchId: mogadishu,
+        homeOffice: "Mogadishu Office",
+      },
+      user: {
+        id: "u-client",
+        name: "Nairobi Operator",
+        role: "operator",
+        assignedBranchId: nairobi,
+      },
+    });
+  });
+  assert.equal(String(clients.docs.get("client-branch").homeBranchId), nairobi);
+  assert.equal(clients.docs.get("client-branch").homeOffice, "Nairobi Office");
 });
 
 test("operator cannot create cargo with the same origin and destination branch", async () => {

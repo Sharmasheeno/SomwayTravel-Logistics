@@ -1,22 +1,26 @@
+import mongoose from "mongoose";
 import Ticket from "../models/Ticket.js";
 import Visa from "../models/Visa.js";
 import { assertBranchAccess } from "./branches.js";
+import { purgeServiceFinanceRecords } from "./serviceDeletion.js";
+import { withServiceLock } from "./serviceLock.js";
 
 export const TICKET_STATUSES = ["booked", "issued", "changed", "cancelled"];
-export const VISA_STATUSES = ["submitted", "approved", "refused", "delivered"];
+export const VISA_STATUSES = ["submitted", "approved", "refused", "delivered", "cancelled"];
 
 const TRANSITIONS = {
   ticket: {
-    booked: ["issued", "cancelled"],
-    issued: ["changed", "cancelled"],
-    changed: ["issued", "cancelled"],
+    booked: ["cancelled"],
+    issued: ["cancelled"],
+    changed: ["cancelled"],
     cancelled: [],
   },
   visa: {
-    submitted: ["approved", "refused"],
-    approved: ["delivered"],
+    submitted: ["approved", "refused", "cancelled"],
+    approved: ["delivered", "cancelled"],
     refused: [],
     delivered: [],
+    cancelled: [],
   },
 };
 
@@ -34,6 +38,7 @@ export const normalizeServiceStatus = (kind, value) => {
           approved: "approved",
           refused: "refused",
           delivered: "delivered",
+          cancelled: "cancelled",
         }
       : {
           booked: "booked",
@@ -47,7 +52,7 @@ export const normalizeServiceStatus = (kind, value) => {
 };
 
 export const prepareNewServiceWorkflow = (kind, record, user) => {
-  const status = normalizeServiceStatus(kind, record.status);
+  const status = kind === "ticket" ? "issued" : normalizeServiceStatus(kind, record.status);
   const at = new Date().toISOString();
   return {
     ...record,
@@ -75,7 +80,7 @@ export const transitionServiceStatus = async ({
   note = "",
   correctionReason = "",
   user,
-}) => {
+}) => withServiceLock(`${kind}:${id}`, async () => {
   const Model = MODELS[kind];
   if (!Model) {
     throw Object.assign(new Error("Unknown service workflow."), {
@@ -91,6 +96,9 @@ export const transitionServiceStatus = async ({
   if (user.role !== "owner") await assertBranchAccess(user, record.branchId);
   const fromStatus = normalizeServiceStatus(kind, record.status);
   const nextStatus = normalizeServiceStatus(kind, toStatus);
+  if (kind === "ticket" && nextStatus === "changed") {
+    throw Object.assign(new Error("Ticket status can only be cancelled after issuance."), { status: 409 });
+  }
   if (!STATUSES[kind].includes(nextStatus) || nextStatus === fromStatus) {
     throw Object.assign(new Error("Choose a valid next status."), {
       status: 400,
@@ -140,5 +148,12 @@ export const transitionServiceStatus = async ({
       { status: 409 },
     );
   }
+  // Cancelling a service reverses its finance: remove the auto-generated
+  // payable while retaining customer receipts for refunds, reflected in the
+  // daily summary, receivables and reports. The record itself is kept (with its
+  // status history) so the cancellation remains auditable.
+  if (nextStatus === "cancelled" && mongoose.connection.readyState !== 0) {
+    await purgeServiceFinanceRecords(kind, id);
+  }
   return updated;
-};
+});
