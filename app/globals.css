@@ -47,6 +47,7 @@ body {
   letter-spacing: 0;
 }
 html[data-theme="dark"] {
+  color-scheme: dark;
   --ink: #e7eef8;
   --paper: #0d1728;
   --white: #142238;
@@ -57,6 +58,7 @@ html[data-theme="dark"] {
   --blue: #1b3558;
   --cream: #3c3420;
   --cream-2: #66572e;
+  --blue-ink: #9ac5ff;
   --shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
 }
 html[data-theme="dark"] body { background: var(--paper); color: var(--ink); }

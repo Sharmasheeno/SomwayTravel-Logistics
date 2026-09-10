@@ -2938,7 +2938,7 @@ export default function Home() {
   const [overviewFrom, setOverviewFrom] = useState(`${today().slice(0, 7)}-01`);
   const [overviewTo, setOverviewTo] = useState(today());
   const ui = locale === "so" ? {
-    Dashboard: "Dashboard", Bookings: "Boos celin", Cargo: "Rar", "Visa Services": "Adeegyada Fiisaha",
+    Dashboard: "Dulmar", Bookings: "Tigidhada", Cargo: "Xamuul", "Visa Services": "Adeegyada Fiisaha",
     "Daily Summary": "Warbixinta Maalinlaha", Expenses: "Kharashaadka", Clients: "Macmiisha",
     "Accounts Receivable": "Deynta la sugayo", Receipts: "Rasiidhada", "Track Shipment": "Raac shixnadda",
     "Financial Reports": "Warbixinta maaliyadeed", "Accounts Payable": "Deynta la bixinayo", "Activity Log": "Diiwaanka hawsha",
@@ -5572,9 +5572,9 @@ function LiveOverviewDashboard({
       <div className="overview-greeting-row">
         <div className="overview-greeting-copy">
           <h1>
-            Good {greeting}, {user.name.split(" ")[0]} <span aria-hidden="true">👋</span>
+            {locale === "so" ? (greeting === "morning" ? "Subax wanaagsan" : greeting === "afternoon" ? "Galab wanaagsan" : "Fiid wanaagsan") : `Good ${greeting}`}, {user.name.split(" ")[0]} <span aria-hidden="true">👋</span>
           </h1>
-          <p>Here&rsquo;s what&rsquo;s happening with SomWay today.</p>
+          <p>{t("Here’s what’s happening with SomWay today.", "Waa kuwan hawlaha SomWay ee maanta.")}</p>
         </div>
         <section className="overview-status-strip" aria-label="Today at a glance">
           {financial && (
@@ -5586,21 +5586,21 @@ function LiveOverviewDashboard({
                     ? "—"
                     : `${revenueGrowth >= 0 ? "+" : ""}${revenueGrowth.toFixed(1)}%`}
                 </strong>
-                <small>Revenue Growth</small>
+                <small>{t("Revenue Growth", "Kororka dakhliga")}</small>
               </div>
             </div>
           )}
           <div>
             <span className="status-icon blue"><Icon name="cargo" /></span>
-            <div><strong>{activeCases}</strong><small>Open Jobs</small></div>
+            <div><strong>{activeCases}</strong><small>{t("Open Jobs", "Hawlaha socda")}</small></div>
           </div>
           <div>
             <span className="status-icon amber"><Icon name="expense" /></span>
-            <div><strong>{pendingApprovals}</strong><small>Reviews Pending</small></div>
+            <div><strong>{pendingApprovals}</strong><small>{t("Reviews Pending", "Dib-u-eegista la sugayo")}</small></div>
           </div>
           <div>
             <span className="status-icon green"><Icon name="close" /></span>
-            <div><strong>{completedJobs}</strong><small>Jobs Completed</small></div>
+            <div><strong>{completedJobs}</strong><small>{t("Jobs Completed", "Hawlaha la dhammaystiray")}</small></div>
           </div>
         </section>
       </div>
@@ -5654,7 +5654,7 @@ function LiveOverviewDashboard({
               <Empty title="No branch revenue" detail="Branch performance appears once payments are recorded." />
             )}
           </Panel>
-          <Panel title="Cargo Tracking Status" actions={<button type="button" className="linkish" onClick={() => onNavigate("cargo")}>View all <Icon name="arrow" size={13} /></button>}>
+          <Panel title="Cargo Tracking Status" actions={<button type="button" className="linkish" onClick={() => onNavigate("cargo")}>{t("View all", "Wada eeg")} <Icon name="arrow" size={13} /></button>}>
             <div className="stack dashboard-status-list">
               {pipeline.map((item) => {
                 const totalTracked = pipeline.reduce((sum, entry) => sum + entry.count, 0);
@@ -5678,11 +5678,11 @@ function LiveOverviewDashboard({
       )}
 
       <div className="split-2 dashboard-bottom-row" style={{ marginTop: 14 }}>
-        <Panel title="Recent Transactions" actions={<button type="button" className="linkish" onClick={() => onNavigate("receivables")}>View all <Icon name="arrow" size={13} /></button>}>
-          {recentRows.length ? <DataTable columns={["Date", "Type", "Description", "Client", "Amount", "Status"]} rows={recentRows} /> : <Empty title="No transactions yet" detail="New service records will appear here." />}
+        <Panel title={t("Recent Transactions", "Dhaqdhaqaaqyadii ugu dambeeyay")} actions={<button type="button" className="linkish" onClick={() => onNavigate("receivables")}>{t("View all", "Wada eeg")} <Icon name="arrow" size={13} /></button>}>
+          {recentRows.length ? <DataTable columns={["Date", "Type", "Description", "Client", "Amount", "Status"]} rows={recentRows} /> : <Empty title={t("No transactions yet", "Weli wax dhaqdhaqaaq ah ma jiraan")} detail={t("New service records will appear here.", "Diiwaannada adeegyada cusub ayaa halkan ka muuqan doona.")} />}
         </Panel>
         {financial && (
-          <Panel title="Top Clients" actions={<button type="button" className="linkish" onClick={() => onNavigate("clients")}>View all <Icon name="arrow" size={13} /></button>}>
+          <Panel title={t("Top Clients", "Macaamiisha ugu sarreeya")} actions={<button type="button" className="linkish" onClick={() => onNavigate("clients")}>{t("View all", "Wada eeg")} <Icon name="arrow" size={13} /></button>}>
             <div className="stack">
               {topClients.length ? topClients.map((entry, index) => (
                 <div className="recent-client-row top-client-row" key={entry.client.id}>
@@ -5694,12 +5694,12 @@ function LiveOverviewDashboard({
                   </div>
                   <b className="top-client-spend">{money(entry.spend, activeTrendCurrency)}</b>
                 </div>
-              )) : <Empty title="No client spend yet" detail="Top clients appear once services are billed." />}
+              )) : <Empty title={t("No client spend yet", "Weli wax lacag ah oo macaamiishu bixiyeen ma jiraan")} detail={t("Top clients appear once services are billed.", "Macaamiisha ugu sarreeya ayaa soo muuqan doona marka adeegyada la diiwaangeliyo.")} />}
             </div>
           </Panel>
         )}
         <div className="split-even">
-          <Panel title="Tasks & Alerts">
+          <Panel title={t("Tasks & Alerts", "Hawlaha iyo ogeysiisyada")}>
             <div className="alert-list">
               {alerts.map((alert) => (
                 <button
@@ -5725,7 +5725,7 @@ function LiveOverviewDashboard({
               ))}
             </div>
           </Panel>
-          <Panel title="Recent Clients">
+          <Panel title={t("Recent Clients", "Macaamiishii ugu dambeeyay")}>
             <div className="stack">
               {clientActivity.slice(0, 4).map(({ client }) => (
                 <div className="recent-client-row" key={client.id}>
@@ -5734,7 +5734,7 @@ function LiveOverviewDashboard({
                   <StatusBadge tone="blue">{client.type}</StatusBadge>
                 </div>
               ))}
-              {!clientActivity.length && <Empty title="No clients yet" detail="Client relationships will appear here." />}
+              {!clientActivity.length && <Empty title={t("No clients yet", "Weli macaamiil ma jiraan")} detail={t("Client relationships will appear here.", "Xogta macaamiisha ayaa halkan ka muuqan doonta.")} />}
             </div>
           </Panel>
         </div>

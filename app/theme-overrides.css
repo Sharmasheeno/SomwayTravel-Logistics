@@ -1,0 +1,42 @@
+/* Load after component styles so fixed light surfaces cannot override theme. */
+html[data-theme="dark"] {
+  --bg: #0d1728;
+  --surface: #142238;
+  --ink: #e7eef8;
+  --muted: #aebed4;
+  --line: #34465e;
+}
+html[data-theme="dark"] :is(.workspace, .main-content, .content, .overview-greeting-row) {
+  background: var(--paper);
+  color: var(--ink);
+}
+html[data-theme="dark"] :is(.empty, .metric-card, .overview-status-strip,
+  .workspace-context, .branch-filter, .branch-select, .search-box,
+  .form-section, .form-summary-card, .modal-side, .record-card,
+  .record-modal, .panel, .account-menu, .table-wrap, .auth-panel) {
+  background: var(--white);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html[data-theme="dark"] :is(.workspace, .modal, .record-modal, .auth-panel)
+  :is(h1, h2, h3, h4, h5, h6, label, .metric-label, .record-detail-value,
+  .record-title, .form-summary-row strong, .form-summary-total strong,
+  .dashboard-status-row strong, .alert-copy strong) {
+  color: var(--ink);
+}
+html[data-theme="dark"] :is(.workspace, .modal, .record-modal)
+  :is(.muted, .metric-foot, .record-cell-label, .record-detail-label, small) {
+  color: var(--muted);
+}
+html[data-theme="dark"] :is(thead, th, td, .record-details, .alert-count) {
+  background-color: var(--white);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html[data-theme="dark"] :is(input, select, textarea, .icon-button, .small-icon) {
+  background-color: var(--white);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder { color: var(--muted); }
