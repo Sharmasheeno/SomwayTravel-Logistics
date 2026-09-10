@@ -2981,7 +2981,7 @@ export default function Home() {
       try {
         const routeResponse = await fetch(`/api/operator-access/validate?path=${encodeURIComponent(path)}`, { cache: "no-store" });
         if (routeResponse.status === 404 && path === "/") { setPublicLanding(true); return; }
-        if (!routeResponse.ok) { setRouteUnavailable(true); return; }
+        if (!routeResponse.ok && path !== "/admin") { setRouteUnavailable(true); return; }
         const statusResponse = await fetch("/api/auth/status", {
           cache: "no-store",
         });
